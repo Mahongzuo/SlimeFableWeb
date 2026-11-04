@@ -1,0 +1,6 @@
+import {SlimeSolver} from './solver';
+import {SurfaceBuilder} from './surface';
+import {FrameInput,MeshFrame} from './types';
+import {createWorld,WorldDefinition} from './world';
+let solver=new SlimeSolver();const surface=new SurfaceBuilder();let accumulator=0,lastGeneration=-1;
+self.onmessage=(event:MessageEvent<{input:FrameInput;world?:WorldDefinition;recycle?:Pick<MeshFrame,'positions'|'normals'|'slots'>}>)=>{try{const {input,recycle,world}=event.data;if(world){solver=new SlimeSolver(input.anchor,createWorld(world));lastGeneration=-1;}if(input.generation!==lastGeneration){solver.reset(input.anchor);accumulator=0;lastGeneration=input.generation}for(const c of input.commands){if(c.type==='launch'&&c.target)solver.launch(c.target,input.forward)}const start=performance.now();accumulator=Math.min(accumulator+input.dt,4/60);let steps=0;while(accumulator>=1/60&&steps<4){solver.step(1/60,input);accumulator-=1/60;steps++}const simMs=performance.now()-start;const frame=surface.build(solver,input.quality,recycle);frame.simMs=simMs;frame.generation=input.generation;(self as any).postMessage(frame,[frame.positions.buffer,frame.normals.buffer,frame.slots.buffer])}catch(e){(self as any).postMessage({error:String(e)})}};

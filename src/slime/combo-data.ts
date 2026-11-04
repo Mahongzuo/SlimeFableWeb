@@ -1,0 +1,327 @@
+// Generated from SlimeCombatTypes.cpp by scripts/extract-ue-reference.mjs
+export const comboData = [
+  [
+    {
+      "name": "水戳",
+      "exec": "Melee",
+      "pose": "WhipSnap",
+      "shape": "Capsule",
+      "range": 1.6,
+      "radius": 0.28,
+      "damage": 10,
+      "windup": 0.1,
+      "hitStart": 0.12,
+      "hitEnd": 0.2,
+      "recovery": 0.28
+    },
+    {
+      "name": "水扫",
+      "exec": "Melee",
+      "pose": "PunchStretch",
+      "shape": "Capsule",
+      "range": 1.7,
+      "radius": 0.32,
+      "damage": 11,
+      "windup": 0.1,
+      "hitStart": 0.12,
+      "hitEnd": 0.22,
+      "recovery": 0.3
+    },
+    {
+      "name": "水挑",
+      "exec": "Melee",
+      "pose": "UpperStretch",
+      "shape": "Capsule",
+      "range": 1.65,
+      "radius": 0.3,
+      "damage": 12,
+      "windup": 0.12,
+      "hitStart": 0.14,
+      "hitEnd": 0.24,
+      "recovery": 0.32
+    },
+    {
+      "name": "浪砸",
+      "exec": "Melee",
+      "pose": "SlamFlatten",
+      "shape": "Cone",
+      "range": 2,
+      "radius": 0.5,
+      "damage": 23.400000000000002,
+      "windup": 0.14,
+      "hitStart": 0.18,
+      "hitEnd": 0.32,
+      "recovery": 0.42
+    }
+  ],
+  [
+    {
+      "name": "风戳",
+      "exec": "Melee",
+      "pose": "PunchStretch",
+      "shape": "Sphere",
+      "range": 1.4,
+      "radius": 0.42,
+      "damage": 8,
+      "windup": 0.05,
+      "hitStart": 0.06,
+      "hitEnd": 0.12,
+      "recovery": 0.16
+    },
+    {
+      "name": "风扫",
+      "exec": "Melee",
+      "pose": "WhipSnap",
+      "shape": "Sphere",
+      "range": 1.45,
+      "radius": 0.44,
+      "damage": 9,
+      "windup": 0.05,
+      "hitStart": 0.06,
+      "hitEnd": 0.12,
+      "recovery": 0.16
+    },
+    {
+      "name": "风挑",
+      "exec": "Melee",
+      "pose": "UpperStretch",
+      "shape": "Sphere",
+      "range": 1.5,
+      "radius": 0.46,
+      "damage": 10,
+      "windup": 0.06,
+      "hitStart": 0.07,
+      "hitEnd": 0.14,
+      "recovery": 0.18
+    },
+    {
+      "name": "风砸",
+      "exec": "Dash",
+      "pose": "DashRibbon",
+      "shape": "Sphere",
+      "range": 1.5,
+      "radius": 0.48,
+      "damage": 18.2,
+      "windup": 0.08,
+      "hitStart": 0.08,
+      "hitEnd": 0.2,
+      "recovery": 0.24
+    }
+  ],
+  [
+    {
+      "name": "火戳",
+      "exec": "Melee",
+      "pose": "PunchStretch",
+      "shape": "Sphere",
+      "range": 1.3,
+      "radius": 0.42,
+      "damage": 11,
+      "windup": 0.08,
+      "hitStart": 0.1,
+      "hitEnd": 0.18,
+      "recovery": 0.22
+    },
+    {
+      "name": "火扫",
+      "exec": "Melee",
+      "pose": "PunchStretch",
+      "shape": "Sphere",
+      "range": 1.35,
+      "radius": 0.44,
+      "damage": 12,
+      "windup": 0.08,
+      "hitStart": 0.1,
+      "hitEnd": 0.18,
+      "recovery": 0.24
+    },
+    {
+      "name": "火挑",
+      "exec": "Melee",
+      "pose": "UpperStretch",
+      "shape": "Sphere",
+      "range": 1.4,
+      "radius": 0.46,
+      "damage": 13,
+      "windup": 0.1,
+      "hitStart": 0.12,
+      "hitEnd": 0.2,
+      "recovery": 0.26
+    },
+    {
+      "name": "焰砸",
+      "exec": "AoE",
+      "pose": "Pulse",
+      "shape": "Sphere",
+      "range": 0,
+      "radius": 1.6,
+      "damage": 26,
+      "windup": 0.12,
+      "hitStart": 0.16,
+      "hitEnd": 0.3,
+      "recovery": 0.38
+    }
+  ],
+  [
+    {
+      "name": "雷戳",
+      "exec": "Melee",
+      "pose": "Spike",
+      "shape": "Capsule",
+      "range": 1.4,
+      "radius": 0.22,
+      "damage": 11,
+      "windup": 0.06,
+      "hitStart": 0.07,
+      "hitEnd": 0.12,
+      "recovery": 0.2
+    },
+    {
+      "name": "雷扫",
+      "exec": "Melee",
+      "pose": "Spike",
+      "shape": "Capsule",
+      "range": 1.45,
+      "radius": 0.24,
+      "damage": 12,
+      "windup": 0.06,
+      "hitStart": 0.07,
+      "hitEnd": 0.12,
+      "recovery": 0.2
+    },
+    {
+      "name": "雷挑",
+      "exec": "Melee",
+      "pose": "UpperStretch",
+      "shape": "Capsule",
+      "range": 1.4,
+      "radius": 0.24,
+      "damage": 13,
+      "windup": 0.07,
+      "hitStart": 0.08,
+      "hitEnd": 0.14,
+      "recovery": 0.22
+    },
+    {
+      "name": "雷炸",
+      "exec": "AoE",
+      "pose": "Pulse",
+      "shape": "Sphere",
+      "range": 0,
+      "radius": 1.2,
+      "damage": 23.400000000000002,
+      "windup": 0.1,
+      "hitStart": 0.1,
+      "hitEnd": 0.2,
+      "recovery": 0.3
+    }
+  ],
+  [
+    {
+      "name": "暗戳",
+      "exec": "Melee",
+      "pose": "PunchStretch",
+      "shape": "Sphere",
+      "range": 1.3,
+      "radius": 0.42,
+      "damage": 12,
+      "windup": 0.12,
+      "hitStart": 0.14,
+      "hitEnd": 0.22,
+      "recovery": 0.3
+    },
+    {
+      "name": "暗扫",
+      "exec": "Melee",
+      "pose": "WhipSnap",
+      "shape": "Sphere",
+      "range": 1.35,
+      "radius": 0.44,
+      "damage": 13,
+      "windup": 0.12,
+      "hitStart": 0.14,
+      "hitEnd": 0.22,
+      "recovery": 0.32
+    },
+    {
+      "name": "暗挑",
+      "exec": "Melee",
+      "pose": "UpperStretch",
+      "shape": "Sphere",
+      "range": 1.4,
+      "radius": 0.46,
+      "damage": 14,
+      "windup": 0.14,
+      "hitStart": 0.16,
+      "hitEnd": 0.26,
+      "recovery": 0.34
+    },
+    {
+      "name": "雾砸",
+      "exec": "AoE",
+      "pose": "Pulse",
+      "shape": "Sphere",
+      "range": 0,
+      "radius": 1.8,
+      "damage": 26,
+      "windup": 0.16,
+      "hitStart": 0.2,
+      "hitEnd": 0.36,
+      "recovery": 0.45
+    }
+  ],
+  [
+    {
+      "name": "锤戳",
+      "exec": "Melee",
+      "pose": "PunchStretch",
+      "shape": "Sphere",
+      "range": 1.3,
+      "radius": 0.42,
+      "damage": 14,
+      "windup": 0.1,
+      "hitStart": 0.12,
+      "hitEnd": 0.2,
+      "recovery": 0.24
+    },
+    {
+      "name": "锤扫",
+      "exec": "Melee",
+      "pose": "PunchStretch",
+      "shape": "Sphere",
+      "range": 1.35,
+      "radius": 0.44,
+      "damage": 15,
+      "windup": 0.1,
+      "hitStart": 0.12,
+      "hitEnd": 0.22,
+      "recovery": 0.26
+    },
+    {
+      "name": "上挑",
+      "exec": "Melee",
+      "pose": "UpperStretch",
+      "shape": "Sphere",
+      "range": 1.4,
+      "radius": 0.46,
+      "damage": 16,
+      "windup": 0.12,
+      "hitStart": 0.14,
+      "hitEnd": 0.24,
+      "recovery": 0.3
+    },
+    {
+      "name": "砸地",
+      "exec": "Melee",
+      "pose": "SlamFlatten",
+      "shape": "Sphere",
+      "range": 1.45,
+      "radius": 0.6,
+      "damage": 31.200000000000003,
+      "windup": 0.14,
+      "hitStart": 0.18,
+      "hitEnd": 0.32,
+      "recovery": 0.4
+    }
+  ]
+] as const;

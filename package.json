@@ -1,0 +1,19 @@
+{
+  "name": "slimefable-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5180 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "check": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "serve": "node scripts/serve.mjs --open"
+  },
+  "devDependencies": {
+    "three": "^0.170.0",
+    "tsx": "^4.20.6",
+    "typescript": "~5.7.3",
+    "vite": "^6.4.1"
+  }
+}
