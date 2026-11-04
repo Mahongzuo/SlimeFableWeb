@@ -3,7 +3,7 @@ import {Vec, distance} from '../slime/types';
 import {harborDefinition} from '../home/harbor-world';
 import {bakeHarborCollision} from '../home/harbor-collision';
 import {HarborWater} from '../home/harbor-water';
-import {homeSpawn, plazaBoxes, plazaCenter, portalSlots, SEA_LEVEL, shardSpots, spawnYaw} from '../home/layout';
+import {homeSpawn, plazaCenter, portalSlots, SEA_LEVEL, shardSpots, spawnYaw} from '../home/layout';
 import {TimePortal} from '../home/portals';
 import {Lectern, Shards} from '../home/props';
 import {SeaFX} from '../home/sea-fx';
@@ -27,7 +27,10 @@ export class Game {
       toTitle: () => this.toTitle(), element: i => this.slime.setElement(i),
     });
     ctx.camera.position.fromArray(TITLE_CAM.pos); ctx.controls.target.fromArray(TITLE_CAM.target); ctx.controls.update();
-    const world = bakeHarborCollision(ctx, {...harborDefinition, boxes: plazaBoxes(), water: ctx.puddles, fluids: [{min: [-10, -30], max: [30, 10], level: SEA_LEVEL, sink: .14}]});
+    // plaza pieces exist before the bake so their meshes become part of the height field
+    this.portals = portalSlots.map(s => new TimePortal(ctx, s));
+    this.lectern = new Lectern(ctx);
+    const world = bakeHarborCollision(ctx, {...harborDefinition, boxes: [], water: ctx.puddles, fluids: [{min: [-10, -30], max: [30, 10], level: SEA_LEVEL, sink: .14}]});
     this.fx = new SeaFX(ctx);
     this.slime = new SlimeCharacter(ctx, {world, spawn: homeSpawn, ui: false, trainingTargets: [], showCollisionBoxes: false, title: '晴雨港',
       onToast: () => {}, onReady: () => this.ready(),
@@ -35,8 +38,6 @@ export class Game {
     this.slime.quality = this.save.data.quality;
     window.__slime = this.slime; (window as any).__game = this;
     this.puddles = new HarborWater(ctx, this.slime);
-    this.portals = portalSlots.map(s => new TimePortal(ctx, s));
-    this.lectern = new Lectern(ctx);
     this.shards = new Shards(ctx, this.save.data.shards);
     this.shards.onCollect = (spot, n) => { this.save.add('shards', spot.id); this.slime.setMood('Happy', 1, 70); this.ui.toast(n === shardSpots.length ? `✦ 12 枚时光碎片全部找齐了！` : `✦ 时光碎片 ${n} / ${shardSpots.length} · ${spot.hint}`); };
     this.applyShowing(); this.titleScreen();

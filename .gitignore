@@ -1,4 +1,18 @@
+# dependencies & builds
 node_modules/
 dist/
 release/
+*.tsbuildinfo
+# local QA output (screenshots, reports, logs)
 qa/shots/
+qa/*.json
+*.log
+# editors / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# secrets never belong here
+.env
+.env.*
+auth.json

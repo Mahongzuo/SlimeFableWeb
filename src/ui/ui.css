@@ -5,6 +5,9 @@
   --sans:"PingFang SC","Microsoft YaHei","Noto Sans SC","Source Han Sans SC",system-ui,sans-serif;
   --shadow:4px 5px 0 rgba(47,42,36,.2);--radius:18px;
 }
+html,body{margin:0;height:100%;overflow:hidden;background:#eef5f0}
+body>canvas{display:block}
+#slime-ui{display:none!important}
 #game-ui{position:fixed;inset:0;pointer-events:none;font-family:var(--sans);color:var(--ink);user-select:none;-webkit-user-select:none;z-index:10}
 #game-ui *{box-sizing:border-box}
 #game-ui button{font:inherit;color:inherit;cursor:pointer;pointer-events:auto}
@@ -28,11 +31,11 @@
 .screen-title{position:absolute;inset:0;pointer-events:auto;background:linear-gradient(90deg,rgba(247,241,227,.96) 0,rgba(247,241,227,.86) 30%,rgba(247,241,227,0) 62%);display:flex;align-items:center;padding:0 0 0 min(7vw,96px);animation:fade .8s ease both}
 .title-col{width:min(520px,86vw);position:relative}
 .kicker{font:800 12px/1 var(--sans);letter-spacing:.32em;color:var(--sea-deep);text-transform:uppercase}
-.title-col h1{margin:14px 0 6px;font:900 clamp(56px,7.4vw,104px)/1 var(--serif);letter-spacing:.06em;color:var(--ink);display:flex;align-items:center;gap:18px}
+.title-col h1{margin:14px 0 6px;font:900 clamp(52px,6.6vw,100px)/1 var(--serif);letter-spacing:.04em;color:var(--ink);display:flex;align-items:center;gap:16px;white-space:nowrap}
 .title-col h1 svg{width:.72em;height:.72em;flex:none}
 .tagline{margin:0 0 28px;font:500 19px/1.6 var(--serif);color:var(--ink-2)}
-.postmark{position:absolute;right:-12px;top:-36px;width:132px;height:132px;border-radius:50%;border:3px solid var(--stamp);color:var(--stamp);display:grid;place-items:center;text-align:center;transform:rotate(-11deg);opacity:.88;box-shadow:inset 0 0 0 6px var(--paper),inset 0 0 0 7.5px var(--stamp)}
-.postmark b{display:block;font:900 34px/1 var(--serif);letter-spacing:.02em}
+.postmark{position:absolute;right:0;top:-128px;width:118px;height:118px;border-radius:50%;border:3px solid var(--stamp);color:var(--stamp);display:grid;place-items:center;text-align:center;transform:rotate(-11deg);opacity:.88;box-shadow:inset 0 0 0 6px var(--paper),inset 0 0 0 7.5px var(--stamp)}
+.postmark b{display:block;font:900 30px/1 var(--serif);letter-spacing:.02em}
 .postmark small{display:block;font:700 10px/1.5 var(--sans);letter-spacing:.18em}
 .today-card{padding:18px 20px 16px;margin-bottom:26px}
 .today-card h3{margin:0 0 6px;font:800 13px/1 var(--sans);letter-spacing:.2em;color:var(--ink-3)}
@@ -138,4 +141,4 @@
 .door-note{margin:0 0 18px;padding:10px 14px;border-radius:12px;background:var(--paper-2);font:500 13px/1.6 var(--sans);color:var(--ink-2)}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes pop{from{opacity:0;transform:translate(-50%,-90%) scale(.92)}to{opacity:1;transform:translate(-50%,-100%) scale(1)}}
-@media (max-height:700px){.book{height:92vh}.title-col h1{font-size:60px}.tagline{margin-bottom:18px}.today-card{margin-bottom:18px}}
+@media (max-height:760px){.postmark{top:-14px;right:-6px;width:96px;height:96px}.postmark b{font-size:24px}.postmark small{font-size:9px}.book{height:92vh}.title-col h1{font-size:60px}.tagline{margin-bottom:18px}.today-card{margin-bottom:18px}}
