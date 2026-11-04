@@ -1,10 +1,4 @@
-import './slime/legacy.css';
-import {SlimeCharacter} from './slime/character';
-import {harborDefinition,harborSpawn} from './home/harbor-world';
-import {bakeHarborCollision} from './home/harbor-collision';
-import {HarborWater} from './home/harbor-water';
-const app=window.__app;if(!app)throw new Error('港口场景尚未初始化');
-const character=new SlimeCharacter(app.ctx,{world:bakeHarborCollision(app.ctx,{...harborDefinition,water:app.ctx.puddles}),spawn:harborSpawn,trainingTargets:[],title:'晴雨港'}).attach();
-window.__slime=character;
-const water=new HarborWater(app.ctx,character);
-app.ctx.onUpdate((t:number,dt:number)=>{character.update(t,dt);water.update(dt)});app.ctx.renderSlime=(pass:any)=>character.render(pass);
+import {Game} from './game/game';
+const app = window.__app;
+if (!app) throw new Error('港口场景尚未初始化');
+new Game(app);
