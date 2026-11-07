@@ -20,7 +20,7 @@ const checks = (meta.checks ?? 'check,test').split(',').map(s => s.trim()).filte
 const stateDir = 'tasks/.runs'; mkdirSync(stateDir, {recursive: true}); mkdirSync('tasks/reports', {recursive: true});
 const statePath = join(stateDir, name + '.json'), state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : {};
 const sh = (cmd) => execSync(cmd, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']}).trim();
-const changed = () => sh('git status --porcelain --untracked-files=all').split('\n').filter(Boolean).map(l => l.slice(3).replace(/^"|"$/g, '')).filter(f => !f.startsWith('tasks/'));
+const changed = () => execSync('git status --porcelain --untracked-files=all', {encoding: 'utf8'}).split('\n').filter(Boolean).map(l => l.slice(3).replace(/^"|"$/g, '')).filter(f => !f.startsWith('tasks/'));
 const save = () => writeFileSync(statePath, JSON.stringify(state, null, 2));
 if (mode === 'run') {
   if (!state.started && changed().length) { console.error('working tree is dirty; commit or stash first:\n' + changed().join('\n')); process.exit(3); }
