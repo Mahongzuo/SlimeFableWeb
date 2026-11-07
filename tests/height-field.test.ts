@@ -51,3 +51,27 @@ test('box colliders keep the same skin at their sides and only the radius on top
   const top: [number, number, number] = [.5, 1.01, .5]; boxed.projectPoint(top, .022);
   assert.ok(Math.abs(top[1] - 1.022) < 1e-6, 'rests on top at its radius: ' + top[1]);
 });
+test('a thick ground slab does not hide what stands on it', () => {
+  const slab = [
+    ...quad([-4, 0, -4], [4, 0, -4], [4, 0, 4], [-4, 0, 4]),           // top of the slab
+    ...quad([-4, -1.5, -4], [4, -1.5, -4], [4, -1.5, 4], [-4, -1.5, 4]), // its underside, 1.5 m below
+    ...quad([0, .6, 0], [1, .6, 0], [1, .6, 1], [0, .6, 1]),           // a crate lid on the slab
+    ...quad([0, 0, 0], [0, 0, 1], [0, .6, 1], [0, .6, 0]),             // crate side
+  ];
+  const naive = bakeHeightField(slab, {x0: -8, z0: -8, size: 16, cell: .1});
+  const grounded = bakeHeightField(slab, {x0: -8, z0: -8, size: 16, cell: .1, ground: () => 0});
+  const at = (d: typeof naive) => d.data[Math.floor((.5 + 8) / .1) + Math.floor((.5 + 8) / .1) * d.w];
+  assert.ok(at(naive) < .1, 'without a ground hint the slab underside starts the stack');
+  assert.ok(Math.abs(at(grounded) - .6) < .02, 'with it the crate is solid: ' + at(grounded));
+});
+test('closed solids stay solid; open air under an overhead underside stays passable', () => {
+  const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) => [
+    ...quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]),   // top, facing up
+    ...quad([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]),   // bottom, facing down
+  ];
+  const t = [...quad([-4, 0, -4], [-4, 0, 4], [4, 0, 4], [4, 0, -4]), ...box(0, 0, 0, 1, 1.9, 1), ...box(-3, 3.8, -1, -2, 4, 1)];
+  const d = bakeHeightField(t, {x0: -8, z0: -8, size: 16, cell: .1, ground: () => 0});
+  const at = (x: number, z: number) => d.data[Math.floor((x + 8) / .1) + Math.floor((z + 8) / .1) * d.w];
+  assert.ok(Math.abs(at(.5, .5) - 1.9) < .02, 'vending-machine interior is solid: ' + at(.5, .5));
+  assert.ok(Math.abs(at(-2.5, 0)) < .02, 'walk under the lamp arm: ' + at(-2.5, 0));
+});
