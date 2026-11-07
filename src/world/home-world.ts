@@ -6,16 +6,17 @@ import {SEA_LEVEL} from '../home/layout';
 import {buildZones, type BuiltZones} from '../zones';
 import {bakeRegion} from './bake';
 import type {LifeData} from '../life/state';
+import type {ZoneContext} from '../zones/types';
 import {buildInlandGround} from './terrain-mesh';
 import {inlandSurfaces, lakeFluid, WORLD, ZONES} from './map';
 /**
  * Build the whole Home: harbour (already in the scene) + new land + zone scenery, then bake collision:
  * the harbour tile as before, one more 0.1 m tile per zone that has solid props, analytic ground everywhere.
  */
-export function buildHomeWorld(ctx: any, life: LifeData, save: () => void): {world: WorldDefinition; zones: BuiltZones} {
+export function buildHomeWorld(ctx: any, life: LifeData, save: () => void, extra: Pick<ZoneContext, 'hud' | 'historyDay'> = {}): {world: WorldDefinition; zones: BuiltZones} {
   const started = performance.now();
   buildInlandGround(ctx);
-  const zones = buildZones(ctx, life, save);
+  const zones = buildZones(ctx, life, save, extra);
   const base: WorldDefinition = {
     ...harborDefinition, boxes: [], water: ctx.puddles,
     surfaces: [...harborDefinition.surfaces, ...inlandSurfaces()],

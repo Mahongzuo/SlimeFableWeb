@@ -166,3 +166,19 @@ body>canvas{display:block}
 .intro ol{margin:0 0 22px;padding-left:20px;font:600 14px/1.9 var(--sans)}
 .complete .seal{width:92px;height:92px;margin:6px auto 14px;border-radius:50%;border:3px solid var(--stamp);color:var(--stamp);display:grid;place-items:center;font:900 22px/1.1 var(--serif);transform:rotate(-9deg);box-shadow:inset 0 0 0 5px var(--paper),inset 0 0 0 6.5px var(--stamp)}
 @keyframes banner{0%{opacity:0;transform:translate(-50%,-40%)}12%{opacity:1;transform:translate(-50%,-50%)}80%{opacity:1}100%{opacity:0}}
+/* ---------- life loops ---------- */
+#life-ui{position:fixed;inset:0;pointer-events:none;font-family:var(--sans);color:var(--ink);z-index:9}
+#life-ui .coins{position:absolute;right:22px;top:84px;display:flex;align-items:baseline;gap:6px;padding:7px 14px;font:800 15px/1 var(--sans)}
+#life-ui .coins small{font-weight:600;font-size:11px;color:var(--ink-2)}
+#life-ui .coins.bump{animation:bump .35s ease}
+@keyframes bump{40%{transform:scale(1.15)}}
+#life-ui .fishing{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);width:min(420px,86vw);padding:14px 18px 12px}
+#life-ui .fish-title{font:800 17px/1.3 var(--serif);margin-bottom:10px}
+#life-ui .fish-meter{position:relative;height:16px;border:2px solid var(--ink);border-radius:999px;background:#f2d3c9;overflow:hidden}
+#life-ui .fish-meter .green{position:absolute;top:0;bottom:0;background:#bfe0c4}
+#life-ui .fish-meter .needle{position:absolute;top:-2px;bottom:-2px;width:4px;margin-left:-2px;background:var(--ink);transition:left .05s linear}
+#life-ui .fish-meter.alarm{animation:alarm .2s linear infinite alternate}
+@keyframes alarm{to{border-color:var(--stamp)}}
+#life-ui .fish-progress{height:6px;margin-top:8px;border-radius:999px;background:var(--paper-3);overflow:hidden}
+#life-ui .fish-progress i{display:block;height:100%;width:0;background:var(--sea)}
+#life-ui .fish-help{margin-top:8px;font:600 12px/1.5 var(--sans);color:var(--ink-2)}

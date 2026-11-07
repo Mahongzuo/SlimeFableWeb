@@ -2,6 +2,7 @@ import {SlimeCharacter} from '../slime/character';
 import {Vec, distance} from '../slime/types';
 import {buildHomeWorld} from '../world/home-world';
 import type {BuiltZones} from '../zones';
+import {LifeUI} from '../ui/life-ui';
 import type {Interactable, PlayerHandle} from '../zones/types';
 import {HarborWater} from '../home/harbor-water';
 import {homeSpawn, plazaCenter, portalSlots, SEA_LEVEL, shardSpots, spawnYaw} from '../home/layout';
@@ -19,7 +20,7 @@ const TITLE_CAM = {pos: [-8, 6.8, 35] as Vec, target: [6, 1.9, 20] as Vec};
 export class Game {
   state: State = 'loading'; private panelFrom: State = 'play'; private ui: GameUI; readonly slime: SlimeCharacter; private save = new Save();
   private showing!: Showing; private portals: TimePortal[]; private lectern: Lectern; private shards: Shards; private fx: SeaFX; private puddles: HarborWater;
-  private zones!: BuiltZones; private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | {kind: 'spot'; spot: Interactable} | null = null; private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
+  private zones!: BuiltZones; private life: LifeUI; private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | {kind: 'spot'; spot: Interactable} | null = null; private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
   constructor(private app: any) {
     const ctx = app.ctx; this.T = ctx.THREE;
     this.ui = new GameUI({
@@ -31,7 +32,8 @@ export class Game {
     // plaza pieces exist before the bake so their meshes become part of the height field
     this.portals = portalSlots.map(s => new TimePortal(ctx, s));
     this.lectern = new Lectern(ctx);
-    const home = buildHomeWorld(ctx, this.save.data.life, () => this.save.write()), world = home.world; this.zones = home.zones;
+    this.life = new LifeUI(); this.life.show(false);
+    const home = buildHomeWorld(ctx, this.save.data.life, () => this.save.write(), {hud: this.life, historyDay: () => this.showing?.isToday && this.showing.shown.chapters.some(c => c.status === 'web')}), world = home.world; this.zones = home.zones;
     this.fx = new SeaFX(ctx);
     this.slime = new SlimeCharacter(ctx, {world, spawn: homeSpawn, ui: false, trainingTargets: [], showCollisionBoxes: false, title: '晴雨港',
       onToast: () => {}, onReady: () => this.ready(),
@@ -55,7 +57,7 @@ export class Game {
   }
   private start() {
     if (!this.slime.ready || (this.state !== 'title' && this.state !== 'loading')) return;
-    this.ui.title(null); this.ui.panel(null); this.slime.play(); this.slime.yaw = spawnYaw; this.state = 'play'; this.ui.showHud(true); this.refreshHud();
+    this.ui.title(null); this.ui.panel(null); this.slime.play(); this.slime.yaw = spawnYaw; this.state = 'play'; this.ui.showHud(true); this.life.show(true); this.refreshHud();
     if (this.returnFrom) {
       const portal = this.portals.find(p => p.chapter?.id === this.returnFrom);
       if (portal) { const fx = Math.sin(portal.slot.yaw), fz = Math.cos(portal.slot.yaw); this.slime.teleport([portal.slot.position[0] + fx * 2.3, 0, portal.slot.position[2] + fz * 2.3]); this.slime.yaw = Math.atan2(-fx, -fz); this.doorLatch.add(portal.slot.slot); }
@@ -82,7 +84,7 @@ export class Game {
     if (byGesture) this.resume(); else { this.state = 'pause'; this.ui.pause(this.save.data.quality); }
   }
   private respawn() { this.slime.reset(); this.slime.yaw = spawnYaw; this.resume(); }
-  private toTitle() { this.state = 'title'; this.ui.panel(null); this.ui.showHud(false); this.slime.observe(); this.app.ctx.camera.position.fromArray(TITLE_CAM.pos); this.app.ctx.controls.target.fromArray(TITLE_CAM.target); this.app.ctx.controls.update(); this.titleScreen(); }
+  private toTitle() { this.state = 'title'; this.ui.panel(null); this.ui.showHud(false); this.life.show(false); this.slime.observe(); this.app.ctx.camera.position.fromArray(TITLE_CAM.pos); this.app.ctx.controls.target.fromArray(TITLE_CAM.target); this.app.ctx.controls.update(); this.titleScreen(); }
   private showDay(id: DayId | null) {
     const today = realToday().id;
     this.save.data.selectedDay = id && id !== today && days[id] ? id : null; this.save.write(); this.applyShowing();
@@ -170,6 +172,7 @@ export class Game {
     };
   }
   private refreshHud() {
+    this.life.refresh(this.save.data.life);
     const today = realToday(), sh = this.showing, n = this.shards.count, total = shardSpots.length;
     const visitedToday = sh.shown.chapters.some(c => this.save.data.visited.includes(c.id));
     const objective = !visitedToday ? '走近一扇时光门，按 F 看看门后是哪一年' : n < total ? `在港口里找时光碎片 · 屋顶、水面和防波堤上都有` : '碎片都找齐了 · 换一天的档案看看？按 J';

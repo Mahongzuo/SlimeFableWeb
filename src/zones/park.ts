@@ -1,6 +1,7 @@
 import {inland, LAKE, pathDistance, TERRACE, lakeEdge} from '../world/map';
 import {fence, signpost, trees, tufts} from './kit';
 import type {ZoneBuilder} from './types';
+import {critterField} from './critter-field';
 
 /** park zone (starter content; see tasks/cards). */
 export const park: ZoneBuilder = z => {
@@ -10,5 +11,6 @@ export const park: ZoneBuilder = z => {
   for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2, r = 19 + z.rand() * 4; const x = 0 + Math.cos(a) * r * 1.3, zz = 55 + Math.sin(a) * r; if (pathDistance(x, zz) > 3 && x > -29 && x < 30) spots.push([x, zz, .8 + z.rand() * .5]); }
   root.add(trees(z, spots, [0x7fb35f, 0x9cc46a, 0x6aa65c]));
   root.add(tufts(z, 900, {min: [-29, 31], max: [30, 79]}, (x, zz) => pathDistance(x, zz) < 2.4));
-  return {root};
+  const homes: [number, number][] = [[-10, 45], [8, 50], [-18, 66], [24, 44], [-4, 72], [14, 72]];
+  return {root, update: critterField(z, root, 'park', homes)};
 };
