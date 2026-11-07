@@ -3,7 +3,7 @@ export type Quality = 'high' | 'balanced';
 export interface Box {min:Vec; max:Vec; camera?:boolean; name:string}
 export interface Command {type:'launch'|'reset'|'attack'; target?:Vec; combo?:number}
 export interface Pose {active:boolean; forward:Vec; stretch:Vec; flatten:number; pulse:number}
-export interface FrameInput {anchor:Vec; velocity:Vec; forward:Vec; spread:number; grounded:boolean; recalling:boolean; impact:number; pose:Pose; dt:number; quality:Quality; commands:Command[]; generation:number}
+export interface FrameInput {anchor:Vec; velocity:Vec; forward:Vec; spread:number; grounded:boolean; recalling:boolean; impact:number; pose:Pose; dt:number; quality:Quality; commands:Command[]; cling?:{point:Vec;normal:Vec}|null; generation:number}
 export interface ShotView {id:number; phase:'separating'|'flying'|'active'|'returning'|'merging'; center:Vec; radius:number; age:number; mergeProgress:number}
 export interface MeshFrame {positions:Float32Array; normals:Float32Array; slots:Float32Array; count:number; centers:Vec[]; radii:Vec[]; clusterIds:number[]; shots:ShotView[]; simMs:number; meshMs:number; particleCount:number; generation:number; overflow:boolean; spread:number; grounded:boolean}
 export const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
