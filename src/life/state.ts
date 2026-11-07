@@ -2,7 +2,8 @@
  * Persistent casual-play state (farm, fishing, critters, park records, requests). Pure data, saved with the rest.
  * Times are real-world milliseconds (Date.now()) so crops keep growing while the game is closed.
  */
-export interface PlotState {crop: string; planted: number; watered: number; /** growth ms already banked */ grown: number; weeds?: boolean}
+/** `watered`: when the soil dries again; `wetFrom`: start of the current wet spell; `grown`: growth ms banked before it. */
+export interface PlotState {crop: string; planted: number; watered: number; grown: number; wetFrom?: number; ripeSince?: number; weeds?: boolean}
 export interface DexEntry {n: number; first: number; /** biggest size (fish cm) or best time (park ms) */ best?: number}
 export interface RequestState {id: string; item: string; count: number; reward: number; done: boolean}
 export interface LifeData {
