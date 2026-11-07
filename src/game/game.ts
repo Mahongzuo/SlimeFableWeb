@@ -24,7 +24,7 @@ export class Game {
     this.ui = new GameUI({
       start: () => this.start(), resume: () => this.resume(), pause: () => this.pauseGame(), openBook: () => this.openBook(), closePanel: () => this.closePanel(true),
       showDay: id => this.showDay(id), showToday: () => this.showDay(null), respawn: () => this.respawn(), quality: q => { this.slime.quality = q; this.save.data.quality = q; this.save.write(); },
-      toTitle: () => this.toTitle(), element: i => this.slime.setElement(i),
+      toTitle: () => this.toTitle(), element: i => this.slime.setElement(i), go: id => this.go(id),
     });
     ctx.camera.position.fromArray(TITLE_CAM.pos); ctx.controls.target.fromArray(TITLE_CAM.target); ctx.controls.update();
     // plaza pieces exist before the bake so their meshes become part of the height field
@@ -55,7 +55,14 @@ export class Game {
   private start() {
     if (!this.slime.ready || (this.state !== 'title' && this.state !== 'loading')) return;
     this.ui.title(null); this.ui.panel(null); this.slime.play(); this.slime.yaw = spawnYaw; this.state = 'play'; this.ui.showHud(true); this.refreshHud();
-    if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('欢迎回到晴雨港 · 走近史书或时光门，按 F 看看', 4200), 600);
+    if (this.returnFrom) {
+      const portal = this.portals.find(p => p.chapter?.id === this.returnFrom);
+      if (portal) { const fx = Math.sin(portal.slot.yaw), fz = Math.cos(portal.slot.yaw); this.slime.teleport([portal.slot.position[0] + fx * 2.3, 0, portal.slot.position[2] + fz * 2.3]); this.slime.yaw = Math.atan2(-fx, -fz); this.doorLatch.add(portal.slot.slot); }
+      const done = this.save.data.completed.includes(this.returnFrom);
+      setTimeout(() => this.ui.toast(done ? '回到晴雨港 · 这扇门的故事已经写进史书' : '回到晴雨港', 3600), 500);
+      this.returnFrom = null; history.replaceState(null, '', location.pathname);
+      this.applyShowing();
+    } else if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('欢迎回到晴雨港 · 走近史书或时光门，按 F 看看', 4200), 600);
   }
   private resume() { if (this.state === 'title' || this.state === 'loading') { this.ui.panel(null); this.state = 'title'; return; } this.ui.panel(null); this.slime.play(); this.state = 'play'; this.ui.showHud(true); }
   private pauseGame() { if (this.state !== 'play') return; this.state = 'pause'; this.slime.pause(); this.ui.pause(this.save.data.quality); }
@@ -64,7 +71,7 @@ export class Game {
     if (this.state === 'door') this.stepOutOfDoor();
     this.panelFrom = this.state === 'title' || this.state === 'loading' ? 'title' : 'play';
     this.state = 'book'; if (this.slime.mode === 'play') this.slime.pause();
-    this.ui.book({todayId: this.showing.today, shownId: this.showing.shown.day, souvenirs: this.save.data.souvenirs, visited: this.save.data.visited});
+    this.ui.book({todayId: this.showing.today, shownId: this.showing.shown.day, souvenirs: this.save.data.souvenirs, visited: this.save.data.visited, completed: this.save.data.completed});
   }
   /** byGesture: a click or key that may re-acquire pointer lock; Escape cannot, so it lands on the pause card instead. */
   private closePanel(byGesture: boolean) {
@@ -79,15 +86,19 @@ export class Game {
     const today = realToday().id;
     this.save.data.selectedDay = id && id !== today && days[id] ? id : null; this.save.write(); this.applyShowing();
     this.ui.toast(this.showing.isToday ? '港口回到了今天' : `港口正在展出 ${dayLabel(this.showing.shown.day)}`);
-    if (this.state === 'book') this.ui.book({todayId: this.showing.today, shownId: this.showing.shown.day, souvenirs: this.save.data.souvenirs, visited: this.save.data.visited});
+    if (this.state === 'book') this.ui.book({todayId: this.showing.today, shownId: this.showing.shown.day, souvenirs: this.save.data.souvenirs, visited: this.save.data.visited, completed: this.save.data.completed});
   }
   private openDoor(portal: TimePortal) {
     const c = portal.chapter; if (!c) return;
     this.state = 'door'; this.panelFrom = 'play'; this.slime.pause(); this.focusPortal = portal;
     if (this.save.add('visited', c.id)) portal.setChapter(c, true);
-    this.ui.prompt(null); this.ui.door(c, portal.slot.slot);
+    this.ui.prompt(null); this.ui.door(c, portal.slot.slot, this.save.data.completed.includes(c.id));
   }
   private focusPortal: TimePortal | null = null;
+  /** Leave through a time portal: the level is its own page (see 11/7 plan). */
+  private go(id: string) { this.ui.toast('穿过时光门…'); setTimeout(() => { location.href = 'level.html?id=' + encodeURIComponent(id); }, 250); }
+  /** Coming back from a level: stand in front of the door it was entered from. */
+  private returnFrom = new URLSearchParams(location.search).get('from');
   private stepOutOfDoor() {
     const p = this.focusPortal; if (!p) return; this.focusPortal = null;
     const fx = Math.sin(p.slot.yaw), fz = Math.cos(p.slot.yaw), at = p.local(this.slime.position);
@@ -98,7 +109,7 @@ export class Game {
     if (e.code === 'Enter' && this.state === 'title') { this.start(); return; }
     if (e.code === 'KeyJ' && !e.repeat && ['play', 'book', 'title', 'pause'].includes(this.state)) { e.preventDefault(); if (this.state === 'pause') { this.state = 'play'; } this.openBook(); return; }
     if (e.code === 'KeyF' && !e.repeat) {
-      if (this.state === 'door') { this.closePanel(true); return; }
+      if (this.state === 'door') { const c = this.focusPortal?.chapter; if (c?.status === 'web') this.go(c.id); else this.closePanel(true); return; }
       if (this.state === 'play' && this.focus) { if (this.focus.kind === 'lectern') this.openBook(); else this.openDoor(this.focus.portal); }
       return;
     }

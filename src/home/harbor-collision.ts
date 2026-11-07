@@ -6,7 +6,7 @@ const SKIP = /water|gull|rain|foam|seabed|shaft|puddle|weather|pennant|wire|rope
 const SOLID = /landscape|buildings|warehouse|waitingRoom|whDoor|props|vending|lighthouse|tetrapod|house|base|boats|cruiser|time-portal|history-lectern/;
 const pathOf = (m: any) => { const names: string[] = []; let node = m; while (node) { names.push(node.name ?? ''); node = node.parent; } return names.join('/'); };
 /**
- * Bake every solid triangle in the harbour once, at load, into a 0.2 m height field (see slime/height-field.ts).
+ * Bake every solid triangle in the harbour once, at load, into a 0.1 m height field (see slime/height-field.ts).
  * The worker then answers every collision query with array lookups instead of scanning triangles.
  * Boats bob by about 0.15 m around their moorings; their baked decks are a static approximation.
  */
@@ -33,7 +33,7 @@ export function bakeHarborCollision(ctx: any, base: WorldDefinition): WorldDefin
     else push(m.geometry, m.matrixWorld);
     meshes++;
   });
-  const height = bakeHeightField(data, {x0: -32, z0: -32, size: 64, cell: .2, clearance: .75, fluids: base.fluids});
+  const height = bakeHeightField(data, {x0: -32, z0: -32, size: 64, cell: .1, clearance: .75, fluids: base.fluids});
   console.info(`[Slime collision] ${meshes} meshes, ${data.length / 9} triangles → ${height.w}×${height.h} height field in ${(performance.now() - started).toFixed(0)} ms`);
   return {...base, boxes: base.boxes.filter(b => b.name.startsWith('training')), triangles: undefined, height};
 }

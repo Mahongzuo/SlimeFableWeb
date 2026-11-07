@@ -9,6 +9,38 @@ export const NO_FLOOR = -1e4;
 const empty = (v: number) => v <= NO_FLOOR / 2;
 export class HeightField {
   constructor(readonly d: HeightFieldData) {}
+  cell(i: number, j: number) { const d = this.d; return i < 0 || j < 0 || i >= d.w || j >= d.h ? NO_FLOOR : d.data[i + j * d.w]; }
+  /**
+   * Keep a particle `skin` metres clear of wall columns (like UE's collider skin = particle spacing), so the
+   * reconstructed surface, which grows past the particles, rests against walls instead of sinking into them.
+   * A wall is a neighbour column topping out above the particle and clearly above its own cell (not a slope).
+   */
+  pushOut(p: [number, number, number], skin: number) {
+    const d = this.d, c = d.cell, fx = (p[0] - d.x0) / c, fz = (p[2] - d.z0) / c, i = Math.floor(fx), j = Math.floor(fz);
+    if (i < 1 || j < 1 || i >= d.w - 1 || j >= d.h - 1) return;
+    const own = this.cell(i, j);
+    if (own > p[1] + .45) { // deep inside a column: leave through the nearest free cell
+      let best = Infinity, bx = 0, bz = 0;
+      for (let r = 1; r <= 2 && best === Infinity; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== r || this.cell(i + di, j + dj) > p[1] + .03) continue;
+        const nx = Math.min(Math.max(fx, i + di + skin / c), i + di + 1 - skin / c), nz = Math.min(Math.max(fz, j + dj + skin / c), j + dj + 1 - skin / c);
+        const dist = Math.hypot(nx - fx, nz - fz); if (dist < best) { best = dist; bx = nx; bz = nz; }
+      }
+      if (best < Infinity) { p[0] = d.x0 + bx * c; p[2] = d.z0 + bz * c; }
+      return;
+    }
+    const wall = (di: number, dj: number) => { const v = this.cell(i + di, j + dj); return v > p[1] + .03 && v > own + .12; };
+    const L = wall(-1, 0), R = wall(1, 0), B = wall(0, -1), F = wall(0, 1), s = skin / c;
+    let x = fx, z = fz;
+    if (L && x - i < s) x = i + s; if (R && i + 1 - x < s) x = i + 1 - s;
+    if (B && z - j < s) z = j + s; if (F && j + 1 - z < s) z = j + 1 - s;
+    for (const [di, dj] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+      if (!wall(di, dj) || (di < 0 ? L : R) || (dj < 0 ? B : F)) continue;
+      const cx = di < 0 ? i : i + 1, cz = dj < 0 ? j : j + 1, vx = x - cx, vz = z - cz, len = Math.hypot(vx, vz);
+      if (len < s && len > 1e-6) { x = cx + vx / len * s; z = cz + vz / len * s; }
+    }
+    p[0] = d.x0 + x * c; p[2] = d.z0 + z * c;
+  }
   /** Nearest cell, unsmoothed: used for wall tests so edges stay sharp. */
   raw(x: number, z: number) {
     const d = this.d, i = Math.floor((x - d.x0) / d.cell), j = Math.floor((z - d.z0) / d.cell);

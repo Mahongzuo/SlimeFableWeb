@@ -5,11 +5,11 @@ import {DayId, dayLabel, month, monthLength, isValidDay} from '../game/calendar'
 import {elements} from '../slime/elements';
 export interface UIHandlers {
   start(): void; resume(): void; pause(): void; openBook(): void; closePanel(): void; showDay(id: DayId): void; showToday(): void;
-  respawn(): void; quality(q: 'high' | 'balanced'): void; toTitle(): void; element(i: number): void;
+  respawn(): void; quality(q: 'high' | 'balanced'): void; toTitle(): void; element(i: number): void; go(id: string): void;
 }
 export interface TitleInfo {ready: boolean; todayId: DayId; year: number; weekday: string; shown: DayMeta; isToday: boolean; quality: 'high' | 'balanced'}
 export interface HudInfo {day: string; sub: string; objective: string; shards: number; total: number; element: number; aiming: boolean}
-export interface BookInfo {todayId: DayId; shownId: DayId; souvenirs: string[]; visited: string[]}
+export interface BookInfo {todayId: DayId; shownId: DayId; souvenirs: string[]; visited: string[]; completed: string[]}
 const slimeMark = `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M7 50C7 30 17 12 32 12s25 18 25 38c0 4-3 6-7 6H14c-4 0-7-2-7-6z" style="fill:var(--accent)" stroke="#2f2a24" stroke-width="3.5"/><ellipse cx="24" cy="38" rx="3.3" ry="4.3" fill="#2f2a24"/><ellipse cx="40" cy="38" rx="3.3" ry="4.3" fill="#2f2a24"/><path d="M27 45q5 4 10 0" stroke="#2f2a24" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M17 26c2-5 6-9 11-10" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" opacity=".85"/></svg>`;
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]!));
 const statusChip = (c: ChapterMeta) => `<span class="chip ${c.status === 'web' ? 'sea' : c.status === 'ue' ? 'stamp' : 'mute'}">${statusNames[c.status]}</span>`;
@@ -40,7 +40,7 @@ export class GameUI {
       const act = t.dataset.act;
       if (act === 'start') this.h.start(); else if (act === 'resume') this.h.resume(); else if (act === 'book') this.h.openBook();
       else if (act === 'pause') this.h.pause(); else if (act === 'close') this.h.closePanel(); else if (act === 'respawn') this.h.respawn(); else if (act === 'title') this.h.toTitle();
-      else if (act === 'show') this.h.showDay(this.bookState.selected); else if (act === 'today') { this.h.showToday(); }
+      else if (act === 'show') this.h.showDay(this.bookState.selected); else if (act === 'today') { this.h.showToday(); } else if (act === 'go' && t.dataset.id) this.h.go(t.dataset.id);
     });
     root.addEventListener('change', e => { const t = e.target as HTMLSelectElement; if (t.dataset.quality !== undefined) this.h.quality(t.value as 'high' | 'balanced'); });
   }
@@ -99,11 +99,11 @@ export class GameUI {
         <div class="day-summary card"><div><strong>${dayLabel(st.selected)}</strong><small>${sel ? `${sel.chapters.length} 个故事 · ${sel.theme}` : '档案整理中'}${st.selected === info.todayId ? ' · 今天' : ''}</small></div>
         ${sel ? (shown ? '<span class="chip sea">港口正在展出</span>' : '<button class="btn small primary" data-act="show">在港口展出</button>') : (info.shownId !== info.todayId && st.selected === info.todayId ? '' : '')}</div>
         <div class="row" style="justify-content:flex-start;margin-top:12px"><button class="btn small ghost" data-act="today">回到今天</button></div></div>`;
-      right = `<div class="page">${sel ? `<h2>${dayLabel(st.selected)}</h2><p class="sub">按顺序对应港口的 1–${sel.chapters.length} 号时光门</p>${sel.chapters.map(c => `<div class="chapter"><div class="yr">${c.year}<small>${templateNames[c.template]}</small></div><div><h4>${esc(c.event)}</h4><p>主线：${esc(c.quest)}</p><div class="meta">${statusChip(c)}<span class="chip">✦ ${esc(c.souvenir)}</span>${info.visited.includes(c.id) ? '<span class="chip mute">已拜访</span>' : ''}</div></div></div>`).join('')}`
+      right = `<div class="page">${sel ? `<h2>${dayLabel(st.selected)}</h2><p class="sub">按顺序对应港口的 1–${sel.chapters.length} 号时光门</p>${sel.chapters.map(c => `<div class="chapter"><div class="yr">${c.year}<small>${templateNames[c.template]}</small></div><div><h4>${esc(c.event)}</h4><p>主线：${esc(c.quest)}</p><div class="meta">${statusChip(c)}<span class="chip">✦ ${esc(c.souvenir)}</span>${info.completed.includes(c.id) ? '<span class="chip sea">已通关</span>' : info.visited.includes(c.id) ? '<span class="chip mute">已拜访</span>' : ''}</div></div></div>`).join('')}`
         : `<div class="empty"><b>这一天的档案还在整理。</b>已经收录：${Object.keys(days).sort().map(dayLabel).join('、')}。<br>新的日子会按日历提前上架。</div>`}</div>`;
     } else if (st.tab === 'souvenir') {
       const all = Object.values(days).flatMap(d => d.chapters);
-      left = `<div class="page" style="grid-column:1/3"><h2>纪念品</h2><p class="sub">每扇门的主线通关后，带回一件小东西。已收集 ${info.souvenirs.length} / ${all.length}</p>
+      left = `<div class="page" style="grid-column:1/3"><h2>纪念品</h2><p class="sub">每扇门后面都藏着一件纪念品，找到就收进这里。已收集 ${info.souvenirs.length} / ${all.length}</p>
         <div class="souvenirs">${all.map(c => { const got = info.souvenirs.includes(c.id); return `<div class="souvenir ${got ? 'got' : ''}"><div class="seal">${got ? '✦' : '?'}</div><b>${got ? esc(c.souvenir) : '尚未获得'}</b><small>${dayLabel(c.day)} · ${c.year}</small></div>`; }).join('')}</div></div>`;
     } else {
       const rows: [string, string][] = [['<span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>', '移动；按住 <span class="key">Shift</span> 冲刺'], ['<span class="key">空格</span>', '两段跳；漂在水里也能起跳'], ['<span class="key">F</span>', '互动：翻开史书、进入时光门'], ['<span class="key">J</span>', '打开 / 合上史书'], ['<span class="key">1</span>–<span class="key">6</span>', '切换水、风、火、雷、暗、物；水属性游得最快'], ['<span class="key">G</span>+<span class="key">左键</span>', '瞄准并发射分身（最多 5 团）'], ['<span class="key">X</span>', '按住收回分身'], ['<span class="key">C</span>', '按住摊开身体，钻低矮缝隙'], ['<span class="key">左键</span>', '四段连击'], ['<span class="key">滚轮</span>', '镜头远近'], ['<span class="key">T</span>', '卡住时回到出生点'], ['<span class="key">Esc</span>', '暂停']];
@@ -111,14 +111,14 @@ export class GameUI {
     }
     this.panel(`<div class="overlay"><div class="book grain">${tabs}${left}${right}</div></div>`);
   }
-  door(c: ChapterMeta, slot: number) {
+  door(c: ChapterMeta, slot: number, completed = false) {
     const playable = c.status === 'web';
     this.panel(`<div class="overlay"><div class="door card" style="--a:${c.palette[0]};--b:${c.palette[1]}"><div class="door-band"><small>第 ${slot} 扇门</small><b>${c.year}</b></div>
       <div class="door-body"><div class="kicker">时光门 · ${dayLabel(c.day)} · ${templateNames[c.template]}</div><h2>${esc(c.event)}</h2>
       <div class="quest"><span>◆</span> 主线：${esc(c.quest)}</div><ol>${c.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
       <div class="meta">${statusChip(c)}<span class="chip">✦ 纪念品：${esc(c.souvenir)}</span></div>
       ${playable ? '' : '<p class="door-note">这扇门后面的关卡还在 Web 版制作中，按日历上架后就能从这里出发。现在可以先在港口里找找时光碎片。</p>'}
-      <div class="row" style="justify-content:flex-start"><button class="btn primary" data-act="resume">${playable ? '出发' : '回到港口'}<span class="key">F</span></button><button class="btn ghost small" data-act="book">在史书里看这一天</button></div></div></div></div>`);
+      <div class="row" style="justify-content:flex-start">${playable ? `<button class="btn primary" data-act="go" data-id="${c.id}">${completed ? '再去一次' : '出发'}<span class="key">F</span></button><button class="btn small" data-act="resume">回到港口</button>` : '<button class="btn primary" data-act="resume">回到港口<span class="key">F</span></button>'}<button class="btn ghost small" data-act="book">在史书里看这一天</button></div></div></div></div>`);
   }
 }
 export {isValidDay};

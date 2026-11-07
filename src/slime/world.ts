@@ -10,7 +10,7 @@ export interface WorldDefinition {boxes:Box[];surfaces:GroundSurface[];triangles
 export interface CollisionWorld {definition:WorldDefinition;boxes:Box[];terrain:(x:number,z:number)=>number|null;support:(x:number,z:number,footY?:number)=>number|null;projectPoint:(p:Vec,r:number)=>void;moveCapsule:(p:Vec,d:Vec,r?:number,height?:number)=>{position:Vec;squeezed:boolean};cast:(a:Vec,b:Vec,r?:number,camera?:boolean)=>{point:Vec;t:number}|null;fluid:(x:number,z:number)=>number|null}
 export function createWorld(definition:WorldDefinition):CollisionWorld {
  const boxes=definition.boxes,mesh=definition.triangles?.length?new TriangleWorld(definition.triangles):null,hf=definition.height?new HeightField(definition.height):null;
- const STEP=.34,DIRS:[number,number][]=[[1,0],[-1,0],[0,1],[0,-1],[.7071,.7071],[-.7071,.7071],[.7071,-.7071],[-.7071,-.7071]];
+ const STEP=.34,SKIN=.07,DIRS:[number,number][]=[[1,0],[-1,0],[0,1],[0,-1],[.7071,.7071],[-.7071,.7071],[.7071,-.7071],[-.7071,-.7071]];
  /** True when any footprint sample stands on a column taller than a step: a wall for a body whose feet are at y. */
  const wall=(x:number,z:number,y:number,r:number)=>{if(!hf)return false;if(hf.raw(x,z)>y+STEP)return true;for(const [dx,dz] of DIRS)if(hf.raw(x+dx*r,z+dz*r)>y+STEP)return true;return false};
  function terrain(x:number,z:number):number|null {let result:number|null=null;for(const s of definition.surfaces){if(x<s.min[0]||x>s.max[0]||z<s.min[1]||z>s.max[1])continue;let y=s.height+(x-s.min[0])*(s.slope?.[0]??0)+(z-s.min[1])*(s.slope?.[1]??0);if(s.grid){const g=s.grid,gx=(x-s.min[0])/(s.max[0]-s.min[0])*(g.width-1),gz=(z-s.min[1])/(s.max[1]-s.min[1])*(g.height-1),ix=Math.min(g.width-2,Math.floor(gx)),iz=Math.min(g.height-2,Math.floor(gz)),tx=gx-ix,tz=gz-iz;const at=(a:number,b:number)=>g.values[a+b*g.width];y+=(at(ix,iz)*(1-tx)+at(ix+1,iz)*tx)*(1-tz)+(at(ix,iz+1)*(1-tx)+at(ix+1,iz+1)*tx)*tz;}result=y;}return result;}
@@ -20,7 +20,7 @@ function support(x:number,z:number,footY=Infinity):number|null {
 }
 function projectPoint(p:Vec,r:number){
  mesh?.project(p,r);
- if(hf&&hf.raw(p[0],p[2])>p[1]-r+.45){outer:for(let ring=1;ring<=3;ring++)for(const [dx,dz] of DIRS){const qx=p[0]+dx*hf.d.cell*ring,qz=p[2]+dz*hf.d.cell*ring;if(hf.raw(qx,qz)<=p[1]-r+.3){p[0]=qx;p[2]=qz;break outer}}}
+ hf?.pushOut(p,SKIN);
  const g=support(p[0],p[2],p[1]);if(g!==null&&p[1]<g+r&&p[1]>g-.7)p[1]=g+r;
  for(const b of boxes){if(p[1]+r<=b.min[1]||p[1]-r>=b.max[1])continue;const q:Vec=[clamp(p[0],b.min[0],b.max[0]),clamp(p[1],b.min[1],b.max[1]),clamp(p[2],b.min[2],b.max[2])];let dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],d=Math.hypot(dx,dy,dz);if(d>=r)continue;if(d>1e-5){const s=(r-d)/d;p[0]+=dx*s;p[1]+=dy*s;p[2]+=dz*s}else{const faces=[p[0]-b.min[0],b.max[0]-p[0],p[1]-b.min[1],b.max[1]-p[1],p[2]-b.min[2],b.max[2]-p[2]];const f=faces.indexOf(Math.min(...faces));p[Math.floor(f/2)]=(f%2?b.max:b.min)[Math.floor(f/2)]+(f%2?r:-r)}}
 }

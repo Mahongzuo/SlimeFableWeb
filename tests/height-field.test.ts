@@ -33,3 +33,14 @@ test('camera and aim casts stop at walls', () => {
   const hit = world.cast([0, .5, 0], [3, .5, 0], .05);
   assert.ok(hit && hit.point[0] < 1.1 && hit.point[0] > .7);
 });
+test('particles keep a skin of clearance from walls so the surface does not sink in', () => {
+  const p: [number, number, number] = [.97, .1, 0];
+  world.projectPoint(p, .022);
+  assert.ok(p[0] <= .93 + 1e-6, 'pushed back from the wall: ' + p[0]);
+  const inside: [number, number, number] = [1.1, .3, 0];
+  world.projectPoint(inside, .022);
+  assert.ok(inside[0] < 1 || inside[0] > 1.2, 'left the wall column: ' + inside[0]);
+  const open: [number, number, number] = [-.5, .1, 0];
+  world.projectPoint(open, .022);
+  assert.ok(Math.abs(open[0] + .5) < 1e-9, 'untouched in the open');
+});

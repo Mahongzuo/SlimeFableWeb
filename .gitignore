@@ -17,3 +17,4 @@ Thumbs.db
 .env.*
 auth.json
 *.bundle
+tasks/.runs/
