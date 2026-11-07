@@ -109,6 +109,8 @@ export class Game {
     this.doorLatch.add(p.slot.slot);
   }
   private key(e: KeyboardEvent) {
+    if (e.code === 'KeyB' && !e.repeat && this.state === 'play') { this.life.dex(this.life.dexOpen ? null : this.save.data.life); return; }
+    if (e.code === 'Escape' && this.life.dexOpen) { this.life.dex(null); }
     if (e.code === 'Enter' && this.state === 'title') { this.start(); return; }
     if (e.code === 'KeyJ' && !e.repeat && ['play', 'book', 'title', 'pause'].includes(this.state)) { e.preventDefault(); if (this.state === 'pause') { this.state = 'play'; } this.openBook(); return; }
     if (e.code === 'KeyF' && !e.repeat) {
