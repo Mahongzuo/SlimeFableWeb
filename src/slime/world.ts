@@ -22,7 +22,8 @@ function projectPoint(p:Vec,r:number){
  mesh?.project(p,r);
  hf?.pushOut(p,SKIN);
  const g=support(p[0],p[2],p[1]);if(g!==null&&p[1]<g+r&&p[1]>g-.7)p[1]=g+r;
- for(const b of boxes){if(p[1]+r<=b.min[1]||p[1]-r>=b.max[1])continue;const q:Vec=[clamp(p[0],b.min[0],b.max[0]),clamp(p[1],b.min[1],b.max[1]),clamp(p[2],b.min[2],b.max[2])];let dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],d=Math.hypot(dx,dy,dz);if(d>=r)continue;if(d>1e-5){const s=(r-d)/d;p[0]+=dx*s;p[1]+=dy*s;p[2]+=dz*s}else{const faces=[p[0]-b.min[0],b.max[0]-p[0],p[1]-b.min[1],b.max[1]-p[1],p[2]-b.min[2],b.max[2]-p[2]];const f=faces.indexOf(Math.min(...faces));p[Math.floor(f/2)]=(f%2?b.max:b.min)[Math.floor(f/2)]+(f%2?r:-r)}}
+ // beside a box (below its top) particles keep the surface skin, on top of it only their own radius
+ for(const b of boxes){const side=p[1]<b.max[1]-.01,rr=side?r+SKIN:r;if(p[1]+r<=b.min[1]||p[1]-r>=b.max[1])continue;const q:Vec=[clamp(p[0],b.min[0],b.max[0]),clamp(p[1],b.min[1],b.max[1]),clamp(p[2],b.min[2],b.max[2])];let dx=p[0]-q[0],dy=side?0:p[1]-q[1],dz=p[2]-q[2],d=Math.hypot(dx,dy,dz);if(d>=rr)continue;if(d>1e-5){const s=(rr-d)/d;p[0]+=dx*s;p[1]+=dy*s;p[2]+=dz*s}else{const faces=[p[0]-b.min[0],b.max[0]-p[0],p[1]-b.min[1],b.max[1]-p[1],p[2]-b.min[2],b.max[2]-p[2]];const f=faces.indexOf(Math.min(...faces)),k=Math.floor(f/2);p[k]=(f%2?b.max:b.min)[k]+(f%2?1:-1)*(k===1?r:rr)}}
 }
 function moveCapsule(p:Vec,delta:Vec,r=.27,height=.56):{position:Vec;squeezed:boolean}{
  const out:Vec=[...p];const steps=Math.max(1,Math.ceil(Math.hypot(delta[0],delta[2])/.10));let squeezed=false;

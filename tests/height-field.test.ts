@@ -44,3 +44,10 @@ test('particles keep a skin of clearance from walls so the surface does not sink
   world.projectPoint(open, .022);
   assert.ok(Math.abs(open[0] + .5) < 1e-9, 'untouched in the open');
 });
+test('box colliders keep the same skin at their sides and only the radius on top', () => {
+  const boxed = createWorld({boxes: [{name: 'crate', min: [0, 0, 0], max: [1, 1, 1]}], surfaces: [{min: [-5, -5], max: [5, 5], height: 0}]});
+  const side: [number, number, number] = [-.03, .5, .5]; boxed.projectPoint(side, .022);
+  assert.ok(side[0] <= -.09 + 1e-6, 'kept 7 cm + radius off the side: ' + side[0]);
+  const top: [number, number, number] = [.5, 1.01, .5]; boxed.projectPoint(top, .022);
+  assert.ok(Math.abs(top[1] - 1.022) < 1e-6, 'rests on top at its radius: ' + top[1]);
+});
