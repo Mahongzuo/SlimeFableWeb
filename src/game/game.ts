@@ -1,7 +1,8 @@
 import {SlimeCharacter} from '../slime/character';
 import {Vec, distance} from '../slime/types';
-import {harborDefinition} from '../home/harbor-world';
-import {bakeHarborCollision} from '../home/harbor-collision';
+import {buildHomeWorld} from '../world/home-world';
+import type {BuiltZones} from '../zones';
+import type {Interactable, PlayerHandle} from '../zones/types';
 import {HarborWater} from '../home/harbor-water';
 import {homeSpawn, plazaCenter, portalSlots, SEA_LEVEL, shardSpots, spawnYaw} from '../home/layout';
 import {TimePortal} from '../home/portals';
@@ -18,7 +19,7 @@ const TITLE_CAM = {pos: [-8, 6.8, 35] as Vec, target: [6, 1.9, 20] as Vec};
 export class Game {
   state: State = 'loading'; private panelFrom: State = 'play'; private ui: GameUI; readonly slime: SlimeCharacter; private save = new Save();
   private showing!: Showing; private portals: TimePortal[]; private lectern: Lectern; private shards: Shards; private fx: SeaFX; private puddles: HarborWater;
-  private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | null = null; private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
+  private zones!: BuiltZones; private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | {kind: 'spot'; spot: Interactable} | null = null; private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
   constructor(private app: any) {
     const ctx = app.ctx; this.T = ctx.THREE;
     this.ui = new GameUI({
@@ -30,12 +31,12 @@ export class Game {
     // plaza pieces exist before the bake so their meshes become part of the height field
     this.portals = portalSlots.map(s => new TimePortal(ctx, s));
     this.lectern = new Lectern(ctx);
-    const world = bakeHarborCollision(ctx, {...harborDefinition, boxes: [], water: ctx.puddles, fluids: [{min: [-10, -30], max: [30, 10], level: SEA_LEVEL, sink: .14}]});
+    const home = buildHomeWorld(ctx, this.save.data.life, () => this.save.write()), world = home.world; this.zones = home.zones;
     this.fx = new SeaFX(ctx);
     this.slime = new SlimeCharacter(ctx, {world, spawn: homeSpawn, ui: false, trainingTargets: [], showCollisionBoxes: false, title: '晴雨港',
       onToast: () => {}, onReady: () => this.ready(),
       onLand: (speed, swimming) => { if (swimming && speed > 1.2) this.fx.splash(this.slime.position, speed); }}).attach();
-    this.slime.quality = this.save.data.quality;
+    this.slime.quality = this.save.data.quality; this.player = this.makePlayer();
     window.__slime = this.slime; (window as any).__game = this;
     this.puddles = new HarborWater(ctx, this.slime);
     this.shards = new Shards(ctx, this.save.data.shards);
@@ -110,7 +111,7 @@ export class Game {
     if (e.code === 'KeyJ' && !e.repeat && ['play', 'book', 'title', 'pause'].includes(this.state)) { e.preventDefault(); if (this.state === 'pause') { this.state = 'play'; } this.openBook(); return; }
     if (e.code === 'KeyF' && !e.repeat) {
       if (this.state === 'door') { const c = this.focusPortal?.chapter; if (c?.status === 'web') this.go(c.id); else this.closePanel(true); return; }
-      if (this.state === 'play' && this.focus) { if (this.focus.kind === 'lectern') this.openBook(); else this.openDoor(this.focus.portal); }
+      if (this.state === 'play' && this.focus) { if (this.focus.kind === 'lectern') this.openBook(); else if (this.focus.kind === 'spot') this.focus.spot.act(); else this.openDoor(this.focus.portal); }
       return;
     }
     if (e.code === 'Escape' && (this.state === 'book' || this.state === 'door')) { this.closePanel(false); }
@@ -121,6 +122,8 @@ export class Game {
     for (const p of this.portals) { p.hover += ((this.focus?.kind === 'portal' && this.focus.portal === p ? 1 : 0) - p.hover) * (1 - Math.exp(-dt * 8)); p.update(t, dt); }
     if (this.state === 'play' && s.mode !== 'play') { this.state = 'pause'; this.ui.pause(this.save.data.quality); }
     this.shards.update(t, dt, this.state === 'play' ? s.position : [0, -99, 0]);
+    for (const u of this.zones.updates) u(t, dt, this.player);
+    this.followSun();
     if (this.state !== 'play') return;
     if (s.swimming && this.save.add('seenHints', 'swim')) this.ui.toast('漂起来了！水属性游得最快 · 东边的船坡和浮码头可以上岸', 4200);
     this.interact();
@@ -137,14 +140,34 @@ export class Game {
     }
     const dl = Math.hypot(p[0] - plazaCenter[0], p[2] - plazaCenter[2]);
     if (dl < 2 && dl < score) best = {kind: 'lectern'};
+    let spotPrompt: {title: string; sub: string} | null = null;
+    if (!best) for (const spot of this.zones.interactables) { const d = Math.hypot(p[0] - spot.position[0], p[2] - spot.position[2]); if (d < spot.radius && Math.abs(p[1] - spot.position[1]) < 2 && d < score) { const pr = spot.prompt(); if (pr) { score = d; best = {kind: 'spot', spot}; spotPrompt = pr; } } }
     this.focus = best;
     if (!best) { this.ui.prompt(null); return; }
-    const anchor = best.kind === 'lectern' ? new this.T.Vector3(plazaCenter[0], 1.95, plazaCenter[2]) : new this.T.Vector3(best.portal.slot.position[0], 3.05, best.portal.slot.position[2]);
+    const anchor = best.kind === 'lectern' ? new this.T.Vector3(plazaCenter[0], 1.95, plazaCenter[2]) : best.kind === 'spot' ? new this.T.Vector3(best.spot.position[0], best.spot.position[1] + 1.2, best.spot.position[2]) : new this.T.Vector3(best.portal.slot.position[0], 3.05, best.portal.slot.position[2]);
     const v = anchor.project(this.app.ctx.camera);
     if (v.z > 1) { this.ui.prompt(null); return; }
     const x = (v.x * .5 + .5) * innerWidth, y = (-v.y * .5 + .5) * innerHeight;
     if (best.kind === 'lectern') this.ui.prompt({x, y, title: '翻开史书', sub: `今天是 ${dayLabel(this.showing.today)}`});
+    else if (best.kind === 'spot') this.ui.prompt({x, y, ...spotPrompt!});
     else { const c = best.portal.chapter!; this.ui.prompt({x, y, title: `走进 ${c.year}`, sub: c.event.length > 16 ? c.event.slice(0, 15) + '…' : c.event}); }
+  }
+  /** The shadow camera covers 92 m; keep it centred on the slime (snapped to whole texels so shadows don't swim). */
+  private followSun() {
+    const sun = this.app.ctx.sun; if (!sun) return; const p = this.slime.position, step = 92 / 4096 * 8;
+    const x = Math.round(p[0] / step) * step, z = Math.round(p[2] / step) * step;
+    if (sun.userData.offset === undefined) { sun.userData.offset = sun.position.clone().sub(sun.target.position); }
+    sun.target.position.set(x, 0, z); sun.position.copy(sun.target.position).add(sun.userData.offset); sun.target.updateMatrixWorld();
+  }
+  private player!: PlayerHandle;
+  private makePlayer(): PlayerHandle {
+    const s = this.slime, ui = this.ui;
+    return {
+      get position() { return s.position; }, get velocity() { return s.velocity; }, get grounded() { return s.grounded; }, get swimming() { return s.swimming; },
+      get clinging() { return !!s.cling; }, get element() { return s.element; }, get spread() { return s.spread; },
+      launch: v => { s.cling = null; s.velocity = [...v]; s.grounded = false; s.jumps = 1; },
+      toast: (text, ms) => ui.toast(text, ms), mood: (m, sec = .8) => s.setMood(m as any, sec, 70), lock: on => { s.inputLock = on; },
+    };
   }
   private refreshHud() {
     const today = realToday(), sh = this.showing, n = this.shards.count, total = shardSpots.length;

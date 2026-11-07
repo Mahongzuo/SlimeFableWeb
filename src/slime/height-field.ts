@@ -59,12 +59,24 @@ export class HeightField {
   }
 }
 /** `ground`: the walkable floor where the scan starts (e.g. the analytic terrain). Without it the scan starts at the lowest geometry, which can be the underside of a slab. */
-export interface HeightBakeOptions {x0: number; z0: number; size: number; cell: number; clearance?: number; fluids?: FluidVolume[]; ground?: (x: number, z: number) => number | null;
+export interface HeightBakeOptions {x0: number; z0: number; size: number; /** Depth in z when the region is not square. */ sizeZ?: number; cell: number; clearance?: number; fluids?: FluidVolume[]; ground?: (x: number, z: number) => number | null;
   /** Triangles of hollow shells (hulls, tetrapod piles) whose columns count as solid up to their highest surface. */
   filled?: ArrayLike<number>;
   /** Per triangle: 1 = double-sided sheet (counts as both a top and an underside). */
   sheets?: ArrayLike<number>}
 const Y0 = -8, BIN = .25, NB = 88, WORDS = 3;
+/**
+ * Several baked tiles (the harbour plus each Home zone that has solid props). Queries go to the tile that contains
+ * the point; outside every tile there are no props, only the analytic terrain, so the answer is NO_FLOOR.
+ */
+export class HeightAtlas {
+  private tiles: HeightField[];
+  constructor(data: HeightFieldData[]) { this.tiles = data.map(d => new HeightField(d)); }
+  private tile(x: number, z: number) { for (const t of this.tiles) { const d = t.d; if (x >= d.x0 && z >= d.z0 && x < d.x0 + d.w * d.cell && z < d.z0 + d.h * d.cell) return t; } return null; }
+  pushOut(p: [number, number, number], skin: number) { this.tile(p[0], p[2])?.pushOut(p, skin); }
+  raw(x: number, z: number) { return this.tile(x, z)?.raw(x, z) ?? NO_FLOOR; }
+  at(x: number, z: number) { const t = this.tile(x, z); return t ? t.at(x, z) : null; }
+}
 export function bakeHeightField(tris: ArrayLike<number>, o: HeightBakeOptions): HeightFieldData {
   const base = bakeStack(tris, o);
   if (!o.filled?.length) return base;
@@ -80,7 +92,7 @@ export function bakeHeightField(tris: ArrayLike<number>, o: HeightBakeOptions): 
  * In open water the column starts just below the surface, so the seabed is ignored.
  */
 function bakeStack(tris: ArrayLike<number>, o: HeightBakeOptions): HeightFieldData {
-  const cell = o.cell, w = Math.ceil(o.size / cell), h = w, N = w * h, clearance = o.clearance ?? .75, gapBins = Math.max(1, Math.round(clearance / BIN) - 1);
+  const cell = o.cell, w = Math.ceil(o.size / cell), h = Math.ceil((o.sizeZ ?? o.size) / cell), N = w * h, clearance = o.clearance ?? .75, gapBins = Math.max(1, Math.round(clearance / BIN) - 1);
   const binOf = (y: number) => clamp(Math.floor((y - Y0) / BIN), 0, NB - 1);
   const cellOf = (x: number, z: number) => { const i = Math.floor((x - o.x0) / cell), j = Math.floor((z - o.z0) / cell); return i < 0 || j < 0 || i >= w || j >= h ? -1 : i + j * w; };
   const side = new Uint32Array(N * WORDS), sideTop = new Float32Array(N).fill(NO_FLOOR);

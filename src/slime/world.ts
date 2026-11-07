@@ -1,18 +1,18 @@
 import {Box,Vec,clamp} from './types';
 import {WaterPatch} from './water-mask';
 import {TriangleWorld} from './mesh-collision';
-import {HeightField,HeightFieldData} from './height-field';
+import {HeightAtlas,HeightField,HeightFieldData} from './height-field';
 /** Serializable collision data, shared verbatim with the simulation Worker. Metres, Y up. */
 export interface GroundSurface {min:[number,number];max:[number,number];height:number;slope?:[number,number];grid?:{width:number;height:number;values:number[]}}
 /** Open water the body floats on: XZ rectangle, surface height, and how deep the jelly sits in it. */
 export interface FluidVolume {min:[number,number];max:[number,number];level:number;sink?:number}
-export interface WorldDefinition {boxes:Box[];surfaces:GroundSurface[];triangles?:number[];height?:HeightFieldData;water?:WaterPatch[];fluids?:FluidVolume[];bounds?:{min:Vec;max:Vec}}
+export interface WorldDefinition {boxes:Box[];surfaces:GroundSurface[];triangles?:number[];height?:HeightFieldData;heights?:HeightFieldData[];water?:WaterPatch[];fluids?:FluidVolume[];bounds?:{min:Vec;max:Vec}}
 export interface CollisionWorld {definition:WorldDefinition;boxes:Box[];terrain:(x:number,z:number)=>number|null;support:(x:number,z:number,footY?:number)=>number|null;projectPoint:(p:Vec,r:number)=>void;moveCapsule:(p:Vec,d:Vec,r?:number,height?:number)=>{position:Vec;squeezed:boolean};cast:(a:Vec,b:Vec,r?:number,camera?:boolean)=>{point:Vec;t:number}|null;fluid:(x:number,z:number)=>number|null;
  /** First climbable wall from p along a horizontal direction: contact point at p's height, outward normal (XZ), wall top. */
  wall:(p:Vec,dir:[number,number],reach:number)=>WallHit|null}
 export interface WallHit {point:Vec;normal:Vec;top:number;distance:number}
 export function createWorld(definition:WorldDefinition):CollisionWorld {
- const boxes=definition.boxes,mesh=definition.triangles?.length?new TriangleWorld(definition.triangles):null,hf=definition.height?new HeightField(definition.height):null;
+ const boxes=definition.boxes,mesh=definition.triangles?.length?new TriangleWorld(definition.triangles):null,hf:HeightField|HeightAtlas|null=definition.heights?.length?new HeightAtlas(definition.height?[definition.height,...definition.heights]:definition.heights):definition.height?new HeightField(definition.height):null;
  const STEP=.34,SKIN=.07,DIRS:[number,number][]=[[1,0],[-1,0],[0,1],[0,-1],[.7071,.7071],[-.7071,.7071],[.7071,-.7071],[-.7071,-.7071]];
  /** True when any footprint sample stands on a column taller than a step: a wall for a body whose feet are at y. */
  const wall=(x:number,z:number,y:number,r:number)=>{if(!hf)return false;if(hf.raw(x,z)>y+STEP)return true;for(const [dx,dz] of DIRS)if(hf.raw(x+dx*r,z+dz*r)>y+STEP)return true;return false};
