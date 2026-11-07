@@ -3,12 +3,12 @@ import {defineLevel} from './types';
 // until the Grok card rewrites them; facts limited to the date, the city and the weekly's purpose.
 export default defineLevel({
   id: '0815-1920', template: 'explore-quest', theme: 'minguo-shanghai', seed: '0815-1920',
-  title: '1920 · 《劳动界》创刊', intro: '1920 年 8 月 15 日，上海。一份写给工人看的周刊就要印出来了。', outro: '创刊号送到了工友手里。',
+  title: '1920 · 《劳动界》创刊', intro: '1920 年 8 月 15 日，上海。写给工人看的周刊《劳动界》，就要印出来了。', outro: '创刊号送到工友手里了。这份周刊，是写给工人看的。',
   actors: {
-    editor: {name: '陈编', slot: 'plaza-a', lines: ['手稿还差几份，找齐了我们就开印。'], done: '印好了！把创刊号送到工友们手里吧。', lock: {element: 0, hint: '印机要用水调墨 · 按 1 切换成水属性'}},
-    worker1: {name: '码头工友', slot: 'lane', lines: ['这份报纸写的是我们自己的事？'], done: '谢谢，我念给大家听。'},
-    worker2: {name: '纱厂工友', slot: 'plaza-b', lines: ['下了工正好有空读一读。'], done: '字印得真清楚。'},
-    worker3: {name: '车夫', slot: 'yard', lines: ['我认字不多，听人念也行。'], done: '收好了，晚上带回去。'},
+    editor: {name: '陈编', slot: 'plaza-a', lines: ['手稿还没齐，里弄里再找找。', '齐了我们就开印。', '《劳动界》是写给工人看的周刊。'], done: '印好了，送到工友手里吧。', lock: {element: 0, hint: '印机要用水调墨 · 按 1 切换成水属性'}},
+    worker1: {name: '码头工友', slot: 'lane', lines: ['码头歇脚，想看看写给我们的字。', '周刊是写给工人看的，对吗？', '我念给旁边的工友听。'], done: '谢谢，我念给大家听。'},
+    worker2: {name: '纱厂工友', slot: 'plaza-b', lines: ['纱厂下了工，正好有空读。', '字印清楚些，我们就认得。', '这份周刊，像是说我们的事。'], done: '字印得真清楚。'},
+    worker3: {name: '车夫', slot: 'yard', lines: ['我认字不多，听人念也行。', '拉完车，想带一份回家。', '灯下让邻居慢慢念。'], done: '收好了，晚上带回去。'},
   },
   items: {
     draft1: {name: '手稿', slot: 'alley'},
@@ -24,5 +24,5 @@ export default defineLevel({
     ]},
     side: {title: '找到创刊号影印', objective: {type: 'collect', label: '创刊号影印', targets: ['copy']}, souvenir: '创刊号影印'},
   },
-  signs: ['印刷所', '茶馆', '杂货', '裁缝铺'],
+  signs: ['茶馆', '裁缝铺', '南货店', '酱园', '布庄', '药铺'],
 });
