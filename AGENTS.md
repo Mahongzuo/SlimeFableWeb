@@ -14,6 +14,11 @@
 3. 历史事实只用任务卡给的内容和来源，不自行新增或改写。严肃事件只用不战斗的模板。
 4. 交付前必须通过：`npm run check`、`npm test`、`npm run build`。
 5. 不提交 `node_modules/`、`dist/`、`qa/shots/`、任何密钥。
+6. 改了玩家看得到的东西（模型、UI、特效），验收时 `qa/evidence/` 里要有一张截图。
+
+## 任务卡与检查点
+- 任务卡模板：`tasks/templates/card.md`；派发与验收：`node scripts/agent-run.mjs run|verify <卡>`，报告写在 `tasks/reports/`。
+- 每次收工更新 `docs/session/active.md`（做到哪、下一步、卡在哪）。下次开工先读它。
 
 ## 目录
 - `content/days/MMDD.ts` 每日章节数据（Agent 主工作区）
