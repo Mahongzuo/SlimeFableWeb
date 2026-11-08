@@ -19,3 +19,18 @@ export interface LevelSpec {
   signs?: string[];
 }
 export const defineLevel = (spec: LevelSpec) => spec;
+
+/** Runner chapters: a linear dash through themed segments, picking things up, to a finish line. Geometry from `seed`. */
+export type RunnerSegment = 'hutong' | 'roofs' | 'avenue' | 'bridge';
+export interface RunnerSpec {
+  id: string; template: 'runner'; theme: string; seed: string; title: string; intro: string; outro: string;
+  segments: RunnerSegment[];
+  /** What the pickups are called, and how many the course carries. */
+  pickup: {name: string; count: number};
+  /** Banner text per segment as the slime enters it. */
+  segmentNames: Record<RunnerSegment, string>;
+  finish: {label: string; done: string};
+  souvenir: string; signs?: string[];
+}
+export type AnyLevel = LevelSpec | RunnerSpec;
+export const defineRunner = (spec: RunnerSpec) => spec;
