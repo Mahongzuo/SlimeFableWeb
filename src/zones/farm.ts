@@ -155,7 +155,7 @@ export const farm: ZoneBuilder = z => {
   }
   const update = farmLoop(z, root, plots, {x: stall.x, z: stall.z + 1.4});
   root.add(fence(z, [[-31, -29], [-31, -6], ], 0xe9dfc9));
-  root.add(tufts(z, 700, {min: [-105, -30], max: [-31, 29]}, (x, zz) => pathDistance(x, zz) < 2.4));
+  root.add(tufts(z, 4500, {min: [-105, -30], max: [-31, 29]}, (x, zz) => pathDistance(x, zz) < 2.4));
   const bugs = critterField(z, root, 'farm', plots.map(p => [p.x + 2, p.z - 1.4] as [number, number]));
   return {root, update: (t, dt, p) => { update(t, dt, p); bugs(t, dt, p); rooster.rotation.y = .35 + Math.sin(t * .22) * .6; }};
 };

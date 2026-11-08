@@ -99,7 +99,7 @@ export const park: ZoneBuilder = z => {
     if (pathDistance(x, zz) > 3 && x > -29 && x < 29 && Math.hypot(x - 20, zz - 64) > 5 && route.every(p => Math.hypot(x - p[0], zz - p[1]) > 3) && mushroomSites.every(p => Math.hypot(x - p[0], zz - p[1]) > 3)) spots.push([x, zz, .8 + z.rand() * .5]);
   }
   root.add(trees(z, spots, [0x7fb35f, 0x9cc46a, 0x6aa65c]));
-  root.add(tufts(z, 900, {min: [-29, 31], max: [30, 79]}, (x, zz) => pathDistance(x, zz) < 2.4));
+  root.add(tufts(z, 5000, {min: [-29, 31], max: [30, 79]}, (x, zz) => pathDistance(x, zz) < 2.4));
   const homes: [number, number][] = [[-10, 45], [8, 50], [-18, 66], [24, 44], [-4, 72], [14, 72]];
   const updateCritters = critterField(z, root, 'park', homes);
   let clock = 0, started = 0, lastRing = 0, target = 0, hasPrevious = false;

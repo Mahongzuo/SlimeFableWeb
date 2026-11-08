@@ -1,4 +1,4 @@
-import {inland, lakeEdge, pathDistance, WORLD, ZONES, zoneAt, LAKE} from './map';
+import {inland, lakeEdge, pathDistance, PATHS, WORLD, ZONES, zoneAt, LAKE} from './map';
 /** Grass tint per zone, then dirt paths and the lake's sand ring are painted into vertex colours. */
 const GRASS: Record<string, number> = {park: 0x9fc77c, lake: 0x93c07a, farm: 0xa9c46f, forest: 0x6f9e62};
 const DIRT = 0xc9ab7c, SAND = 0xe3d3a6, MUD = 0x8c7a5c, SKIRT = 0x7d6b55;
@@ -15,8 +15,11 @@ export function buildInlandGround(ctx: any) {
       const x = pos.getX(i) + (z.min[0] + z.max[0]) / 2, zz = pos.getZ(i) + (z.min[1] + z.max[1]) / 2, y = inland(x, zz);
       pos.setXYZ(i, x, y, zz);
       c.setHex(GRASS[zoneAt(x, zz)] ?? GRASS.park);
-      const n = Math.sin(x * 1.7 + zz * .9) * Math.sin(x * .37 - zz * 1.3); c.offsetHSL(n * .015, 0, n * .035);
-      const p = pathDistance(x, zz); if (p < 2.2) c.lerp(tint.setHex(DIRT), Math.min(1, (2.2 - p) / .8));
+      // two scales of patchiness: broad clover / dry-grass patches and fine mottling, like the harbour hill
+      const big = Math.sin(x * .11 + Math.sin(zz * .07) * 2) * Math.sin(zz * .13 + Math.cos(x * .05) * 2), fine = Math.sin(x * 1.7 + zz * .9) * Math.sin(x * .37 - zz * 1.3);
+      if (big > .35) c.lerp(tint.setHex(0x6f9f55), Math.min(.45, (big - .35) * 1.2)); else if (big < -.45) c.lerp(tint.setHex(0xc9c27a), Math.min(.35, (-.45 - big) * 1.1));
+      c.offsetHSL(fine * .012, 0, fine * .03);
+      const p = pathDistance(x, zz); if (p < 2.2) c.lerp(tint.setHex(DIRT), Math.min(1, (2.2 - p) / .8)); else if (p < 3.2) c.multiplyScalar(1 - (3.2 - p) * .06); // worn verge
       const e = lakeEdge(x, zz); if (e < 1.25) c.lerp(tint.setHex(y < LAKE.level - .2 ? MUD : SAND), Math.min(1, (1.25 - e) / .12));
       colors.set([c.r, c.g, c.b], i * 3);
     }
@@ -34,6 +37,16 @@ export function buildInlandGround(ctx: any) {
     const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(verts, 3)); geo.setIndex(idx); geo.computeVertexNormals();
     const m = new T.Mesh(geo, skirt); m.material.side = T.DoubleSide; m.name = 'inland-skirt'; group.add(m);
   }
+  // stones along both verges of every path (walk-through, so they never snag the slime)
+  const stones: [number, number, number][] = [];
+  for (const path of PATHS) for (let i = 1; i < path.length; i++) {
+    const [ax, az] = path[i - 1], [bx, bz] = path[i], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
+    for (let d = 0; d < len; d += .55 + ((d * 13.7) % 1) * .5) for (const side of [-1, 1]) { const x = ax + (bx - ax) * d / len + nx * side * 2.15, zz = az + (bz - az) * d / len + nz * side * 2.15; if (zoneAt(x, zz) !== 'harbor' && pathDistance(x, zz) > 1.9) stones.push([x, zz, (d * 7.1 + side) % 1]); }
+  }
+  const sm = new T.InstancedMesh(new T.DodecahedronGeometry(.16, 0), ctx.mats.toon(0xffffff), stones.length); sm.name = 'path-stones-fx';
+  const m = new T.Matrix4(), q = new T.Quaternion(), e = new T.Euler();
+  stones.forEach(([x, zz, r], i) => { e.set(r * 3, r * 9, 0); q.setFromEuler(e); m.compose(new T.Vector3(x, inland(x, zz) + .02, zz), q, new T.Vector3(1 + r, .55 + r * .3, .9 + r * .6)); sm.setMatrixAt(i, m); sm.setColorAt(i, c.setHex(0xbdb5a2).offsetHSL(0, 0, (r - .5) * .12)); });
+  sm.castShadow = sm.receiveShadow = true; group.add(sm);
   ctx.scene.add(group);
   return group;
 }

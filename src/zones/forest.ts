@@ -131,7 +131,7 @@ export const forest: ZoneBuilder = z => {
   scatter(40, .4, (x, zz) => leaves.push([x, z.ground(x, zz) + .06, zz, .6 + z.rand() * .5, .12, .4 + z.rand() * .4, z.rand() * 6]));
   batch('forest-leaf-piles', new T.IcosahedronGeometry(1, 0), 0x877340, leaves);
   root.add(signpost(z, -33, 53, -Math.PI / 2, '松果林', '轻手轻脚，小动物会躲'));
-  root.add(tufts(z, 1200, {min: [-105, 31], max: [-31, 141]}, (x, zz) => pathDistance(x, zz) < 2.4 || creekDistance(x, zz) < 1, [0x5c814c, 0xa69a56, 0xc98fb8, 0xe3dcc0]));
+  root.add(tufts(z, 7000, {min: [-105, 31], max: [-31, 141]}, (x, zz) => pathDistance(x, zz) < 2.4 || creekDistance(x, zz) < 1, [0x5c814c, 0xa69a56, 0xc98fb8, 0xe3dcc0]));
   const homes: [number, number][] = [];
   for (let i = 0; i < 28; i++) { const x = -100 + z.rand() * 64, zz = 36 + z.rand() * 100; homes.push([x, zz]); }
   return {root, update: critterField(z, root, 'forest', homes)};
