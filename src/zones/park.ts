@@ -3,6 +3,7 @@ import {pathDistance} from '../world/map';
 import {signpost, trees, tufts} from './kit';
 import type {ZoneBuilder} from './types';
 import {critterField} from './critter-field';
+import {plazaLife} from './plaza-life';
 
 /** Windmill playground; all moving decoration is excluded from the static bake. */
 export const park: ZoneBuilder = z => {
@@ -243,7 +244,9 @@ export const park: ZoneBuilder = z => {
   let px = 0, py = 0, pz = 0;
   const highlight = () => rings.forEach((r, i) => { r.mesh.material.emissive.setHex(i === target ? 0xffbf49 : 0x000000); r.mesh.material.emissiveIntensity = i === target ? .85 : 0; });
   highlight();
+  const life = plazaLife(z, root, [4.2, 36.8], [19.5, 33.5]);
   return {root, update: (t, dt, player) => {
+    life(t, dt, player);
     updateCritters(t, dt, player);
     const step = Math.max(0, dt); clock += step; blades.rotation.z += step * Math.PI * 2 * .6;
     const [x, y, zz] = player.position;

@@ -4,10 +4,11 @@ import {park} from './park';
 import {lake} from './lake';
 import {farm} from './farm';
 import {forest} from './forest';
+import {harbor} from './harbor';
 import type {Interactable, PlayerHandle, ZoneBuild, ZoneBuilder, ZoneContext} from './types';
 import type {LifeData} from '../life/state';
 /** Zone builders live one per file (park.ts, lake.ts, farm.ts, forest.ts); the contract is in types.ts. */
-export const zoneBuilders: Partial<Record<ZoneId, ZoneBuilder>> = {park, lake, farm, forest};
+export const zoneBuilders: Partial<Record<ZoneId, ZoneBuilder>> = {harbor, park, lake, farm, forest};
 
 export interface BuiltZones {roots: any[]; interactables: Interactable[]; updates: ((t: number, dt: number, p: PlayerHandle) => void)[]}
 export function buildZones(ctx: any, life: LifeData, save: () => void, extra: Pick<ZoneContext, 'hud' | 'historyDay'> = {}): BuiltZones {
