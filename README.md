@@ -1,6 +1,6 @@
 # 史莱姆寓言 · Web 版（SlimeFable Web）
 
-把「历史上的今天」做成史莱姆冒险：一个 Home 主关卡（晴雨港），每天自动挂上当天可玩的年份关卡。
+把「历史上的今天」做成史莱姆冒险：一个 Home 主关卡（凝露港），每天自动挂上当天可玩的年份关卡。
 这是 UE 5.8 原项目 SlimeFable 的 Web 版，用来验证每日上新的玩法循环，并把迭代成本降下来。
 
 ## 运行
@@ -12,7 +12,7 @@
 - `?date=MMDD` 可以模拟任意日期，例如 `/?date=0815`
 
 ## 现在有什么
-- **晴雨港 Home 关**：港口东侧的「时光广场」，中央是史书台，六扇时光门按当天章节顺序绑定 1–6 号门（沿用 UE 的 ChapterOrder 规则）。
+- **凝露港 Home 关**：港口东侧的「时光广场」，中央是史书台，六扇时光门按当天章节顺序绑定 1–6 号门（沿用 UE 的 ChapterOrder 规则）。
 - **每日匹配**：读取玩家本地日期；当天有内容就展出当天，没有就展出最近的历史档案，大厅不会空。史书里可以切换展出哪一天。
 - **内容**：8 月 15 日（6 章）、10 月 1 日（5 章），数据来自 UE 设计文档，在 `content/days/`。
 - **水面**：港池里史莱姆会漂浮，带落水水花、波纹和尾迹；水属性游得最快，火属性入水会冒蒸汽。东边的船坡和浮码头可以上岸，也能跳上船。
@@ -33,17 +33,17 @@
 ```
 content/            每日章节数据（DayMeta / ChapterMeta）
 src/slime/          史莱姆角色：PBF 软体、Marching Cubes、渲染、高度场碰撞
-src/home/           晴雨港：布局、时光门、史书台、碎片、水面效果、碰撞烘焙
+src/home/           凝露港：布局、时光门、史书台、碎片、水面效果、碰撞烘焙
 src/game/           状态机、日历、存档、每日匹配
 src/ui/             游戏 UI
-public/harbor.js    晴雨港场景（Three.js r170）
+public/harbor.js    凝露港场景（Three.js r170），由 `node scripts/localize-harbor.mjs` 从 vendor/sunharbor/harbor.ja.js 生成：日文招牌改中文、去掉船旗
 scripts/serve.mjs   本地静态服务（含 QA 截图接口）
 tests/              单元测试
 ```
 
 ## 协作与贡献
 - **Mahongzuo**：游戏策划、UE 原项目 SlimeFable、关卡设计、试玩与视觉验收。
-- **Claude（Anthropic，Opus 系列）**：晴雨港场景与史莱姆 Web 角色模块（SunHarbor 原型），本仓库的架构、Home 关、高度场碰撞、水面交互、游戏 UI 和测试。
+- **Claude（Anthropic，Opus 系列）**：凝露港场景与史莱姆 Web 角色模块（SunHarbor 原型），本仓库的架构、Home 关、高度场碰撞、水面交互、游戏 UI 和测试。
 - **Grok 4.7（Cursor）/ Codex（GPT-6 Astra）**：按任务卡批量制作关卡逻辑和程序化场景，目前在试点阶段，规则见 `AGENTS.md`。
 
 ## 第三方

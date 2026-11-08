@@ -1,6 +1,7 @@
 import {LAKE, pathDistance, lakeEdge} from '../world/map';
 import {signpost, trees} from './kit';
 import type {ZoneBuilder} from './types';
+import {lakeWater} from './lake-water';
 import {critterField} from './critter-field';
 import {fishingSpot} from './fishing-spot';
 
@@ -32,9 +33,12 @@ export const lake: ZoneBuilder = z => {
   waterGeometry.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
   const water = new T.Mesh(waterGeometry, z.toon(0xffffff, {vertexColors: true, transparent: true, opacity: .88, depthWrite: false}));
   water.name = 'lake-water'; water.scale.set(LAKE.rx * 1.08, 1, LAKE.rz * 1.08);
-  water.position.set(cx, LAKE.level, cz); root.add(water);
+  water.position.set(cx, LAKE.level, cz);
+  // mirror water from the harbour's sea shader; the flat toon disc stays only as a fallback
+  const mirror = lakeWater(z.ctx); if (mirror) root.add(mirror.mesh); else root.add(water);
+
   const foam = new T.Mesh(new T.RingGeometry(1.045, 1.065, 96).rotateX(-Math.PI / 2), z.toon(0xd7eee0, {transparent: true, opacity: .48, depthWrite: false}));
-  foam.name = 'water-shore-foam-fx'; foam.scale.set(LAKE.rx, 1, LAKE.rz); foam.position.set(cx, LAKE.level + .015, cz); root.add(foam);
+  foam.name = 'water-shore-foam-fx'; foam.scale.set(LAKE.rx, 1, LAKE.rz); foam.position.set(cx, LAKE.level + .015, cz); if (!mirror) root.add(foam);
   const leaves: Part[] = [[-10, 0, 105, .65, 1, .55], [-11.4, 0, 106, .48, 1, .5], [-9, 0, 106.6, .55, 1, .45], [15, 0, 119, .7, 1, .6], [16.2, 0, 120.3, .55, 1, .5], [14.1, 0, 121, .45, 1, .4], [-4, 0, 126, .65, 1, .5]];
   const lilies = new T.Group(); lilies.name = 'water-leaf-flowers'; root.add(lilies);
   const leaf = instances('water-lotus-leaf', new T.CircleGeometry(1, 18, .15, Math.PI * 2 - .3).rotateX(-Math.PI / 2), 0xffffff,
@@ -121,6 +125,7 @@ export const lake: ZoneBuilder = z => {
   root.add(trees(z, spots));
   const critters = critterField(z, root, 'lake', [[-22, 110], [24, 106], [-12, 128], [16, 126], [-24, 98], [26, 120]]);
   return {root, update: (t, dt, p) => {
+    mirror?.update();
     lilies.position.y = Math.sin(t * .85) * .018;
     fish(t, dt, p); fishEast(t, dt, p); fishWest(t, dt, p); critters(t, dt, p);
   }};

@@ -7,7 +7,7 @@ import {hill} from '../home/harbor-world';
 export type ZoneId = 'harbor' | 'park' | 'lake' | 'farm' | 'forest';
 export interface ZoneRect {id: ZoneId; name: string; min: [number, number]; max: [number, number]}
 export const ZONES: ZoneRect[] = [
-  {id: 'harbor', name: '晴雨港', min: [-30, -30], max: [30, 30]},
+  {id: 'harbor', name: '凝露港', min: [-30, -30], max: [30, 30]},
   {id: 'park', name: '风车公园', min: [-30, 30], max: [31, 80]},
   {id: 'lake', name: '镜湖', min: [-30, 80], max: [31, 142]},
   {id: 'farm', name: '梯田农场', min: [-106, -31], max: [-30, 30]},

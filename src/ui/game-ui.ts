@@ -52,7 +52,7 @@ export class GameUI {
     const shown = info.shown, chapters = shown.chapters;
     const line = info.isToday ? `今天港口开着 <b>${chapters.length}</b> 扇时光门。` : `${dayLabel(info.todayId)}的档案还在整理。港口正在展出 <b>${dayLabel(shown.day)}</b> 的 ${chapters.length} 扇时光门。`;
     layer.innerHTML = `<section class="screen-title"><div class="title-col">
-      <div class="postmark"><div><small>晴雨港</small><b>${String(m).padStart(2, '0')}·${String(d).padStart(2, '0')}</b><small>${info.year} ${info.weekday}</small></div></div>
+      <div class="postmark"><div><small>凝露港</small><b>${String(m).padStart(2, '0')}·${String(d).padStart(2, '0')}</b><small>${info.year} ${info.weekday}</small></div></div>
       <div class="kicker">Slime Fable · 历史上的今天</div>
       <h1>${slimeMark}史莱姆寓言</h1><p class="tagline">一小团果冻，穿过每一个“今天”。</p>
       <div class="today-card card grain"><h3>今天的档案</h3><p>${line}</p><div class="years">${chapters.map(c => `<span class="year-chip"><i style="background:${c.palette[0]}"></i>${c.year}</span>`).join('')}</div></div>

@@ -16,7 +16,7 @@ import {DayId, dayLabel, realToday} from './calendar';
 import {days} from '../../content/registry';
 type State = 'loading' | 'title' | 'play' | 'pause' | 'book' | 'door';
 const TITLE_CAM = {pos: [-8, 6.8, 35] as Vec, target: [6, 1.9, 20] as Vec};
-/** Home = 晴雨港. Owns the state machine; the slime, harbour and UI only talk through here. */
+/** Home = 凝露港. Owns the state machine; the slime, harbour and UI only talk through here. */
 export class Game {
   state: State = 'loading'; private panelFrom: State = 'play'; private ui: GameUI; readonly slime: SlimeCharacter; private save = new Save();
   private showing!: Showing; private portals: TimePortal[]; private lectern: Lectern; private shards: Shards; private fx: SeaFX; private puddles: HarborWater;
@@ -35,7 +35,7 @@ export class Game {
     this.life = new LifeUI(); this.life.show(false);
     const home = buildHomeWorld(ctx, this.save.data.life, () => this.save.write(), {hud: this.life, historyDay: () => this.showing?.isToday && this.showing.shown.chapters.some(c => c.status === 'web')}), world = home.world; this.zones = home.zones;
     this.fx = new SeaFX(ctx);
-    this.slime = new SlimeCharacter(ctx, {world, spawn: homeSpawn, ui: false, trainingTargets: [], showCollisionBoxes: false, title: '晴雨港',
+    this.slime = new SlimeCharacter(ctx, {world, spawn: homeSpawn, ui: false, trainingTargets: [], showCollisionBoxes: false, title: '凝露港',
       onToast: () => {}, onReady: () => this.ready(),
       onLand: (speed, swimming) => { if (swimming && speed > 1.2) this.fx.splash(this.slime.position, speed); }}).attach();
     this.slime.quality = this.save.data.quality; this.player = this.makePlayer();
@@ -62,10 +62,10 @@ export class Game {
       const portal = this.portals.find(p => p.chapter?.id === this.returnFrom);
       if (portal) { const fx = Math.sin(portal.slot.yaw), fz = Math.cos(portal.slot.yaw); this.slime.teleport([portal.slot.position[0] + fx * 2.3, 0, portal.slot.position[2] + fz * 2.3]); this.slime.yaw = Math.atan2(-fx, -fz); this.doorLatch.add(portal.slot.slot); }
       const done = this.save.data.completed.includes(this.returnFrom);
-      setTimeout(() => this.ui.toast(done ? '回到晴雨港 · 这扇门的故事已经写进史书' : '回到晴雨港', 3600), 500);
+      setTimeout(() => this.ui.toast(done ? '回到凝露港 · 这扇门的故事已经写进史书' : '回到凝露港', 3600), 500);
       this.returnFrom = null; history.replaceState(null, '', location.pathname);
       this.applyShowing();
-    } else if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('欢迎回到晴雨港 · 走近史书或时光门，按 F 看看', 4200), 600);
+    } else if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('欢迎回到凝露港 · 走近史书或时光门，按 F 看看', 4200), 600);
   }
   private resume() { if (this.state === 'title' || this.state === 'loading') { this.ui.panel(null); this.state = 'title'; return; } this.ui.panel(null); this.slime.play(); this.state = 'play'; this.ui.showHud(true); }
   private pauseGame() { if (this.state !== 'play') return; this.state = 'pause'; this.slime.pause(); this.ui.pause(this.save.data.quality); }
