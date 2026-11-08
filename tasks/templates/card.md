@@ -15,4 +15,6 @@ checks: check,test     # npm scripts that must pass
 
 验收：哪些命令通过；改了画面的，`qa/evidence/<卡名>.jpg` 要有一张截图（由 Opus 在浏览器里补拍）。
 
+<!-- Grok 卡：一张卡只动一个文件，规格写死（接口、常量、算法都给出），不要留“自己设计”——单轮推理超过 150 s 会被杀掉且无法续上。
+     Codex 卡：模型和强度每次运行都会被钉住；报告里会写实际模型和 token。 -->
 <!-- 派发：node scripts/agent-run.mjs run tasks/cards/<卡>.md → verify … --commit。超时就再 run 一次，会续上原会话。 -->
