@@ -37,6 +37,9 @@ const CODE = [
   [`Ne='"Yu Gothic","YuGothic","Hiragino Kaku Gothic ProN","Noto Sans JP","Meiryo","MS Gothic",sans-serif'`, `Ne='"PingFang SC","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Noto Sans CJK SC",sans-serif'`, 'sans font → Simplified Chinese'],
   [`Wn='"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP","MS Mincho",serif'`, `Wn='"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","SimSun",serif'`, 'serif font → Simplified Chinese'],
   ['ie.castShadow=!0,ie.receiveShadow=!0,Ut.add(ie)', 'ie.castShadow=!0,ie.receiveShadow=!0,ie.visible=!1,Ut.add(ie)', 'no stern flag on the boats'],
+  ['for(let D of g)xp(r,{...D,y0:d,topFn:()=>.05,groundFn:u,depth:.24,rand:o,colors:Xl,capColor:Ex,rowMin:.2,rowMax:.3});',
+   'for(let D of g)xp(r,{...D,y0:d,topFn:()=>.05,groundFn:u,depth:.24,rand:o,colors:Xl,capColor:Ex,rowMin:.2,rowMax:.3});(globalThis.__harborLots||(globalThis.__harborLots=[])).push({lot:e,group:s});{let __jp=new me;__jp.name="jp-house-body";__jp.userData.dynamic=!0;s.add(__jp);s=__jp;r=new Ln(s,t.vc);a=new Ln(s,t.wet)}',
+   'hill houses: keep the lot (platform, stone walls), build the Japanese house body into a removable, unmerged group; src/home/chinese-houses.ts builds the replacement'],
   ['let y=new Xp(x,a);t.add(y.mesh);', 'let y=new Xp(x,a);y.mesh.visible=!1,y.mesh.name="boat-flags-hidden",t.add(y.mesh);', 'no mast flags / pennants on the boats'],
 ];
 let s = readFileSync(src, 'utf8'); const problems = [];

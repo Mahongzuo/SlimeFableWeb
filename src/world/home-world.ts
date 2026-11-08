@@ -5,6 +5,7 @@ import {bakeHarborCollision} from '../home/harbor-collision';
 import {SEA_LEVEL} from '../home/layout';
 import {buildZones, type BuiltZones} from '../zones';
 import {bakeRegion} from './bake';
+import {buildChineseHouses} from '../home/chinese-houses';
 import type {LifeData} from '../life/state';
 import type {ZoneContext} from '../zones/types';
 import {buildInlandGround} from './terrain-mesh';
@@ -15,6 +16,7 @@ import {inlandSurfaces, lakeFluid, WORLD, ZONES} from './map';
  */
 export function buildHomeWorld(ctx: any, life: LifeData, save: () => void, extra: Pick<ZoneContext, 'hud' | 'historyDay'> = {}): {world: WorldDefinition; zones: BuiltZones} {
   const started = performance.now();
+  buildChineseHouses(ctx);
   buildInlandGround(ctx);
   const zones = buildZones(ctx, life, save, extra);
   const base: WorldDefinition = {
