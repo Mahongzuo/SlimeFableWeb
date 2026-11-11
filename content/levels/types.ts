@@ -32,5 +32,16 @@ export interface RunnerSpec {
   finish: {label: string; done: string; kind?: 'flag' | 'ribbon'};
   souvenir: string; signs?: string[];
 }
-export type AnyLevel = LevelSpec | RunnerSpec;
+/** Low-gravity landing; all values are game tuning, not a physical reconstruction. */
+export interface LanderSpec {
+  id: string; template: 'lander'; theme: 'space'; seed: string;
+  title: string; intro: string; outro: string; souvenir: string; hiddenSouvenir: string;
+  gravityScale: number; descentSeconds: number;
+  battery: {capacity: number; shadowDrain: number; sunCharge: number; jetCost: number};
+  sunlight: {period: number; radius: number; travel: number};
+  medals: {gold: number; silver: number};
+  science: [string, string, string];
+}
+export const defineLander = (spec: LanderSpec) => spec;
+export type AnyLevel = LevelSpec | RunnerSpec | LanderSpec;
 export const defineRunner = (spec: RunnerSpec) => spec;

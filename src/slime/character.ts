@@ -9,7 +9,7 @@ import {FrameInput,MeshFrame,Vec,Quality,Command,clamp,mix,idlePose,distance} fr
 export interface SlimeRenderPass {color:any;depth:any;time:number}
 /** Supply the same Three.js namespace used by your scene; no second renderer is created. */
 export interface SlimeContext {THREE:any;renderer:any;scene:any;camera:any;sun:any;controls:{enabled:boolean;target:any;update:()=>void}}
-export interface SlimeOptions {world:WorldDefinition;spawn:Vec;mount?:HTMLElement;ui?:boolean;input?:boolean;title?:string;trainingTargets?:Vec[];showCollisionBoxes?:boolean;sceneStats?:()=>unknown;
+export interface SlimeOptions {gravityScale?:number;world:WorldDefinition;spawn:Vec;mount?:HTMLElement;ui?:boolean;input?:boolean;title?:string;trainingTargets?:Vec[];showCollisionBoxes?:boolean;sceneStats?:()=>unknown;
  /** Game-layer hooks. The legacy HUD stays hidden when ui is false; toasts and landings are forwarded here. */
  onToast?:(text:string)=>void;onLand?:(speed:number,swimming:boolean)=>void;onReady?:()=>void;onCling?:(on:boolean)=>void}
 function createUI(mount?:HTMLElement){
@@ -73,7 +73,7 @@ export class SlimeCharacter {
   else{this.clingCooldown=r.event==='jump'?CLING.cooldown:r.event==='mantle'||r.event==='floor'||r.event==='vault'?.15:CLING.cooldown*1.5;this.jumps=this.grounded?0:1;if(r.event==='jump'){this.impact=.14;this.face.pulse('Happy',.2,40)}this.options.onCling?.(false)}
   if(this.grounded)this.lastSafe=[...this.position];
   return this.combat.update(dt,this.position,time,(target,damage)=>this.hit(target,damage)).pose}
- if(this.jumpRequest){if(this.jumps<2){this.velocity[1]=this.jumps===0?6.2:5.2;this.grounded=false;this.jumps++;this.impact=.12}this.jumpRequest=false}this.velocity[1]-=15.68*dt;
+ if(this.jumpRequest){if(this.jumps<2){this.velocity[1]=this.jumps===0?6.2:5.2;this.grounded=false;this.jumps++;this.impact=.12}this.jumpRequest=false}this.velocity[1]-=15.68*(this.options.gravityScale??1)*dt;
  const combat=this.combat.update(dt,this.position,time,(target,damage)=>this.hit(target,damage));const lunge=combat.lunge;const move:Vec=[this.velocity[0]*dt+this.combat.direction[0]*lunge,this.velocity[1]*dt,this.velocity[2]*dt+this.combat.direction[2]*lunge];const moved=this.world.moveCapsule(this.position,move,this.spread>.4?.17:.22,mix(.52,.18,this.spread));const next=moved.position;next[1]+=move[1];const floor=this.world.support(next[0],next[2],this.position[1]);if(floor!==null&&this.velocity[1]<=0&&next[1]<=floor+.035&&this.position[1]>=floor-.38){const fluid=this.world.fluid(next[0],next[2]);const floating=fluid!==null&&floor<=fluid-.05;if(!this.grounded){this.face.pulse(floating?'Happy':'Squash',.22,40);this.impact=clamp(-this.velocity[1]*.04,0,.55);this.options.onLand?.(-this.velocity[1],floating);}next[1]=floor;this.velocity[1]=0;this.grounded=true;this.jumps=0;this.swimming=floating}else{this.grounded=false;this.swimming=false}this.position=next;if(this.grounded&&next[1]>-2)this.lastSafe=[...next];if(this.outOfBounds()){const safe=[...this.lastSafe] as Vec;this.reset();this.position=safe;}
  return combat.pose;}
  private outOfBounds(){const b=this.options.world.bounds;if(!b)return this.position[1]<this.spawn[1]-20;return this.position.some((v,k)=>v<b.min[k]||v>b.max[k]);}

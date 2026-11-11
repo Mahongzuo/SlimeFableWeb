@@ -3,4 +3,5 @@ import {levels} from '../../content/levels/registry';
 const id = new URLSearchParams(location.search).get('id') ?? '';
 const spec = levels[id];
 if (spec?.template === 'runner') import('./runner');
+else if (spec?.template === 'lander') import('./lander');
 else import('./explore');
