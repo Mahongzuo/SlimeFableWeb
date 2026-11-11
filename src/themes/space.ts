@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type {Stage, StageLook} from '../level/stage';
 import type {LanderSpec} from '../../content/levels/types';
-import {landerTriangles, terrainHeight, sunlightCenter, type LanderLayout} from '../templates/lander';
+import {landerTriangles, horizonTriangles, horizonHeight, terrainHeight, sunlightCenter, type LanderLayout} from '../templates/lander';
 import {rng} from '../templates/random';
 
 /** Shared, texture-free parts for the 1969 / 1970 / 1980 / 2014 space chapters. */
-export const spaceLook: StageLook = {skyTop: '#050b1d', skyHorizon: '#101b30', fog: [130, 260], sun: '#fff0cc', sunIntensity: 2.5, hemiSky: '#8093b5', hemiGround: '#252937', ink: '#080e1b', wash: '#172238'};
+export const spaceLook: StageLook = {skyTop: '#01030b', skyHorizon: '#040914', fog: [180, 450], sun: '#fff1d6', sunIntensity: 3.4, hemiSky: '#344763', hemiGround: '#080a10', ink: '#02040a', wash: '#030611'};
 const silver = '#c7d3d9', blue = '#164675', gold = '#b49a67';
 function part(stage: Stage, root: any, geometry: any, color: string, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(geometry, stage.toon(color)); m.position.set(x, y, z); root.add(m); return m;
@@ -46,14 +46,21 @@ export function createTruss(stage: Stage, length = 4, width = .5) {
   return compact(g);
 }
 export function createStarDome(seed = 'space', radius = 150) {
-  const r = rng(seed), positions: number[] = [], colors: number[] = [];
-  for (let i = 0; i < 2200; i++) {
-    const a = r.range(0, Math.PI * 2), h = i < 1200 ? r.range(-1, 1) : Math.max(-.95, Math.min(.95, Math.sin(a) * .48 + r.range(-.09, .09)));
-    const s = Math.sqrt(1 - h * h), light = r.range(.42, 1);
-    positions.push(radius * s * Math.cos(a), radius * h, radius * s * Math.sin(a)); colors.push(light * .8, light * .88, light);
+  const r = rng(seed), dome = new THREE.Group(); dome.name = 'star-dome-fx';
+  // Three size classes plus a dense, dim tilted Milky Way, each a single draw.
+  for (let layer = 0; layer < 4; layer++) {
+    const positions: number[] = [], colors: number[] = [], count = [1350,240,55,2400][layer];
+    for (let i=0;i<count;i++) {
+      const a = r.range(0,Math.PI*2), h = layer === 3 ? Math.sin(a + .7)*.46 + r.range(-.065,.065) : r.range(-1,1);
+      const s = Math.sqrt(1-h*h), light = r.range(.45,1);
+      positions.push(radius*s*Math.cos(a),radius*h,radius*s*Math.sin(a));
+      colors.push(light*(i%5===0?1:.76),light*.87,light*(i%5===0?.75:1));
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3)); geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+    const stars = new THREE.Points(geo,new THREE.PointsMaterial({size:[.18,.35,.6,.15][layer],vertexColors:true,transparent:true,opacity:layer===3?.24:.95,depthWrite:false,fog:false}));
+    stars.layers.set(1); dome.add(stars);
   }
-  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  const stars = new THREE.Points(geo, new THREE.PointsMaterial({size: .23, vertexColors: true, transparent: true, opacity: .9, depthWrite: false, fog: false})); stars.name = 'star-dome-fx'; stars.layers.set(1); return stars;
+  return dome;
 }
 export function createSun(stage: Stage, position: [number, number, number] = [-80, 75, -85], radius = 3) {
   const g = new THREE.Group(); g.name = 'distant-sun-fx';
@@ -72,7 +79,12 @@ export function createPhilaeShell(stage: Stage) {
   const g = new THREE.Group(); g.name = 'philae-shell-fx';
   // An open harness leaves the jelly face and deformation visible.
   part(stage, g, new THREE.BoxGeometry(.65, .28, .14), blue, 0, .45, .28);
-  for (const s of [-1, 1]) part(stage, g, new THREE.BoxGeometry(.12, .32, .45), gold, s * .34, .38, .10);
+  for (const s of [-1, 1]) {
+    part(stage, g, new THREE.BoxGeometry(.12, .42, .57), '#d7ac52', s * .34, .38, .10);
+    // Faceted foil folds catch the hard sun without an imported texture.
+    for (let i=0;i<4;i++) { const foil=part(stage,g,new THREE.OctahedronGeometry(.12,0),i%2?'#a87932':'#e6c574',s*.405,.23+i*.1,.1); foil.scale.set(.22,.65,2); }
+  }
+  part(stage,g,new THREE.BoxGeometry(.68,.13,.55),'#d7ac52',0,.6,.10);
   for (let i = 0; i < 3; i++) {
     const a = i * Math.PI * 2 / 3, leg = part(stage, g, new THREE.CylinderGeometry(.025, .035, .65, 6), silver, Math.sin(a) * .43, .16, Math.cos(a) * .43); leg.rotation.z = Math.sin(a) * .7; leg.rotation.x = -Math.cos(a) * .7;
     part(stage, g, new THREE.CylinderGeometry(.12, .14, .035, 6), blue, Math.sin(a) * .62, -.05, Math.cos(a) * .62);
@@ -85,66 +97,140 @@ function label(stage: Stage, text: string, x: number, y: number, z: number) {
   const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 96;
   const c = canvas.getContext('2d')!; c.fillStyle = '#122d4c'; c.fillRect(0, 0, 512, 96); c.strokeStyle = '#c8d9e4'; c.strokeRect(5, 5, 502, 86); c.fillStyle = '#f1e8d1'; c.font = '600 36px "Microsoft YaHei",sans-serif'; c.textAlign = 'center'; c.fillText(text, 256, 60);
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(4.2, .79), stage.toon('#ffffff', {map: texture, side: THREE.DoubleSide})); m.position.set(x, y, z); m.name = 'site-label-fx'; stage.scene.add(m); return m;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(2.2, .42), stage.toon('#ffffff', {map: texture, side: THREE.DoubleSide})); m.position.set(x, y, z); m.name = 'site-label-fx'; stage.scene.add(m);
+  const post = part(stage,stage.scene,new THREE.CylinderGeometry(.035,.045,y,6),'#80909a',x,y/2,z); post.name='site-post-fx';
+  return m;
+}
+/** Vertex colour strata keep the entire ground/cliff mesh to one material. */
+function surfaceGeometry(triangles: number[], seed: string, cliffs = false) {
+  const r=rng(seed), geo=new THREE.BufferGeometry(), colors:number[]=[], color=new THREE.Color();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(triangles,3)); geo.computeVertexNormals();
+  const normal=geo.getAttribute('normal');
+  for(let i=0;i<triangles.length;i+=9) {
+    const x=(triangles[i]+triangles[i+3]+triangles[i+6])/3, y=(triangles[i+1]+triangles[i+4]+triangles[i+7])/3, z=(triangles[i+2]+triangles[i+5]+triangles[i+8])/3;
+    const side=cliffs && y>0.3 && Math.abs(normal.getY(i/3))<.55;
+    const dust=Math.sin(x*.27+Math.sin(z*.17)*2)+Math.cos(z*.39-x*.11)+.35*Math.sin(x*1.8+z*.9);
+    if(side) {
+      const band=Math.floor((y+6)/.55)%5;
+      color.set(['#535c61','#8e9b9e','#37424c','#687c87','#414a51'][band]);
+      // Cold mineral reflection on the face turned away from the sun.
+      if(normal.getX(i/3)>.3) color.lerp(new THREE.Color('#739cb5'),.35);
+    } else color.set(dust>.75?'#8b8982':dust>-.25?'#63645f':'#3a3e40');
+    color.multiplyScalar(r.range(.95,1.05));
+    for(let k=0;k<3;k++) colors.push(color.r,color.g,color.b);
+  }
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3)); return geo;
+}
+/** Cratered second lobe: displaced solid rock, a low neck and a blunt bill, never transparent. */
+function cometLobe(stage: Stage, seed: string) {
+  const root=new THREE.Group(); root.name='duck-head-lobe-fx';
+  const r=rng(seed), cuts=Array.from({length:16},()=>({x:r.range(-1,1),y:r.range(-.6,1),z:r.range(-1,1),radius:r.range(.12,.29)}));
+  for(const [x,y,z,sx,sy,sz] of [[7,21,-88,43,36,33],[24,-12,-62,27,24,29],[-22,14,-78,24,16,23]]) {
+    const geo=new THREE.IcosahedronGeometry(1,4), p=geo.getAttribute('position');
+    for(let i=0;i<p.count;i++) {
+      const a=p.getX(i),b=p.getY(i),c=p.getZ(i);
+      let h=1+.065*Math.sin(a*11+b*5)*Math.cos(c*9)+.035*Math.sin(b*21+c*13);
+      for(const q of cuts) { const d=Math.hypot(a-q.x,b-q.y,c-q.z)/q.radius; if(d<1) h-=.13*(1-d*d); else if(d<1.25) h+=.035*Math.sin((d-1)*Math.PI*4); }
+      p.setXYZ(i,a*h,b*h,c*h);
+    }
+    geo.computeVertexNormals();
+    const m=part(stage,root,geo,'#777a77',x,y,z); m.scale.set(sx,sy,sz);
+  }
+  compact(root); return root;
+}
+/** Soft edge and longitudinal fading, shared by distant dust and sunlight shafts. */
+function fadedMaterial(stage: Stage, color: string, opacity: number) {
+  const mat=stage.toon(color,{transparent:true,opacity,emissive:color,emissiveIntensity:.7,side:THREE.DoubleSide}).clone();
+  mat.depthWrite=false;
+  mat.onBeforeCompile=(shader:any)=>{
+    shader.vertexShader='varying vec2 vFade;\n'+shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\nvFade=uv;');
+    shader.fragmentShader='varying vec2 vFade;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      diffuseColor.a *= pow(max(0.,sin(vFade.x*3.14159265)),1.5)*sin(vFade.y*3.14159265);`);
+  };
+  mat.customProgramCacheKey=()=> 'space-soft-shaft-v1'; return mat;
 }
 export function buildLanderSpace(stage: Stage, l: LanderLayout, spec: LanderSpec) {
-  const r = rng(l.seed + '-art'), root = new THREE.Group(); root.name = 'comet-surface'; stage.scene.add(root);
-  const geo = new THREE.BufferGeometry(), triangles = landerTriangles(l); geo.setAttribute('position', new THREE.Float32BufferAttribute(triangles, 3)); geo.computeVertexNormals();
-  const colors: number[] = [], color = new THREE.Color();
-  for (let i = 0; i < triangles.length; i += 9) {
-    const y = Math.max(triangles[i+1], triangles[i+4], triangles[i+7]); color.set(y > 1 ? '#8dabb8' : '#777b80'); color.multiplyScalar(r.range(.95, 1.05));
-    for (let k = 0; k < 3; k++) colors.push(color.r, color.g, color.b);
+  const r=rng(l.seed+'-art'), root=new THREE.Group(); root.name='comet-surface'; stage.scene.add(root);
+  // A single hard solar key, with only a faint sky fill. No extra point/directional lights.
+  stage.scene.traverse((o:any)=>{if(o.isHemisphereLight)o.intensity=.16;});
+  stage.sun.position.set(-35,75,5); stage.sun.target.position.set(30,0,0);
+  Object.assign(stage.sun.shadow.camera,{left:-78,right:78,top:70,bottom:-70,near:1,far:190}); stage.sun.shadow.camera.updateProjectionMatrix();
+  const mat=stage.toon('#ffffff').clone(); mat.vertexColors=true;
+  const surface=new THREE.Mesh(surfaceGeometry(landerTriangles(l),l.seed,true),mat); surface.name='comet-heightfield'; stage.add(surface,root);
+  const horizon=new THREE.Mesh(surfaceGeometry(horizonTriangles(l),l.seed+'-horizon'),mat); horizon.name='curved-horizon-fx'; horizon.receiveShadow=true; stage.scene.add(horizon);
+  const stars=createStarDome(l.seed); stage.scene.add(stars,createSun(stage,[-117,135,9],2),cometLobe(stage,l.seed));
+
+  const dummy=new THREE.Object3D(), tint=new THREE.Color();
+  const rocks=new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1,0),stage.toon('#737574'),150); rocks.name='rock-shoulders-fx';
+  for(let i=0;i<150;i++) {
+    const p=l.platforms[i%3], tier=Math.floor(i/3)%5, column=Math.floor(i/15), flank=column<5?-1:1;
+    // Five overlapping stones per shoulder column, rooted in the ground and backed by the cliff.
+    const layer=(p.position[1]-.8)/5, x=p.position[0]+(column%5-2)*1.8;
+    const z=p.position[2]+flank*(4.9+.18*Math.sin(column));
+    dummy.position.set(x,(tier+.5)*layer-.3,z);dummy.scale.set(1.45,layer*.72,1.35);
+    dummy.rotation.set(0,r.range(-.3,.3),0);dummy.updateMatrix();rocks.setMatrixAt(i,dummy.matrix);rocks.setColorAt(i,tint.set(i%4===0?'#92a4ac':'#656866').multiplyScalar(r.range(.95,1.05)));
   }
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  const mat = stage.toon('#ffffff').clone(); mat.vertexColors = true;
-  const centers = l.platforms.map(p => new THREE.Vector3(...p.position));
-  // The painted sunlight uses precisely the same moving circles and terrace bounds as the battery rule.
-  mat.onBeforeCompile = (shader: any) => {
-    shader.uniforms.uCenters = {value: centers}; shader.uniforms.uRadius = {value: spec.sunlight.radius};
-    shader.uniforms.uSites = {value: l.platforms.map(p => new THREE.Vector3(...p.position))};
-    shader.vertexShader = 'varying vec3 vComet;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvComet = position;');
-    shader.fragmentShader = 'varying vec3 vComet; uniform vec3 uCenters[3]; uniform vec3 uSites[3]; uniform float uRadius;\n' + shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-      float lit = 0.;
-      for (int i=0;i<3;i++) { vec3 q = vComet-uSites[i]; if (abs(q.y)<.08 && abs(q.x)<=5.01 && abs(q.z)<=5.01) lit=max(lit,1.-smoothstep(uRadius-.18,uRadius,length(vComet.xz-uCenters[i].xz))); }
-      diffuseColor.rgb *= mix(vec3(.61,.67,.81),vec3(1.35,1.22,.91),lit);`);
-  };
-  const surface = new THREE.Mesh(geo, mat); surface.name = 'comet-heightfield'; stage.add(surface, root);
-  stage.scene.add(createStarDome(l.seed), createSun(stage));
-  // Only the distant silhouette is bilobed; traversable terrain remains a height field.
-  const far = new THREE.Group(); far.name = 'bilobed-comet-fx';
-  for (const [x,y,z,sx,sy,sz] of [[-9,0,0,22,17,16],[15,10,0,15,12,13],[3,3,0,11,9,10]]) { const m = part(stage, far, new THREE.IcosahedronGeometry(1, 1), '#4e5967', x,y,z); m.scale.set(sx,sy,sz); }
-  compact(far); far.position.set(28, 3, -100); stage.scene.add(far);
-  const dust = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7, 1, true), stage.toon('#b0cbdb', {transparent: true, opacity: .10, side: THREE.DoubleSide}), 12); dust.name = 'comet-jets-fx'; dust.layers.set(1);
-  const dummy = new THREE.Object3D();
-  for (let i = 0; i < 12; i++) { dummy.position.set(r.range(-10, 58), r.range(6, 20), r.range(-100, -80)); dummy.scale.set(3+i*.3, 24+i*2, 3+i*.3); dummy.rotation.set(0, 0, .35); dummy.updateMatrix(); dust.setMatrixAt(i, dummy.matrix); } stage.scene.add(dust);
-  const pebbles = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), stage.toon('#69717d'), 520); pebbles.name = 'pebbles-fx';
-  for (let i = 0; i < 520; i++) { const x = r.range(-12, 64), z = r.range(-22, 22), s = r.range(.08, .32); dummy.position.set(x, terrainHeight(l,x,z)+s*.35,z); dummy.scale.set(s*1.7,s*.65,s); dummy.rotation.set(r.next(),r.next()*6,r.next()); dummy.updateMatrix(); pebbles.setMatrixAt(i,dummy.matrix); pebbles.setColorAt(i,new THREE.Color('#89929b').multiplyScalar(r.range(.95,1.05))); } stage.scene.add(pebbles);
-  const striations = new THREE.InstancedMesh(new THREE.BoxGeometry(.035, 1, .025), stage.toon('#d3e1e4'), 90); striations.name = 'ice-veins-fx';
-  l.platforms.forEach((p,i) => { for (let k=0;k<30;k++) { dummy.position.set(p.cliff.min[0]-.016,p.position[1]*(.15+.7*r.next()),p.position[2]+r.range(-4.8,4.8)); dummy.scale.set(1,r.range(.4,2),1); dummy.rotation.set(r.range(-.25,.25),0,0); dummy.updateMatrix(); striations.setMatrixAt(i*30+k,dummy.matrix); } }); stage.scene.add(striations);
-  const rings = [l.agilkia,...l.platforms,l.abydos].map((p,i) => {
-    const m = new THREE.Mesh(new THREE.RingGeometry(p.radius-.09,p.radius,64), stage.toon(i===0?'#e8c27a':'#91d7e7',{emissive:i===0?'#e8c27a':'#91d7e7',emissiveIntensity:.5,side:THREE.DoubleSide})); m.rotation.x=-Math.PI/2; m.position.set(p.position[0],p.position[1]+.035,p.position[2]); m.name='landing-ring-fx'; stage.scene.add(m); return m;
+  rocks.castShadow=true; rocks.receiveShadow=true;stage.scene.add(rocks);
+  const pebbles=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,0),stage.toon('#7a7e7c'),950); pebbles.name='pebbles-fx';
+  for(let i=0;i<950;i++) {
+    const x=r.range(-34,88),z=r.range(-44,38),s=r.range(.07,.42);
+    const inside=x>=-14&&x<66&&z>=-24&&z<24;
+    dummy.position.set(x,(inside?terrainHeight(l,x,z):horizonHeight(l,x,z))+s*.3,z);dummy.scale.set(s*1.7,s*.65,s);dummy.rotation.set(r.next(),r.next()*6,r.next());dummy.updateMatrix();pebbles.setMatrixAt(i,dummy.matrix);pebbles.setColorAt(i,tint.set('#a3a39a').multiplyScalar(r.range(.75,1.05)));
+  }
+  pebbles.receiveShadow=true;stage.scene.add(pebbles);
+
+  // Long gauze ribbons originate behind the curved horizon. Soft particles rise along them.
+  const jets=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1,1,12),fadedMaterial(stage,'#b8c9d6',.095),18);jets.name='distant-dust-jets-fx';jets.layers.set(1);
+  for(let i=0;i<18;i++) {
+    dummy.position.set(-47+i*7.3,13+(i%3)*6,-105-(i%3)*6);dummy.scale.set(8+i%3*3,65+i%4*8,1);dummy.rotation.set(0,(i%3-1)*.35,-.32);dummy.updateMatrix();jets.setMatrixAt(i,dummy.matrix);
+  }
+  stage.scene.add(jets);
+  const motes=Array.from({length:22},(_,i)=>{
+    const s=stage.glow('#bdceda',r.range(2.5,6),.08);s.name='rising-dust-fx';stage.scene.add(s);
+    return {sprite:s,x:-55+(i%11)*12,z:-98-r.range(0,17),phase:r.next()};
   });
-  label(stage,'Agilkia · 初次着陆',0,1.3,-4.8); label(stage,'Abydos · 数据回传',59,1.4,-2.8);
-  const panels = l.platforms.map((p,i) => { const g=createSolarWing(stage,1.8,1.1); g.position.set(p.position[0],p.position[1]+.7,p.position[2]); g.scale.x=.15; stage.scene.add(g); label(stage,`科学平台 ${i+1}`,p.position[0],p.position[1]+1.6,p.position[2]-3); return g; });
-  const duck = new THREE.Group(); duck.name='duck-rock-fx';
-  const body=part(stage,duck,new THREE.IcosahedronGeometry(1,1),'#afa790'); body.scale.set(1,.65,.7);
-  part(stage,duck,new THREE.IcosahedronGeometry(.48,1),'#c2b9a0',.65,.65,0); const beak=part(stage,duck,new THREE.ConeGeometry(.24,.5,5),'#b69a6e',1.1,.65,0); beak.rotation.z=-Math.PI/2;
-  compact(duck); duck.position.set(l.hidden.position[0],terrainHeight(l,l.hidden.position[0],l.hidden.position[2])+.6,l.hidden.position[2]); stage.scene.add(duck);
-  const glint=stage.glow('#e8c27a',1.8,.6); glint.position.set(0,1.2,0); duck.add(glint);
-  const rosetta=createRosetta(stage); rosetta.position.set(1,38,-4); stage.scene.add(rosetta);
-  const shell=createPhilaeShell(stage); stage.scene.add(shell);
-  const flame = new THREE.Mesh(new THREE.ConeGeometry(.18,.9,10),stage.toon('#ffb854',{emissive:'#ff8b38',emissiveIntensity:2,transparent:true,opacity:.8})); flame.rotation.z=Math.PI; flame.name='thruster-fx'; flame.visible=false; stage.scene.add(flame);
-  const beam=new THREE.Mesh(new THREE.CylinderGeometry(.10,.45,1,12,1,true),stage.toon('#aadfff',{emissive:'#aadfff',transparent:true,opacity:.5,side:THREE.DoubleSide})); beam.name='transmission-fx'; beam.layers.set(1); beam.visible=false; stage.scene.add(beam);
-  const beamAxis = new THREE.Vector3(0,1,0), beamDirection = new THREE.Vector3();
-  return {root, rosetta, shell, flame, duck, beam, panels,
-    update(time: number, p: number[], spread: number, collected: boolean[], jet: boolean, transmission: number) {
-      for(let i=0;i<3;i++){ const c=sunlightCenter(spec,l.platforms[i],time); centers[i].set(c[0],c[1],c[2]); panels[i].scale.x=Math.min(1,panels[i].scale.x+(collected[i]?.025:0)); rings[i+1].rotation.z=time*.12; }
-      shell.position.set(p[0],p[1]+.1,p[2]); shell.scale.set(1+spread*.35,1-spread*.35,1+spread*.35);
-      flame.visible=jet; flame.position.set(p[0],p[1]-.3,p[2]);
-      rosetta.position.set(transmission>=0?59+(transmission-.5)*24:6+Math.sin(time*.045)*18,transmission>=0?23:38,transmission>=0?1:-10);
-      rosetta.rotation.y=time*.025; dust.rotation.z=Math.sin(time*.08)*.02;
+  const rings=[l.agilkia,...l.platforms,l.abydos].map((p,i)=>{
+    const radius=p.radius;
+    const m=new THREE.Mesh(new THREE.RingGeometry(radius-.045,radius,80),stage.toon(i===0?'#ebc981':'#b1e8f5',{emissive:i===0?'#ebc981':'#b1e8f5',emissiveIntensity:1.3,side:THREE.DoubleSide}).clone());
+    m.rotation.x=-Math.PI/2;m.position.set(p.position[0],p.position[1]+.04,p.position[2]);m.name='landing-ring-fx';m.layers.set(1);stage.scene.add(m);return m;
+  });
+  const sunDirection=new THREE.Vector3(-65,75,5).normalize(),axis=new THREE.Vector3(0,1,0);
+  const shafts=l.platforms.map(()=>{
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(.45,spec.sunlight.radius,23,24,8,true),fadedMaterial(stage,'#ffe5ab',.075));m.name='sun-shaft-fx';m.layers.set(1);m.quaternion.setFromUnitVectors(axis,sunDirection);stage.scene.add(m);return m;
+  });
+  label(stage,'Agilkia',0,.85,-4.6);label(stage,'Abydos',59,1,-2.8);
+  const panels=l.platforms.map(p=>{const g=createSolarWing(stage,1.8,1.1);g.traverse((m:any)=>{m.layers.set(1);m.castShadow=false;});g.position.set(p.position[0],p.position[1]+.7,p.position[2]);g.scale.x=.15;stage.scene.add(g);return g;});
+  const duck=new THREE.Group();duck.name='duck-rock-fx';
+  const body=part(stage,duck,new THREE.IcosahedronGeometry(1,1),'#afa790');body.scale.set(1,.65,.7);
+  part(stage,duck,new THREE.IcosahedronGeometry(.48,1),'#c2b9a0',.65,.65,0);const beak=part(stage,duck,new THREE.ConeGeometry(.24,.5,5),'#b69a6e',1.1,.65,0);beak.rotation.z=-Math.PI/2;
+  compact(duck);duck.position.set(l.hidden.position[0],terrainHeight(l,l.hidden.position[0],l.hidden.position[2])+.6,l.hidden.position[2]);stage.scene.add(duck);
+  const glint=stage.glow('#e8c27a',1.8,.6);glint.position.set(0,1.2,0);duck.add(glint);
+  const rosetta=createRosetta(stage);rosetta.scale.setScalar(1.65);stage.scene.add(rosetta);
+  const shell=createPhilaeShell(stage);stage.scene.add(shell);
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(.18,.9,10),stage.toon('#ffb854',{emissive:'#ff8b38',emissiveIntensity:2,transparent:true,opacity:.8}));flame.rotation.z=Math.PI;flame.name='thruster-fx';flame.visible=false;stage.scene.add(flame);
+  const beam=new THREE.Mesh(new THREE.CylinderGeometry(.10,.45,1,12,1,true),fadedMaterial(stage,'#aadfff',.65));beam.name='transmission-fx';beam.layers.set(1);beam.visible=false;stage.scene.add(beam);
+  const beamDirection=new THREE.Vector3();
+  const centers=l.platforms.map(p=>[...p.position] as [number,number,number]);
+  return {root,rosetta,shell,flame,duck,beam,panels,
+    update(time:number,p:number[],spread:number,collected:boolean[],jet:boolean,transmission:number) {
+      for(let i=0;i<3;i++) {
+        const c=sunlightCenter(spec,l.platforms[i],time,centers[i]);
+        const lit=Math.abs(c[0]-l.platforms[i].position[0])<=spec.sunlight.radius;
+        rings[i+1].material.color.set(lit?'#ffe5ab':'#526677');
+        rings[i+1].material.emissive.set(lit?'#ffe5ab':'#24333f');
+        rings[i+1].material.emissiveIntensity=lit?1.3:.2;
+        shafts[i].position.set(c[0]+sunDirection.x*11.5,c[1]+sunDirection.y*11.5,c[2]+sunDirection.z*11.5);
+        panels[i].scale.x=collected[i]?1:.15;
+      }
+      shell.position.set(p[0],p[1]+.1,p[2]);shell.scale.set(1+spread*.35,1-spread*.35,1+spread*.35);
+      flame.visible=jet;flame.position.set(p[0],p[1]-.3,p[2]);
+      rosetta.position.set(transmission>=0?59+(transmission-.5)*16:14+Math.sin(time*.045)*12,transmission>=0?25:39,transmission>=0?-2:-20);
+      rosetta.rotation.set(.32,time*.015,-.12);
+      for(const m of motes) {const f=(time*.012+m.phase)%1;m.sprite.position.set(m.x+f*20,-14+f*78,m.z);m.sprite.material.opacity=Math.sin(f*Math.PI)*.10;}
       beam.visible=transmission>=0;
-      if(beam.visible){ beamDirection.set(rosetta.position.x-59,rosetta.position.y-.7,rosetta.position.z-1); beam.scale.y=beamDirection.length(); beam.position.set((59+rosetta.position.x)/2,(.7+rosetta.position.y)/2,(1+rosetta.position.z)/2); beam.quaternion.setFromUnitVectors(beamAxis,beamDirection.normalize()); }
+      if(beam.visible) {beamDirection.set(rosetta.position.x-59,rosetta.position.y-.7,rosetta.position.z-1);beam.scale.y=beamDirection.length();beam.position.set((59+rosetta.position.x)/2,(.7+rosetta.position.y)/2,(1+rosetta.position.z)/2);beam.quaternion.setFromUnitVectors(axis,beamDirection.normalize());}
+      // Keep the star field infinitely distant even in the descent and finale cameras.
+      stars.position.copy(stage.camera.position);
     },
   };
 }

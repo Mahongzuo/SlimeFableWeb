@@ -3,6 +3,11 @@ import type {Vec, Box} from '../slime/types';
 import {rng} from './random';
 
 /** Pure layout and game rules. Distances and gravity are deliberately scaled for play. */
+export const LANDER_SHOTS = {
+  opening: {position: [-16, 32, 43], target: [19, 13, -35]},
+  cliff: {position: [9, 10, 22], target: [29, 13, -28]},
+  finale: {position: [68, 3.4, 18], target: [55, 12, -3]},
+};
 export const LANDER_MOTION = {gravity: 15.68, jump: 6.2, walk: 3.2, radius: .26, bounceThreshold: 2.4};
 export interface LandingSite {id: string; position: Vec; radius: number}
 export interface SolarPlatform extends LandingSite {cliff: Box; phase: number}
@@ -26,7 +31,10 @@ export function generateLander(spec: LanderSpec): LanderLayout {
   const terrain = {x0: -14, z0: -24, cell: 1, width: 81, depth: 49, heights: [] as number[]};
   for (let iz = 0; iz < terrain.depth; iz++) for (let ix = 0; ix < terrain.width; ix++) {
     const x = terrain.x0 + ix, z = terrain.z0 + iz;
-    let h = .10 * Math.sin(x * .42) * Math.sin(z * .31);
+    // Broad ridges, medium folds and fine dust ripples; leave the approach corridor forgiving.
+    const roughness = Math.min(1, Math.max(0, (Math.abs(z) - 5) / 7));
+    let h = .08 * Math.sin(x * .42) * Math.sin(z * .31) + roughness *
+      (1.1 * Math.sin(x * .09 + .4) * Math.cos(z * .13) + .48 * Math.sin(x * .31 + z * .22) + .16 * Math.cos(x * .91 - z * .7));
     for (const c of craters) {
       const d = Math.hypot(x - c.x, z - c.z) / c.radius;
       if (d < 1) h -= c.depth * (1 - d * d);
@@ -34,7 +42,7 @@ export function generateLander(spec: LanderSpec): LanderLayout {
     }
     for (const c of cracks) if (Math.abs(z) < 10 && Math.abs(x - c.x) < c.width / 2) h = -4.5;
     // Agilkia is a forgiving dust plain; a distinct sheltered basin ends the route.
-    if (Math.hypot(x, z) < 6 || (x > 55 && Math.abs(z) < 8)) h = 0;
+    if (Math.hypot(x, z) < 6 || (x > 55 && Math.abs(z) < 8) || Math.hypot(x - 49, z + 16) < 2.5) h = 0;
     terrain.heights.push(h);
   }
   return {seed: spec.seed, gravityScale: spec.gravityScale, terrain, craters, cracks, platforms,
@@ -46,15 +54,35 @@ export function generateLander(spec: LanderSpec): LanderLayout {
 /** Same triangular interpolation as the rendered ground, followed by the solid ice terraces. */
 export function terrainHeight(l: LanderLayout, x: number, z: number): number {
   const t = l.terrain, gx = (x - t.x0) / t.cell, gz = (z - t.z0) / t.cell;
-  if (gx < 0 || gz < 0 || gx >= t.width - 1 || gz >= t.depth - 1) return -8;
-  const ix = Math.floor(gx), iz = Math.floor(gz), u = gx - ix, v = gz - iz;
+  if (gx < 0 || gz < 0 || gx > t.width - 1 || gz > t.depth - 1) return -8;
+  const ix = Math.min(t.width - 2, Math.floor(gx)), iz = Math.min(t.depth - 2, Math.floor(gz)), u = gx - ix, v = gz - iz;
   const a = t.heights[iz * t.width + ix], b = t.heights[iz * t.width + ix + 1];
   const c = t.heights[(iz + 1) * t.width + ix], d = t.heights[(iz + 1) * t.width + ix + 1];
   let y = u + v <= 1 ? a + (b - a) * u + (c - a) * v : d + (c - d) * (1 - u) + (b - d) * (1 - v);
-  for (const p of l.platforms) if (x >= p.cliff.min[0] && x <= p.cliff.max[0] && z >= p.cliff.min[2] && z <= p.cliff.max[2]) y = Math.max(y, p.cliff.max[1]);
+  for (const p of l.platforms) if (onPlatform(p, x, z)) y = Math.max(y, p.cliff.max[1]);
   return y;
 }
-/** Ground and closed ice cliffs in one triangle stream, shared by rendering and collision tests. */
+const CLIFF_OUTLINE = [[-5,-2],[-4.8,-3.9],[-2.5,-5],[1.8,-4.7],[4.5,-3.6],[5,-1.8],[4.8,2.7],[2.7,4.8],[-1.6,5],[-4.2,3.9],[-5,2]];
+/** Cut corners keep the climbable west face while removing the rectangular silhouette. */
+export function cliffOutline(p: SolarPlatform, layer = 1): Vec[] {
+  const outline = CLIFF_OUTLINE;
+  const t = Math.max(0, Math.min(1, layer));
+  return outline.map(([x,z], i) => {
+    // The two west anchors stay vertical for the shared character's attach/mantle probes.
+    const bulge = i === 0 || i === outline.length - 1 ? 0 : .18 * Math.sin(t * Math.PI * 7 + i) * Math.sin(t * Math.PI);
+    return [p.position[0] + x * (1 + bulge * .12), p.cliff.min[1] + (p.position[1] - p.cliff.min[1]) * t, p.position[2] + z * (1 + bulge * .12)];
+  });
+}
+export function onPlatform(p: SolarPlatform, x: number, z: number) {
+  const ring = CLIFF_OUTLINE;
+  x -= p.position[0]; z -= p.position[2];
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    if ((b[0] - a[0]) * (z - a[1]) - (b[1] - a[1]) * (x - a[0]) < -1e-6) return false;
+  }
+  return true;
+}
+/** The same closed, stratified polygon cliffs feed rendering and collision baking. */
 export function landerTriangles(l: LanderLayout): number[] {
   const out: number[] = [], t = l.terrain;
   const triangle = (a: Vec, b: Vec, c: Vec) => out.push(...a, ...b, ...c);
@@ -64,21 +92,51 @@ export function landerTriangles(l: LanderLayout): number[] {
     triangle(a, c, b); triangle(b, c, d);
   }
   for (const p of l.platforms) {
-    const [x, y, z] = p.cliff.min, [X, Y, Z] = p.cliff.max;
-    const v: Vec[] = [[x,y,z],[X,y,z],[X,y,Z],[x,y,Z],[x,Y,z],[X,Y,z],[X,Y,Z],[x,Y,Z]];
-    for (const [a,b,c,d] of [[4,7,6,5],[0,1,2,3],[0,4,5,1],[1,5,6,2],[2,6,7,3],[3,7,4,0]]) { triangle(v[a],v[b],v[c]); triangle(v[a],v[c],v[d]); }
+    const layers = Math.ceil((p.position[1] - p.cliff.min[1]) / .55);
+    for (let j = 0; j < layers; j++) {
+      const lo = cliffOutline(p, j / layers), hi = cliffOutline(p, (j + 1) / layers);
+      for (let i = 0; i < lo.length; i++) {
+        const k = (i + 1) % lo.length;
+        triangle(lo[i], hi[i], hi[k]); triangle(lo[i], hi[k], lo[k]);
+        if (j === 0) triangle([p.position[0], p.cliff.min[1], p.position[2]], lo[i], lo[k]);
+        if (j === layers - 1) triangle(p.position, hi[k], hi[i]);
+      }
+    }
   }
   return out;
 }
-export function sunlightCenter(spec: LanderSpec, p: SolarPlatform, time: number): Vec {
-  return [p.position[0] + Math.sin(time / spec.sunlight.period * Math.PI * 2 + p.phase) * spec.sunlight.travel, p.position[1], p.position[2]];
+/** Outer surface meets every playable boundary sample and continues beyond the camera far plane. */
+export function horizonHeight(l: LanderLayout, x: number, z: number): number {
+  const t = l.terrain, cx = Math.max(t.x0, Math.min(t.x0 + (t.width - 1) * t.cell, x));
+  const cz = Math.max(t.z0, Math.min(t.z0 + (t.depth - 1) * t.cell, z));
+  const distance = Math.hypot(x - cx, z - cz), fade = Math.min(1, distance / 14);
+  return terrainHeight(l, cx, cz) * (1 - fade) + fade *
+    (2.4 * Math.sin(x * .057) * Math.cos(z * .071) + .8 * Math.sin(x * .23 + z * .12)) - distance * distance / 340;
+}
+export function horizonTriangles(l: LanderLayout): number[] {
+  const t = l.terrain;
+  const axis = (origin: number, count: number) => [origin-1000, origin-500, origin-260, origin-160, origin-100, origin-65, origin-40, origin-24, origin-12, origin-5,
+    ...Array.from({length: count}, (_, i) => origin + i * t.cell), ...[5,12,24,40,65,100,160,260,500,1000].map(d => origin + (count - 1) * t.cell + d)];
+  const xs = axis(t.x0, t.width), zs = axis(t.z0, t.depth), out: number[] = [];
+  const vertex = (x: number, z: number) => [x,horizonHeight(l,x,z),z];
+  for (let j=0;j<zs.length-1;j++) for (let i=0;i<xs.length-1;i++) {
+    if (xs[i]>=t.x0 && xs[i+1]<=t.x0+(t.width-1)*t.cell && zs[j]>=t.z0 && zs[j+1]<=t.z0+(t.depth-1)*t.cell) continue;
+    const a=vertex(xs[i],zs[j]), b=vertex(xs[i+1],zs[j]), c=vertex(xs[i],zs[j+1]), d=vertex(xs[i+1],zs[j+1]);
+    out.push(...a,...c,...b,...b,...c,...d);
+  }
+  return out;
+}
+function sunlightX(spec: LanderSpec, p: SolarPlatform, time: number) {
+  return p.position[0] + Math.sin(time / spec.sunlight.period * Math.PI * 2 + p.phase) * spec.sunlight.travel;
+}
+export function sunlightCenter(spec: LanderSpec, p: SolarPlatform, time: number, out: Vec = [0,0,0]): Vec {
+  out[0]=sunlightX(spec,p,time); out[1]=p.position[1]; out[2]=p.position[2]; return out;
 }
 export function inSunlight(spec: LanderSpec, l: LanderLayout, p: Vec, time: number): boolean {
   // Abydos remains in the cliff's shelter, including during the transmission.
   if (Math.hypot(p[0] - l.abydos.position[0], p[2] - l.abydos.position[2]) < l.abydos.radius + 1 && p[1] < 4) return false;
   return l.platforms.some(platform => {
-    const center = sunlightCenter(spec, platform, time), c = platform.cliff;
-    return p[0] >= c.min[0] && p[0] <= c.max[0] && p[2] >= c.min[2] && p[2] <= c.max[2] && Math.abs(p[1] - center[1]) < .65 && Math.hypot(p[0] - center[0], p[2] - center[2]) <= spec.sunlight.radius;
+    return onPlatform(platform, p[0], p[2]) && Math.abs(p[1] - platform.position[1]) < .65 && Math.hypot(p[0] - sunlightX(spec,platform,time), p[2] - platform.position[2]) <= spec.sunlight.radius;
   });
 }
 export const batteryAfter = (spec: LanderSpec, battery: number, sunny: boolean, dt: number) => Math.max(0, Math.min(spec.battery.capacity, battery + (sunny ? spec.battery.sunCharge : -spec.battery.shadowDrain) * dt));

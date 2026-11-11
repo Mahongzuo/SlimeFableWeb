@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {Stage} from './stage';
 import {levels} from '../../content/levels/registry';
 import type {LanderSpec} from '../../content/levels/types';
-import {generateLander, validateLander, inSunlight, batteryAfter, landingBounce, batteryMedal} from '../templates/lander';
+import {LANDER_SHOTS, generateLander, validateLander, inSunlight, batteryAfter, landingBounce, batteryMedal} from '../templates/lander';
 import {spaceLook, buildLanderSpace} from '../themes/space';
 import {bakeRegion} from '../world/bake';
 import {SlimeCharacter} from '../slime/character';
@@ -46,11 +46,7 @@ ui.root.querySelector('.hud')!.appendChild(batteryUI);
 const batteryLabel = batteryUI.querySelector('[data-battery-label]')!, batteryBar = batteryUI.querySelector('progress')!, flightLabel = batteryUI.querySelector('[data-flight]')!;
 batteryBar.max = spec.battery.capacity;
 const cameraPosition = new THREE.Vector3(), cameraTarget = new THREE.Vector3(), projected = new THREE.Vector3();
-const shots = {
-  opening: {position: [-8, 43, 20], target: [17, 7, -22]},
-  cliff: {position: [22, 17, 14], target: [32, 9, -12]},
-  finale: {position: [55, 3, 10], target: [59, 22, 1]},
-};
+const shots = LANDER_SHOTS;
 stage.camera.position.fromArray(shots.opening.position); stage.camera.lookAt(...shots.opening.target);
 function showIntro() { ui.intro(spec.title, spec.intro, ['WASD 微调下降 · C 摊开吸收冲击', '空格低重力跳跃 · 朝冰崖持续移动即可贴墙上爬', '3 切换火属性 · 空格短促喷气（消耗电池）', '追随金色阳光，站在三个平台上按 F 展开太阳能板', '到 Abydos 按 F 回传数据；背面的鸭形岩石藏着纪念品'], slime.ready); }
 showIntro();
@@ -101,7 +97,7 @@ function objectives() {
   }
   for (let i=0;i<3;i++) if (!collected[i] && near(layout.platforms[i].position, layout.platforms[i].radius)) {
     const sunny = inSunlight(spec, layout, p, elapsed);
-    prompt(layout.platforms[i].position, sunny ? '展开太阳能板 · 收集数据' : '等待阳光移过来', sunny ? spec.science[i] : '金色区域可以充电；阴影里无法采集');
+    prompt(layout.platforms[i].position, sunny ? '展开太阳能板 · 收集数据' : '等待阳光移过来', sunny ? spec.science[i] : '光柱下的细圈内可以充电；阴影里无法采集');
     if (interact && sunny) { collected[i] = true; ui.banner('科学数据 ' + collected.filter(Boolean).length + ' / 3', spec.science[i]); slime.setMood('Happy'); }
   }
   if (near(layout.abydos.position, layout.abydos.radius)) {
@@ -171,10 +167,10 @@ function step(forcedDt?: number) {
   const transmissionProgress = state === 'transmit' || state === 'done' || (state === 'pause' && pausedFrom === 'transmit') ? Math.min(1,transmission / 8) : -1;
   art.update(elapsed,slime.position,slime.spread,collected,jet>0,transmissionProgress);
   if (state === 'play' && (!firstLanding || reveal > 0)) {
-    cameraPosition.set(slime.position[0]-9,slime.position[1]+8,slime.position[2]+18); cameraTarget.set(12,Math.max(0,slime.position[1]*.3),-16);
+    cameraPosition.set(slime.position[0]-16,Math.max(14,slime.position[1]+5),slime.position[2]+35); cameraTarget.set(20,Math.max(10,slime.position[1]*.4),-28);
     stage.camera.position.lerp(cameraPosition,1-Math.exp(-dt*3)); stage.camera.lookAt(cameraTarget);
   } else if (transmissionProgress >= 0) {
-    cameraPosition.set(55,3.4,10); cameraTarget.copy(art.rosetta.position); stage.camera.position.lerp(cameraPosition,1-Math.exp(-dt*2)); stage.camera.lookAt(cameraTarget);
+    cameraPosition.fromArray(shots.finale.position); cameraTarget.set(55,12,-3); stage.camera.position.lerp(cameraPosition,1-Math.exp(-dt*2)); stage.camera.lookAt(cameraTarget);
   }
   hud -= dt; if (hud <= 0 && (state === 'play' || state === 'transmit')) { hud = .12; updateHud(); }
   stage.render(dt,slime);
