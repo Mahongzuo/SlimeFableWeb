@@ -8,7 +8,7 @@ export function lakeWater(ctx: any) {
   const T = ctx.THREE, sea = ctx.scene.getObjectByName('water-surface');
   if (!sea?.material?.fragmentShader || !ctx.waterReflection) return null;
   const [cx, cz] = LAKE.center, shore = .93; // where the lake bed meets the water level (map.ts inland())
-  const refl = new ctx.waterReflection.constructor(LAKE.level, .4);
+  const refl = new ctx.waterReflection.constructor(LAKE.level, .4); (globalThis as any).__lakeRefl = refl;
   const base = sea.material, keep = base.uniforms.uWaterRefl.value; base.uniforms.uWaterRefl.value = null; // avoid cloning a render target texture
   const mat = base.clone(); base.uniforms.uWaterRefl.value = keep;
   for (const k of ['uTime', 'uCloud', 'uSun', 'uRain', 'uSunDir']) if (ctx.U[k]) mat.uniforms[k] = ctx.U[k];
@@ -31,9 +31,13 @@ void main(){
   const geo = new T.PlaneGeometry(LAKE.rx * 2.2, LAKE.rz * 2.2, 88, 64).rotateX(-Math.PI / 2);
   const mesh = new T.Mesh(geo, mat); mesh.name = 'lake-water-surface'; mesh.position.set(cx, LAKE.level, cz);
   mesh.layers.mask = sea.layers.mask; mesh.renderOrder = sea.renderOrder; mesh.receiveShadow = true;
-  const size = new T.Vector2(), centre = new T.Vector3(cx, LAKE.level, cz);
+  const size = new T.Vector2(), centre = new T.Vector3(cx, LAKE.level, cz), frustum = new T.Frustum(), m4 = new T.Matrix4();
+  const box = new T.Box3(new T.Vector3(cx - LAKE.rx * 1.1, LAKE.level - .5, cz - LAKE.rz * 1.1), new T.Vector3(cx + LAKE.rx * 1.1, LAKE.level + .5, cz + LAKE.rz * 1.1));
   return {mesh, update() {
     const cam = ctx.camera; mesh.visible = cam.position.distanceTo(centre) < 110; if (!mesh.visible) return;
+    // skip the reflection pass entirely when the lake is off screen
+    frustum.setFromProjectionMatrix(m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); if (!frustum.intersectsBox(box)) return;
+    const g = globalThis as any; if ((g.__reflTick ?? 0) % (g.__reflEvery ?? 1)) return; refl.scale = g.__lakeReflScale ?? .4;
     ctx.renderer.getDrawingBufferSize(size); refl.setSize(size.x, size.y); refl.render(ctx.renderer, ctx.scene, cam);
   }};
 }

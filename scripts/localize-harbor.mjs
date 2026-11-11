@@ -40,6 +40,11 @@ const CODE = [
   ['for(let D of g)xp(r,{...D,y0:d,topFn:()=>.05,groundFn:u,depth:.24,rand:o,colors:Xl,capColor:Ex,rowMin:.2,rowMax:.3});',
    'for(let D of g)xp(r,{...D,y0:d,topFn:()=>.05,groundFn:u,depth:.24,rand:o,colors:Xl,capColor:Ex,rowMin:.2,rowMax:.3});(globalThis.__harborLots||(globalThis.__harborLots=[])).push({lot:e,group:s});{let __jp=new me;__jp.name="jp-house-body";__jp.userData.dynamic=!0;s.add(__jp);s=__jp;r=new Ln(s,t.vc);a=new Ln(s,t.wet)}',
    'hill houses: keep the lot (platform, stone walls), build the Japanese house body into a removable, unmerged group; src/home/chinese-houses.ts builds the replacement'],
+  ['function T(){n.setPixelRatio(e);let ct=Math.max(1,M?M[0]:window.innerWidth),vt=Math.max(1,M?M[1]:window.innerHeight);n.setSize(ct,vt),o.aspect=ct/vt,o.updateProjectionMatrix();let q=Math.max(1,Math.floor(ct*e)),K=Math.max(1,Math.floor(vt*e));',
+   'function T(){globalThis.__harborResize=T;let e2=globalThis.__renderScale??e;n.setPixelRatio(e2);let ct=Math.max(1,M?M[0]:window.innerWidth),vt=Math.max(1,M?M[1]:window.innerHeight);n.setSize(ct,vt),o.aspect=ct/vt,o.updateProjectionMatrix();let q=Math.max(1,Math.floor(ct*e2)),K=Math.max(1,Math.floor(vt*e2));',
+   'graphics presets: render scale (canvas and every pass target) + a resize hook'],
+  ['let m=new Ii(4,4,{type:ws,samples:4})', 'let m=globalThis.__harborRT=new Ii(4,4,{type:ws,samples:globalThis.__msaa??4})', 'graphics presets: MSAA samples of the main colour target'],
+  ['n.shadowMap.needsUpdate=!0;let vt=i.fog;', 'n.shadowMap.needsUpdate=globalThis.__shadowTick?globalThis.__shadowTick():!0;let vt=i.fog;', 'graphics presets: shadow map refresh rate'],
   ['let y=new Xp(x,a);t.add(y.mesh);', 'let y=new Xp(x,a);y.mesh.visible=!1,y.mesh.name="boat-flags-hidden",t.add(y.mesh);', 'no mast flags / pennants on the boats'],
 ];
 let s = readFileSync(src, 'utf8'); const problems = [];

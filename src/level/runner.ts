@@ -9,6 +9,7 @@ import {SlimeCharacter} from '../slime/character';
 import type {Vec} from '../slime/types';
 import {LevelUI} from '../ui/level-ui';
 import {Save} from '../game/save';
+import {applyLevelQuality} from '../game/graphics';
 import {dayLabel} from '../game/calendar';
 /** Runner chapters: dash along the course, gather the pickups, reach the finish. Time is kept as a personal best. */
 const id = new URLSearchParams(location.search).get('id') ?? '';
@@ -46,6 +47,7 @@ const ui = new LevelUI({start: () => start(), resume: () => resume(), restart: (
 const ctx = {THREE, renderer: stage.renderer, scene: stage.scene, camera: stage.camera, sun: stage.sun, controls: stage.controls};
 type State = 'intro' | 'play' | 'pause' | 'done'; let state: State = 'intro';
 const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, ui: false, trainingTargets: [], title: spec.title, onToast: () => {}, onReady: () => { if (state === 'intro') showIntro(); }}).attach();
+applyLevelQuality(stage, slime, save.data.quality);
 (window as any).__slime = slime; (window as any).__level = {spec, layout, check};
 stage.camera.position.set(-6, 5, 8); stage.camera.lookAt(6, 1.5, 0);
 const steps = spec.segments.map(s => spec.segmentNames[s]).concat(`沿途收集${spec.pickup.name} 0/${spec.pickup.count}`, spec.finish.label);

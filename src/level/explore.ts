@@ -10,6 +10,7 @@ import type {Vec} from '../slime/types';
 import {QuestRunner} from '../game/quest';
 import {LevelUI} from '../ui/level-ui';
 import {Save} from '../game/save';
+import {applyLevelQuality} from '../game/graphics';
 import {dayLabel} from '../game/calendar';
 const SERIF = '"Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif';
 const id = new URLSearchParams(location.search).get('id') ?? '';
@@ -53,6 +54,7 @@ const ui = new LevelUI({
 }, `${dayLabel(day)} · ${year}`);
 const ctx = {THREE, renderer: stage.renderer, scene: stage.scene, camera: stage.camera, sun: stage.sun, controls: stage.controls};
 const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, ui: false, trainingTargets: [], title: spec.title, onToast: () => {}, onReady: () => { if (state === 'intro') showIntro(); }}).attach();
+applyLevelQuality(stage, slime, save.data.quality);
 (window as any).__slime = slime; (window as any).__level = {spec, layout, quest, check};
 stage.camera.position.set(-27.5, 8.5, 8); stage.camera.lookAt(-15, 1, 0);
 const steps = spec.quest.main.branches.map(b => b.label + (b.targets.length > 1 ? ` 0/${b.targets.length}` : ''));

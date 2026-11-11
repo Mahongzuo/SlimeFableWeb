@@ -1,13 +1,14 @@
 import './ui.css';
+import {PRESET_NAMES, type QualitySetting} from '../game/graphics';
 import {ChapterMeta, DayMeta, statusNames, templateNames} from '../../content/types';
 import {days} from '../../content/registry';
 import {DayId, dayLabel, month, monthLength, isValidDay} from '../game/calendar';
 import {elements} from '../slime/elements';
 export interface UIHandlers {
   start(): void; resume(): void; pause(): void; openBook(): void; closePanel(): void; showDay(id: DayId): void; showToday(): void;
-  respawn(): void; quality(q: 'high' | 'balanced'): void; toTitle(): void; element(i: number): void; go(id: string): void;
+  respawn(): void; quality(q: QualitySetting): void; toTitle(): void; element(i: number): void; go(id: string): void;
 }
-export interface TitleInfo {ready: boolean; todayId: DayId; year: number; weekday: string; shown: DayMeta; isToday: boolean; quality: 'high' | 'balanced'}
+export interface TitleInfo {ready: boolean; todayId: DayId; year: number; weekday: string; shown: DayMeta; isToday: boolean; quality: QualitySetting; preset?: string}
 export interface HudInfo {day: string; sub: string; objective: string; shards: number; total: number; element: number; aiming: boolean}
 export interface BookInfo {todayId: DayId; shownId: DayId; souvenirs: string[]; visited: string[]; completed: string[]}
 const slimeMark = `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M7 50C7 30 17 12 32 12s25 18 25 38c0 4-3 6-7 6H14c-4 0-7-2-7-6z" style="fill:var(--accent)" stroke="#2f2a24" stroke-width="3.5"/><ellipse cx="24" cy="38" rx="3.3" ry="4.3" fill="#2f2a24"/><ellipse cx="40" cy="38" rx="3.3" ry="4.3" fill="#2f2a24"/><path d="M27 45q5 4 10 0" stroke="#2f2a24" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M17 26c2-5 6-9 11-10" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" opacity=".85"/></svg>`;
@@ -42,7 +43,7 @@ export class GameUI {
       else if (act === 'pause') this.h.pause(); else if (act === 'close') this.h.closePanel(); else if (act === 'respawn') this.h.respawn(); else if (act === 'title') this.h.toTitle();
       else if (act === 'show') this.h.showDay(this.bookState.selected); else if (act === 'today') { this.h.showToday(); } else if (act === 'go' && t.dataset.id) this.h.go(t.dataset.id);
     });
-    root.addEventListener('change', e => { const t = e.target as HTMLSelectElement; if (t.dataset.quality !== undefined) this.h.quality(t.value as 'high' | 'balanced'); });
+    root.addEventListener('change', e => { const t = e.target as HTMLSelectElement; if (t.dataset.quality !== undefined) this.h.quality(t.value as QualitySetting); });
   }
   private $(s: string) { return this.root.querySelector(s) as HTMLElement; }
   title(info: TitleInfo | null) {
@@ -57,7 +58,7 @@ export class GameUI {
       <h1>${slimeMark}史莱姆寓言</h1><p class="tagline">一小团果冻，穿过每一个“今天”。</p>
       <div class="today-card card grain"><h3>今天的档案</h3><p>${line}</p><div class="years">${chapters.map(c => `<span class="year-chip"><i style="background:${c.palette[0]}"></i>${c.year}</span>`).join('')}</div></div>
       <div class="title-actions"><button class="btn primary" data-act="start" ${info.ready ? '' : 'disabled'}>${info.ready ? '进入港口' : '史莱姆正在醒来…'}<span class="key">Enter</span></button><button class="btn" data-act="book">打开史书<span class="key">J</span></button></div>
-      <div class="title-foot"><label>画质 <select data-quality><option value="high" ${info.quality === 'high' ? 'selected' : ''}>高</option><option value="balanced" ${info.quality === 'balanced' ? 'selected' : ''}>平衡</option></select></label><span>键鼠游玩 · 建议使用 Chrome / Edge</span></div>
+      <div class="title-foot"><label>画质 <select data-quality>${(['auto', 'low', 'medium', 'high', 'ultra'] as QualitySetting[]).map(q => `<option value="${q}" ${info.quality === q ? 'selected' : ''}>${PRESET_NAMES[q]}</option>`).join('')}</select></label><span>键鼠游玩 · 建议使用 Chrome / Edge</span></div>
     </div></section>`;
   }
   showHud(on: boolean) { this.hudEl.classList.toggle('hidden', !on); if (on) { this.keysEl.classList.remove('dim'); clearTimeout(this.keysTimer); this.keysTimer = window.setTimeout(() => this.keysEl.classList.add('dim'), 12000); } else this.prompt(null); }
@@ -77,11 +78,11 @@ export class GameUI {
   }
   toast(text: string, ms = 2600) { const el = this.$('.toast'); el.textContent = text; el.classList.add('show'); clearTimeout(this.toastTimer); this.toastTimer = window.setTimeout(() => el.classList.remove('show'), ms); }
   panel(html: string | null) { this.$('.layer-panel').innerHTML = html ?? ''; }
-  pause(quality: 'high' | 'balanced') {
+  pause(quality: QualitySetting, preset = '') {
     this.panel(`<div class="overlay"><div class="pause card grain"><h2>暂停一下</h2><p>港口一直都在。</p><div class="stack">
       <button class="btn primary" data-act="resume">继续游玩</button><button class="btn" data-act="book">打开史书<span class="key">J</span></button>
       <button class="btn" data-act="respawn">回到广场</button>
-      <div class="row" style="margin:4px 0">画质 <select data-quality style="pointer-events:auto;font:700 13px var(--sans);border:1.5px solid var(--ink);border-radius:999px;padding:6px 12px;background:var(--paper)"><option value="high" ${quality === 'high' ? 'selected' : ''}>高</option><option value="balanced" ${quality === 'balanced' ? 'selected' : ''}>平衡</option></select></div>
+      <div class="row" style="margin:4px 0">画质 <select data-quality style="pointer-events:auto;font:700 13px var(--sans);border:1.5px solid var(--ink);border-radius:999px;padding:6px 12px;background:var(--paper)">${(['auto', 'low', 'medium', 'high', 'ultra'] as QualitySetting[]).map(q => `<option value="${q}" ${quality === q ? 'selected' : ''}>${PRESET_NAMES[q]}</option>`).join('')}</select>${preset ? `<small style="margin-left:8px;color:var(--ink-3)">当前 ${preset}</small>` : ''}</div>
       <button class="btn ghost small" data-act="title">返回标题</button></div></div></div>`);
   }
   book(info: BookInfo) { this.info = info; this.bookState.selected = info.shownId; this.bookState.month = month(info.shownId); this.renderBook(); }

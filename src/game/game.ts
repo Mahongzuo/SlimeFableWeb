@@ -3,6 +3,7 @@ import {Vec, distance} from '../slime/types';
 import {buildHomeWorld} from '../world/home-world';
 import type {BuiltZones} from '../zones';
 import {LifeUI} from '../ui/life-ui';
+import {Graphics, PRESET_NAMES} from './graphics';
 import type {Interactable, PlayerHandle} from '../zones/types';
 import {HarborWater} from '../home/harbor-water';
 import {homeSpawn, plazaCenter, portalSlots, SEA_LEVEL, shardSpots, spawnYaw} from '../home/layout';
@@ -20,12 +21,12 @@ const TITLE_CAM = {pos: [-8, 6.8, 35] as Vec, target: [6, 1.9, 20] as Vec};
 export class Game {
   state: State = 'loading'; private panelFrom: State = 'play'; private ui: GameUI; readonly slime: SlimeCharacter; private save = new Save();
   private showing!: Showing; private portals: TimePortal[]; private lectern: Lectern; private shards: Shards; private fx: SeaFX; private puddles: HarborWater;
-  private zones!: BuiltZones; private life: LifeUI; private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | {kind: 'spot'; spot: Interactable} | null = null; private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
+  private zones!: BuiltZones; private graphics!: Graphics; private life: LifeUI; private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | {kind: 'spot'; spot: Interactable} | null = null; private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
   constructor(private app: any) {
     const ctx = app.ctx; this.T = ctx.THREE;
     this.ui = new GameUI({
       start: () => this.start(), resume: () => this.resume(), pause: () => this.pauseGame(), openBook: () => this.openBook(), closePanel: () => this.closePanel(true),
-      showDay: id => this.showDay(id), showToday: () => this.showDay(null), respawn: () => this.respawn(), quality: q => { this.slime.quality = q; this.save.data.quality = q; this.save.write(); },
+      showDay: id => this.showDay(id), showToday: () => this.showDay(null), respawn: () => this.respawn(), quality: q => { this.graphics.set(q); this.save.data.quality = q; this.save.write(); },
       toTitle: () => this.toTitle(), element: i => this.slime.setElement(i), go: id => this.go(id),
     });
     ctx.camera.position.fromArray(TITLE_CAM.pos); ctx.controls.target.fromArray(TITLE_CAM.target); ctx.controls.update();
@@ -38,7 +39,10 @@ export class Game {
     this.slime = new SlimeCharacter(ctx, {world, spawn: homeSpawn, ui: false, trainingTargets: [], showCollisionBoxes: false, title: '凝露港',
       onToast: () => {}, onReady: () => this.ready(),
       onLand: (speed, swimming) => { if (swimming && speed > 1.2) this.fx.splash(this.slime.position, speed); }}).attach();
-    this.slime.quality = this.save.data.quality; this.player = this.makePlayer();
+    this.player = this.makePlayer();
+    this.graphics = new Graphics(ctx, this.slime, this.zones.roots); this.graphics.set(this.save.data.quality);
+    this.graphics.onAutoChange = p => this.ui.toast(`画面有点吃力，已自动调到「${PRESET_NAMES[p]}」画质 · 暂停菜单里可以改`, 3600);
+    (window as any).__graphics = this.graphics;
     window.__slime = this.slime; (window as any).__game = this;
     this.puddles = new HarborWater(ctx, this.slime);
     this.shards = new Shards(ctx, this.save.data.shards);
@@ -68,7 +72,7 @@ export class Game {
     } else if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('欢迎回到凝露港 · 走近史书或时光门，按 F 看看', 4200), 600);
   }
   private resume() { if (this.state === 'title' || this.state === 'loading') { this.ui.panel(null); this.state = 'title'; return; } this.ui.panel(null); this.slime.play(); this.state = 'play'; this.ui.showHud(true); }
-  private pauseGame() { if (this.state !== 'play') return; this.state = 'pause'; this.slime.pause(); this.ui.pause(this.save.data.quality); }
+  private pauseGame() { if (this.state !== 'play') return; this.state = 'pause'; this.slime.pause(); this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
   private openBook() {
     if (this.state === 'book') { this.closePanel(true); return; }
     if (this.state === 'door') this.stepOutOfDoor();
@@ -81,7 +85,7 @@ export class Game {
     if (this.state !== 'book' && this.state !== 'door' && this.state !== 'pause') return;
     if (this.state === 'door') this.stepOutOfDoor();
     if (this.panelFrom === 'title' && this.state === 'book') { this.state = 'title'; this.ui.panel(null); this.titleScreen(); return; }
-    if (byGesture) this.resume(); else { this.state = 'pause'; this.ui.pause(this.save.data.quality); }
+    if (byGesture) this.resume(); else { this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
   }
   private respawn() { this.slime.reset(); this.slime.yaw = spawnYaw; this.resume(); }
   private toTitle() { this.state = 'title'; this.ui.panel(null); this.ui.showHud(false); this.life.show(false); this.slime.observe(); this.app.ctx.camera.position.fromArray(TITLE_CAM.pos); this.app.ctx.controls.target.fromArray(TITLE_CAM.target); this.app.ctx.controls.update(); this.titleScreen(); }
@@ -124,9 +128,10 @@ export class Game {
     const s = this.slime;
     s.update(t, dt); this.puddles.update(dt); this.fx.update(dt, s); this.lectern.update(t);
     for (const p of this.portals) { p.hover += ((this.focus?.kind === 'portal' && this.focus.portal === p ? 1 : 0) - p.hover) * (1 - Math.exp(-dt * 8)); p.update(t, dt); }
-    if (this.state === 'play' && s.mode !== 'play') { this.state = 'pause'; this.ui.pause(this.save.data.quality); }
+    if (this.state === 'play' && s.mode !== 'play') { this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
     this.shards.update(t, dt, this.state === 'play' ? s.position : [0, -99, 0]);
     for (const u of this.zones.updates) u(t, dt, this.player);
+    this.graphics.update(dt, this.state === 'play');
     this.followSun();
     if (this.state !== 'play') return;
     if (s.swimming && this.save.add('seenHints', 'swim')) this.ui.toast('漂起来了！水属性游得最快 · 东边的船坡和浮码头可以上岸', 4200);
