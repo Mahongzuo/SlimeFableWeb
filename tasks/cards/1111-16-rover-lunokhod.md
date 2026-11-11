@@ -2,7 +2,7 @@
 agent: codex
 model: gpt-6-astra
 effort: high
-files: src/level/lander.ts, src/templates/lander.ts, src/themes/moon-1970.ts, src/themes/space.ts, content/levels/1117-1970.ts, content/levels/types.ts, content/levels/registry.ts, content/days/1117.ts, content/registry.ts, tests/lander.test.ts
+files: src/slime/character.ts, src/level/lander.ts, src/templates/lander.ts, src/themes/moon-1970.ts, src/themes/space.ts, content/levels/1117-1970.ts, content/levels/types.ts, content/levels/registry.ts, content/days/1117.ts, content/registry.ts, tests/lander.test.ts
 checks: check,test
 ---
 # lander 的 rover 模式 + 1117 · 1970 月球车 1 号

@@ -2,7 +2,7 @@
 agent: codex
 model: gpt-6-astra
 effort: high
-files: src/templates/lander.ts, src/level/lander.ts, src/themes/space.ts, content/levels/1112-2014.ts, content/levels/types.ts, content/levels/registry.ts, content/types.ts, src/level/main.ts, content/days/1112.ts, tests/lander.test.ts
+files: src/slime/character.ts, src/templates/lander.ts, src/level/lander.ts, src/themes/space.ts, content/levels/1112-2014.ts, content/levels/types.ts, content/levels/registry.ts, content/types.ts, src/level/main.ts, content/days/1112.ts, tests/lander.test.ts
 checks: check,test
 ---
 # 低重力着陆模板 lander + 共享 space 套件 + 1112 · 2014 菲莱
@@ -19,7 +19,7 @@ checks: check,test
 
 要点：
 - `lander` 模板：彗星地形用程序化高度场，纯数据，要有坑、冰崖、平原，双瓣外形只在远景里表现。生成着陆圈 Agilkia、3 个阳光平台、终点 Abydos，以及光照区随时间移动的规则。测试要证明所有平台都能用“低重力跳跃 + 贴墙”到达，跑 40 个种子。
-- 低重力：把 SlimeCharacter 的重力做成可配置（如需改 `src/slime/character.ts`，只加一个可选的 `gravityScale` 选项，默认 1，其余逻辑不动），并把这个文件加进本卡的允许列表后再改。落地速度过快会反弹；摊开身体（spread>0.5）能吸收冲击；火属性按空格可以短促喷气。
+- 低重力：把 SlimeCharacter 的重力做成可配置（在 `src/slime/character.ts` 里只加一个可选的 `gravityScale` 选项，默认 1，其余逻辑不动）。落地速度过快会反弹；摊开身体（spread>0.5）能吸收冲击；火属性按空格可以短促喷气。
 - 电池条、阳光和阴影、3 份科学数据、Abydos 传数据的高光（罗塞塔号从头顶飞过、光柱）。
 - `space` 套件：星空穹顶（程序化的点星和银河带）、远处的太阳、航天器零件生成函数（太阳能翼、天线碟、桁架）。1980、1969、1970 这几关都要复用它，所以要写成通用函数并导出。
 
