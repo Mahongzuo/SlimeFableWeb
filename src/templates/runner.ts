@@ -8,7 +8,7 @@ import {rng} from './random';
  * RUNNER_LIMITS so the line is always clearable without sprinting or double-jumping.
  */
 export const RUNNER_LIMITS = {gap: 2.2, rise: 1.0, drop: 4.5};
-export type PieceKind = 'ground' | 'wall' | 'gate' | 'crate' | 'cart' | 'house' | 'roof' | 'ridge' | 'stair' | 'crowd' | 'lamp' | 'rail' | 'bridge' | 'plinth' | 'tower' | 'pole';
+export type PieceKind = 'ground' | 'wall' | 'gate' | 'crate' | 'cart' | 'house' | 'roof' | 'ridge' | 'stair' | 'crowd' | 'lamp' | 'rail' | 'bridge' | 'plinth' | 'tower' | 'pole' | 'booth' | 'car' | 'pylon' | 'beam' | 'ceiling';
 export interface Piece extends Box {kind: PieceKind; segment: RunnerSegment; walk: boolean}
 export interface RunnerLayout {
   seed: string; spawn: Vec; spawnYaw: number; pieces: Piece[]; pickups: Vec[];
@@ -48,6 +48,28 @@ export function generateRunner(spec: RunnerSpec): RunnerLayout {
       for (let k = 6; k < len - 4; k += r.range(5, 8)) { const z0 = r.range(-7, 3); box('crowd', [x + k, 0, z0], [x + k + r.range(1.2, 2.2), 1.6, z0 + r.range(1.5, 3.5)]); }
       for (let k = 2; k < len; k += 10) for (const z of [-8.4, 8.4]) box('lamp', [x + k - .12, 0, z - .12], [x + k + .12, 3.6, z + .12]);
       x += len;
+    } else if (kind === 'toll') { // Oakland toll plaza: a row of booths across a wide road, cars queued in some lanes
+      const len = 36; box('ground', [x, -.2, -9], [x + len, 0, 9], true); step(x, x + len, 0);
+      for (let z = -7.5; z <= 7.5; z += 3) { box('booth', [x + 16, 0, z - .5], [x + 17.4, 2.3, z + .5]); if (Math.abs(z) > 2 && r.chance(.6)) for (let k = 0; k < r.int(1, 3); k++) box('car', [x + 19 + k * 5.2, 0, z + .75], [x + 23.4 + k * 5.2, 1.5, z + 2.25]); }
+      for (const z of [-9, 8.8]) box('rail', [x, 0, z], [x + len, .9, z + .2]);
+      x += len;
+    } else if (kind === 'deck') { // suspension span: lanes with stalled cars to weave round, pass between the tower legs
+      const len = 72; box('ground', [x, -.2, -5.2], [x + len, 0, 5.2], true); step(x, x + len, 0);
+      for (const z of [-5.4, 5.2]) box('rail', [x, 0, z], [x + len, 1.0, z + .2]);
+      for (const k of [18, 54]) { for (const z of [-4.9, 3.7]) box('pylon', [x + k, 0, z], [x + k + 1.4, 22, z + 1.2]); box('beam', [x + k, 6, -4.9], [x + k + 1.4, 7, 4.9]); box('beam', [x + k, 15, -4.9], [x + k + 1.4, 16, 4.9]); }
+      for (let k = 6; k < len - 6; k += r.range(7, 11)) { const lane = r.pick([-3.4, -1.2, 1.2, 3.4]) as number; if (Math.abs((k % 36) - 18) < 3) continue; box('car', [x + k, 0, lane - .75], [x + k + 4.4, 1.5, lane + .75]); }
+      x += len;
+    } else if (kind === 'tunnel') { // Yerba Buena Island tunnel: walls, a low ceiling, a row of pillars down the middle
+      const len = 34; box('ground', [x, -.2, -5.2], [x + len, 0, 5.2], true); step(x, x + len, 0);
+      for (const z of [-6, 5.2]) box('wall', [x, 0, z], [x + len, 6.2, z + .8]);
+      box('ceiling', [x, 6, -5.2], [x + len, 7, 5.2]);
+      for (let k = 4; k < len - 2; k += 6) box('pylon', [x + k, 0, -.3], [x + k + .6, 6, .3]);
+      x += len;
+    } else if (kind === 'arrival') { // San Francisco end: the ribbon across the road between two posts
+      const len = 24; box('ground', [x, -.2, -9], [x + len, 0, 9], true); step(x, x + len, 0);
+      box('plinth', [x + 10, 0, -2.5], [x + 13, .3, 2.5], true); box('pole', [x + 11.4, .3, -3.2], [x + 11.6, 2.2, -3]); box('pole', [x + 11.4, .3, 3], [x + 11.6, 2.2, 3.2]);
+      for (let k = 2; k < len; k += 8) for (const z of [-8.4, 8.4]) box('lamp', [x + k - .12, 0, z - .12], [x + k + .12, 3.6, z + .12]);
+      x += len;
     } else { // Golden Water Bridges over the moat, then the square in front of the gate tower
       const moat = 7; box('ground', [x, -.2, -12], [x + 3, 0, 12], true); step(x, x + 3, 0); x += 3;
       box('ground', [x, -1.6, -12], [x + moat, -1.4, 12]); water.push({min: [x, -12], max: [x + moat, 12], level: -.7});
@@ -63,7 +85,10 @@ export function generateRunner(spec: RunnerSpec): RunnerLayout {
   // pickups: spread along the route, a little above each walkable stretch
   const pickups: Vec[] = [], total = route.reduce((s, q) => s + (q.x1 - q.x0), 0); let acc = 0, next = 3;
   const gapPer = (total - 6) / spec.pickup.count;
-  for (const q of route) { while (next <= acc + (q.x1 - q.x0) && pickups.length < spec.pickup.count) { const px = q.x0 + (next - acc); pickups.push([px, q.y + .6, q.segment === 'avenue' ? Math.sin(px * .35) * 5 : q.z]); next += gapPer; } acc += q.x1 - q.x0; }
+  for (const q of route) { while (next <= acc + (q.x1 - q.x0) && pickups.length < spec.pickup.count) { const px = q.x0 + (next - acc); pickups.push([px, q.y + .6, q.segment === 'avenue' || q.segment === 'toll' ? Math.sin(px * .35) * 5 : q.segment === 'deck' ? Math.sin(px * .2) * 3.4 : q.z]); next += gapPer; } acc += q.x1 - q.x0; }
+  // keep pickups out of solid things (cars, booths, crowds): slide sideways to the nearest free spot
+  const blocked = (q: Vec) => pieces.some(p => !p.walk && q[0] > p.min[0] - .5 && q[0] < p.max[0] + .5 && q[2] > p.min[2] - .5 && q[2] < p.max[2] + .5 && q[1] < p.max[1] + .3 && q[1] > p.min[1] - .3);
+  for (const q of pickups) if (blocked(q)) for (const dz of [1.2, -1.2, 2.4, -2.4, 3.6, -3.6, 0]) { const z = q[2] + dz; if (!blocked([q[0], q[1], z])) { q[2] = z; break; } }
   const fin = segments[segments.length - 1], plinth = pieces.find(p => p.kind === 'plinth')!;
   return {seed: spec.seed, spawn: [1.5, 0, 0], spawnYaw: -Math.PI / 2, pieces, pickups, route, segments, water,
     finish: {x: (plinth.min[0] + plinth.max[0]) / 2, y: plinth.max[1], z: 0, r: 2.2},

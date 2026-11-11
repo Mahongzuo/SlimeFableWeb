@@ -4,6 +4,7 @@ import {levels} from '../../content/levels/registry';
 import type {RunnerSpec} from '../../content/levels/types';
 import {generateRunner, validateRunner} from '../templates/runner';
 import {beipingKit, type RunnerKit} from '../themes/beiping';
+import {sfKit} from '../themes/sf1936';
 import {bakeRegion} from '../world/bake';
 import {SlimeCharacter} from '../slime/character';
 import type {Vec} from '../slime/types';
@@ -14,7 +15,7 @@ import {dayLabel} from '../game/calendar';
 /** Runner chapters: dash along the course, gather the pickups, reach the finish. Time is kept as a personal best. */
 const id = new URLSearchParams(location.search).get('id') ?? '';
 const spec = levels[id] as RunnerSpec;
-const kits: Record<string, RunnerKit> = {'beiping-1949': beipingKit};
+const kits: Record<string, RunnerKit> = {'beiping-1949': beipingKit, 'sf-1936': sfKit};
 const layout = generateRunner(spec), check = validateRunner(layout);
 if (!check.ok) console.warn('[runner] course check failed', check.errors);
 const kit = kits[spec.theme] ?? beipingKit, stage = new Stage(kit.look), save = new Save();
@@ -34,13 +35,16 @@ interface Pick {g: THREE.Group; base: number; taken: boolean; fade: number}
 const picks: Pick[] = layout.pickups.map(p => {
   const g = new THREE.Group(); g.position.set(p[0], p[1], p[2]); g.name = 'pickup-fx';
   const stick = new THREE.Mesh(new THREE.CylinderGeometry(.015, .015, .5, 5), stage.toon('#7a5a3f')); stick.position.y = .05; g.add(stick);
-  const flag = new THREE.Mesh(new THREE.PlaneGeometry(.36, .24), stage.toon('#ffffff', {map: flagTex, side: THREE.DoubleSide})); flag.position.set(.19, .2, 0); g.add(flag);
+  if (spec.pickup.look === 'ribbon') { const cols = ['#e0453a', '#f2c14e', '#3f7fc0', '#ffffff']; for (let k = 0; k < 3; k++) { const rb = new THREE.Mesh(new THREE.TorusGeometry(.14, .025, 6, 16, Math.PI * 1.6), stage.toon(cols[(k + Math.round(p[0])) % cols.length])); rb.position.set(0, .15 + k * .07, 0); rb.rotation.set(k, k * 1.3, 0); g.add(rb); } }
+  else { const flag = new THREE.Mesh(new THREE.PlaneGeometry(.36, .24), stage.toon('#ffffff', {map: flagTex, side: THREE.DoubleSide})); flag.position.set(.19, .2, 0); g.add(flag); }
   g.add(stage.glow('#f2c14e', .9, .45)); stage.scene.add(g); return {g, base: p[1], taken: false, fade: 1};
 });
 // ---- finish: the flag on the pole rises when the slime reaches the plinth
-const pole = layout.pieces.find(p => p.kind === 'pole')!;
+const pole = layout.pieces.find(p => p.kind === 'pole')!, ribbonFinish = spec.finish.kind === 'ribbon';
 const big = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.6), stage.toon('#ffffff', {map: flagTex, side: THREE.DoubleSide}));
-big.position.set(pole.max[0] + 1.2, pole.min[1] + 1.2, 0); big.rotation.y = -Math.PI / 2; big.name = 'finish-flag-fx'; stage.scene.add(big);
+big.position.set(pole.max[0] + 1.2, pole.min[1] + 1.2, 0); big.rotation.y = -Math.PI / 2; big.name = 'finish-flag-fx'; big.visible = !ribbonFinish; stage.scene.add(big);
+// ribbon finish: two halves of a red ribbon between the posts fall apart when cut
+const halves = ribbonFinish ? [-1, 1].map(s => { const m = new THREE.Mesh(new THREE.BoxGeometry(.05, .16, 3.1), stage.toon('#d8322a')); m.geometry.translate(0, 0, -s * 1.55); m.position.set((pole.min[0] + pole.max[0]) / 2, 1.3, s * 3.1); m.name = 'finish-ribbon-fx'; stage.scene.add(m); return {m, s}; }) : [];
 let raise = 0, raising = false;
 // ---- slime, ui
 const ui = new LevelUI({start: () => start(), resume: () => resume(), restart: () => location.reload(), home: () => goHome(), element: i => slime.setElement(i)}, `${dayLabel(day)} · ${year}`);
@@ -50,7 +54,8 @@ const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, ui: false, tr
 applyLevelQuality(stage, slime, save.data.quality);
 (window as any).__slime = slime; (window as any).__level = {spec, layout, check};
 stage.camera.position.set(-6, 5, 8); stage.camera.lookAt(6, 1.5, 0);
-const steps = spec.segments.map(s => spec.segmentNames[s]).concat(`沿途收集${spec.pickup.name} 0/${spec.pickup.count}`, spec.finish.label);
+const segName = (k: string) => (spec.segmentNames as any)[k] ?? k;
+const steps = [...new Set(spec.segments.map(segName))].concat(`沿途收集${spec.pickup.name} 0/${spec.pickup.count}`, spec.finish.label);
 const showIntro = () => ui.intro(spec.title, spec.intro, steps, slime.ready); showIntro();
 let got = 0, seg = -1, clock = 0;
 const best = () => save.data.life.records['runner-' + spec.id];
@@ -77,7 +82,7 @@ const loop = () => {
   if (state === 'play') {
     clock += dt;
     const s = layout.segments.findIndex(q => p[0] >= q.x0 && p[0] < q.x1);
-    if (s > seg) { seg = s; ui.banner(`${dayLabel(day)} · ${year}`, spec.segmentNames[layout.segments[s].kind]); }
+    if (s > seg) { seg = s; ui.banner(`${dayLabel(day)} · ${year}`, segName(layout.segments[s].kind)); }
     if (Math.hypot(p[0] - layout.finish.x, p[2] - layout.finish.z) < layout.finish.r && p[1] > layout.finish.y - .3) finish();
   }
   for (const k of picks) {
@@ -85,7 +90,7 @@ const loop = () => {
     k.g.position.y = k.base + Math.sin(t * 2.4 + k.base * 3 + k.g.position.x) * .08; k.g.rotation.y = Math.sin(t * 1.5 + k.g.position.x) * .6;
     if (state === 'play' && Math.hypot(p[0] - k.g.position.x, p[2] - k.g.position.z) < .9 && Math.abs(p[1] + .3 - k.base) < 1.1) { k.taken = true; got++; slime.setMood('Happy', .6, 50); ui.quest(view()); if (got === spec.pickup.count) ui.toast(`${spec.pickup.name}全部收齐了！`, 2600); }
   }
-  if (raising) { raise = Math.min(1, raise + dt / 4); big.position.y = pole.min[1] + 1.2 + raise * (pole.max[1] - pole.min[1] - 2.2); }
+  if (raising) { raise = Math.min(1, raise + dt / 4); if (ribbonFinish) for (const h of halves) { h.m.rotation.x = -h.s * Math.min(1.4, raise * 4); h.m.position.y = 1.3 - raise * .2; } else big.position.y = pole.min[1] + 1.2 + raise * (pole.max[1] - pole.min[1] - 2.2); }
   big.rotation.x = Math.sin(t * 2.2) * .05;
   hud -= dt; if (hud <= 0 && state === 'play') { hud = .1; ui.quest(view()); ui.hud(slime.element, slime.aiming); }
   stage.render(dt, slime);

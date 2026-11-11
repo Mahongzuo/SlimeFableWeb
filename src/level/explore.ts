@@ -91,7 +91,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyF' && !e.repeat && state === 'play' && focus) talk(focus);
 });
 const clock = new THREE.Clock(); let t = 0, hudTimer = 0;
-stage.renderer.setAnimationLoop(() => {
+const loop = () => {
   const dt = Math.min(clock.getDelta(), .05); t += dt;
   slime.update(t, dt);
   if (state === 'play' && slime.mode !== 'play') { state = 'pause'; ui.showHud(false); ui.panelPause(); }
@@ -119,4 +119,6 @@ stage.renderer.setAnimationLoop(() => {
   if (focus) { const at = screen(focus.spot, 2.1); ui.prompt(at && !ui.speaking ? {...at, title: `和${focus.name}说话`, sub: quest.wants(focus.id) ? quest.view().branch : '聊两句'} : null); if (at && ui.speaking) ui.placeSpeech(at.x, at.y); } else ui.prompt(null);
   hudTimer -= dt; if (hudTimer <= 0) { hudTimer = .15; ui.hud(slime.element, slime.aiming); }
   stage.render(dt, slime);
-});
+};
+stage.renderer.setAnimationLoop(loop);
+(window as any).__level.step = loop; // QA: drive frames when the tab is hidden
