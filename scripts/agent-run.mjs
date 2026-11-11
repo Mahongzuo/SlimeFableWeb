@@ -37,7 +37,9 @@ if (mode === 'run') {
   } else {
     // the model and effort must be pinned on every call: a bare `resume` silently falls back to the account's default model
     const pin = ['-c', `model="${meta.model ?? 'gpt-6-astra'}"`, '-c', `model_reasoning_effort="${meta.effort ?? 'low'}"`];
-    bin = 'codex'; args = resume ? ['exec', 'resume', ...pin, '--last', '继续完成同一张任务卡，完成后用一句中文总结。'] : ['exec', ...pin, '--approve-for-me', '-o', join(stateDir, name + '.last.txt'), prompt];
+    // `images:` in the card front matter attaches screenshots (review rounds), so the agent sees what Opus saw
+    const imgs = (meta.images ?? '').split(',').map(x => x.trim()).filter(Boolean).flatMap(f => ['-i', f]);
+    bin = 'codex'; args = resume ? ['exec', 'resume', ...pin, '--last', '继续完成同一张任务卡，完成后用一句中文总结。'] : ['exec', ...pin, ...imgs, '--approve-for-me', '-o', join(stateDir, name + '.last.txt'), prompt];
   }
   const started = Date.now(), before = Date.now();
   // mark as resumable first: if this whole call is killed from outside, the next `run` resumes instead of refusing a dirty tree
