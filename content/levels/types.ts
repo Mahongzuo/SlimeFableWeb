@@ -43,5 +43,22 @@ export interface LanderSpec {
   science: [string, string, string];
 }
 export const defineLander = (spec: LanderSpec) => spec;
-export type AnyLevel = LevelSpec | RunnerSpec | LanderSpec;
+/** Flyby distances, masses and timing are fictional game units. */
+export interface FlybyBody {
+  id: string; name: string; position: [number, number]; radius: number; mass: number; color: string;
+}
+export interface FlybyPhoto {
+  id: string; name: string; body: string; center: [number, number]; radius: number;
+}
+export interface FlybySpec {
+  id: string; template: 'flyby'; theme: 'space'; seed: string;
+  title: string; intro: string; outro: string; souvenir: string; hiddenSouvenir: string;
+  spawn: [number, number]; velocity: [number, number]; bodies: FlybyBody[]; photos: FlybyPhoto[];
+  rings: {body: string; inner: number; outer: number; gap: [number, number]};
+  titan: string; encounterRadius: number; escapeRadius: number; timeLimit: number;
+  medals: {gold: number; silver: number};
+  hidden: {position: [number, number]; radius: number};
+}
+export const defineFlyby = (spec: FlybySpec) => spec;
+export type AnyLevel = LevelSpec | RunnerSpec | LanderSpec | FlybySpec;
 export const defineRunner = (spec: RunnerSpec) => spec;

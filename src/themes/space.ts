@@ -4,6 +4,7 @@ import type {Stage, StageLook} from '../level/stage';
 import type {LanderSpec} from '../../content/levels/types';
 import {landerTriangles, horizonTriangles, horizonHeight, terrainHeight, sunlightCenter, type LanderLayout} from '../templates/lander';
 import {rng} from '../templates/random';
+import type {FlybyLayout, FlybyState} from '../templates/flyby';
 
 /** Shared, texture-free parts for the 1969 / 1970 / 1980 / 2014 space chapters. */
 export const spaceLook: StageLook = {skyTop: '#01030b', skyHorizon: '#040914', fog: [180, 450], sun: '#fff1d6', sunIntensity: 3.4, hemiSky: '#344763', hemiGround: '#080a10', ink: '#02040a', wash: '#030611'};
@@ -66,6 +67,88 @@ export function createSun(stage: Stage, position: [number, number, number] = [-8
   const g = new THREE.Group(); g.name = 'distant-sun-fx';
   const sun = part(stage, g, new THREE.SphereGeometry(radius, 16, 12), '#fff2d0'); sun.material = stage.toon('#fff2d0', {emissive: '#ffe8b0', emissiveIntensity: 2});
   const halo = stage.glow('#ffe0a0', radius * 7, .65); g.add(halo); g.position.fromArray(position); return g;
+}
+/** The white dish, long RTG boom and engraved gold disc identify the 1977 probe. */
+export function createVoyager(stage: Stage) {
+  const g = new THREE.Group(); g.name = 'voyager-probe-fx';
+  part(stage,g,new THREE.CylinderGeometry(.48,.4,.35,10),gold,0,-.1);
+  const dish=createAntennaDish(stage,.85); dish.position.set(-.75,.18,0);dish.rotation.z=.8;g.add(dish);
+  const boom=createTruss(stage,2.8,.12);boom.position.set(1.6,-.1,0);g.add(boom);
+  for(let i=0;i<3;i++) {
+    part(stage,g,new THREE.CylinderGeometry(.16,.16,.36,10),'#525c6c',2.1+i*.36,-.1).rotation.z=Math.PI/2;
+    for(let k=0;k<3;k++) part(stage,g,new THREE.BoxGeometry(.03,.45,.45),silver,2+i*.36+k*.1,-.1);
+  }
+  part(stage,g,new THREE.CylinderGeometry(.23,.23,.035,32),'#f4cd65',.04,.1,.4).rotation.x=Math.PI/2;
+  for(let i=1;i<5;i++) {const groove=part(stage,g,new THREE.TorusGeometry(i*.041,.005,4,32),'#866537',.04,.1,.425);groove.name='gold-record-groove-fx';}
+  part(stage,g,new THREE.BoxGeometry(.025,2,.025),silver,.3,.9,-.25);
+  part(stage,g,new THREE.BoxGeometry(.4,.16,.25),blue,-.3,.2,-.48);
+  compact(g);g.traverse((m:any)=>{m.castShadow=false;m.receiveShadow=false;});return g;
+}
+/** Flyby scenery shares only reusable spacecraft parts with the lander; its scene stays independent. */
+export function buildFlybySpace(stage: Stage, l: FlybyLayout) {
+  const root=new THREE.Group();root.name='saturn-system-fx';stage.scene.add(root);
+  const stars=createStarDome(l.spec.seed,170);stage.scene.add(stars,createSun(stage,[-85,65,-85],2.5));
+  stage.sun.position.set(-45,55,-20);stage.sun.target.position.set(0,0,0);
+  stage.scene.traverse((o:any)=>{if(o.isHemisphereLight)o.intensity=.8;});
+  const r=rng(l.spec.seed+'-flyby-art'), tint=new THREE.Color();
+  const bodies=new Map<string,any>();
+  for(const b of l.spec.bodies) {
+    const geo=new THREE.SphereGeometry(b.radius,48,32),p=geo.getAttribute('position'),colors:number[]=[];
+    for(let i=0;i<p.count;i++) {
+      const x=p.getX(i)/b.radius,y=p.getY(i)/b.radius,z=p.getZ(i)/b.radius;
+      const band=Math.sin(y*43+Math.sin(x*6)*.5);
+      tint.set(b.color).multiplyScalar(b.id==='saturn'||b.id==='jupiter'? .86+.12*band : .95+.05*Math.sin(x*21+z*13));
+      if(b.id==='mimas') {const d=Math.hypot(x-.12,y-.5,z-.82);const dent=d<.48?1-.22*(1-d/.48):1;p.setXYZ(i,p.getX(i)*dent,p.getY(i)*dent,p.getZ(i)*dent);if(d<.4)tint.multiplyScalar(.58);}
+      colors.push(tint.r,tint.g,tint.b);
+    }
+    geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeVertexNormals();
+    const mat=stage.toon('#ffffff').clone();mat.vertexColors=true;
+    const m=new THREE.Mesh(geo,mat);m.position.set(b.position[0],0,b.position[1]);m.name=b.id+'-body-fx';root.add(m);bodies.set(b.id,m);
+    if(b.id==='titan') {
+      const haze=part(stage,root,new THREE.SphereGeometry(b.radius*1.055,40,24),'#eda94d',b.position[0],0,b.position[1]);
+      haze.material=stage.toon('#eaa244',{transparent:true,opacity:.19,emissive:'#cf7422',emissiveIntensity:.4});haze.material.depthWrite=false;haze.layers.set(1);haze.name='titan-haze-fx';
+    }
+  }
+  // Bands and their particles use the very same radii as the contact simulation.
+  const ringGeo:THREE.BufferGeometry[]=[];
+  for(let radius=l.spec.rings.inner;radius<l.spec.rings.outer;radius+=.22) {
+    const outer=Math.min(radius+.16,l.spec.rings.outer);
+    if(outer>l.spec.rings.gap[0]&&radius<l.spec.rings.gap[1])continue;
+    const geo=new THREE.RingGeometry(radius,outer,160);geo.rotateX(-Math.PI/2);
+    geo.translate(l.ringBody.position[0],0,l.ringBody.position[1]);
+    const color=new THREE.Color(radius<l.spec.rings.gap[0]?'#a99578':'#d9c39a').multiplyScalar(r.range(.85,1.05));
+    const colors=new Float32Array(geo.getAttribute('position').count*3);
+    for(let i=0;i<colors.length;i+=3){colors[i]=color.r;colors[i+1]=color.g;colors[i+2]=color.b;}
+    geo.setAttribute('color',new THREE.BufferAttribute(colors,3));ringGeo.push(geo);
+  }
+  const ringMat=stage.toon('#ffffff',{side:THREE.DoubleSide}).clone();ringMat.vertexColors=true;
+  const rings=new THREE.Mesh(mergeGeometries(ringGeo),ringMat);rings.name='saturn-rings-fx';rings.layers.set(1);root.add(rings);ringGeo.forEach(g=>g.dispose());
+  const dust=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.085,0),stage.toon('#e2d5b8'),900),dummy=new THREE.Object3D();dust.name='ring-particles-fx';dust.layers.set(1);
+  for(let i=0;i<900;i++) {
+    let radius=r.range(l.spec.rings.inner,l.spec.rings.outer);
+    if(radius>l.spec.rings.gap[0]&&radius<l.spec.rings.gap[1])radius=l.spec.rings.gap[1]+r.range(.15,2);
+    const angle=r.range(0,Math.PI*2);dummy.position.set(l.ringBody.position[0]+Math.cos(angle)*radius,r.range(-.15,.15),l.ringBody.position[1]+Math.sin(angle)*radius);dummy.scale.setScalar(r.range(.4,1.5));dummy.updateMatrix();dust.setMatrixAt(i,dummy.matrix);
+  }root.add(dust);
+  function circle(x:number,z:number,radius:number,color:string) {
+    const positions:number[]=[];
+    for(let i=0;i<80;i++) if(i%3!==0) for(const k of [i,i+1]) {const a=k/80*Math.PI*2;positions.push(x+Math.cos(a)*radius,.25,z+Math.sin(a)*radius);}
+    const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    const line=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color,transparent:true,opacity:.5}));line.name='shutter-window-fx';line.layers.set(1);root.add(line);return line;
+  }
+  const windows=l.spec.photos.map(p=>circle(p.center[0],p.center[1],p.radius,'#9bcfce'));
+  const gravity=circle(l.titan.position[0],l.titan.position[1],l.spec.encounterRadius,'#e8c27a');
+  const signal=stage.glow('#ffd579',1.2,.9);signal.position.set(l.spec.hidden.position[0],.6,l.spec.hidden.position[1]);signal.name='record-signal-fx';root.add(signal);
+  const probe=createVoyager(stage);stage.scene.add(probe);
+  const jet=part(stage,probe,new THREE.ConeGeometry(.19,1,12),'#ffb356',-.6,-.2,0);jet.rotation.z=Math.PI/2;jet.material=stage.toon('#ffb356',{emissive:'#ff7333',emissiveIntensity:2});jet.name='fire-thrust-fx';
+  return {root,probe,bodies,windows,gravity,signal,
+    update(s:FlybyState,thrust:number,spread:number) {
+      probe.position.set(s.x,s.height+.7,s.z);probe.rotation.y=-Math.atan2(s.vz,s.vx);
+      jet.visible=thrust>0;jet.scale.y=.65+thrust*2;
+      windows.forEach((w,i)=>{w.visible=!(s.photos&(1<<i));w.material.opacity=.4+.12*Math.sin(s.time*2);});
+      gravity.material.opacity=s.encounter?.75:.35;signal.visible=!s.hidden;signal.material.opacity=.65+.25*Math.sin(s.time*3);
+      probe.scale.y=1-spread*.12;stars.position.copy(stage.camera.position);
+    },
+  };
 }
 export function createRosetta(stage: Stage) {
   const g = new THREE.Group(); g.name = 'rosetta-fx';
