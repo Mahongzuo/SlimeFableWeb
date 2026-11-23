@@ -10,7 +10,7 @@
 | [港口 08 / 15](http://127.0.0.1:5190/?date=0815) | [1914 · 让安康号过闸](http://127.0.0.1:5190/level.html?id=0815-match) | [1977 · 把信号留在纸上](http://127.0.0.1:5190/level.html?id=0815-shot) | [1985 · 沿灯献花](http://127.0.0.1:5190/level.html?id=0815-trial) |
 | [港口 11 / 23](http://127.0.0.1:5190/?date=1123) | [1963 · 雪花里的第一帧](http://127.0.0.1:5190/level.html?id=1123-match) | [1960 · 从轨道看云](http://127.0.0.1:5190/level.html?id=1123-shot) | [1936 · 把水坝印上封面](http://127.0.0.1:5190/level.html?id=1123-trial) |
 
-[当前九关验收](../tasks/reports/1123-mode-revision.md) · [初版记录](../tasks/reports/1123-pilot.md)
+三消棋盘支持按住凝露向相邻格拖动，也支持依次轻点两格。棋盘上的「规则」可查看横纹、竖纹、爆芯、虹彩的生成条件和两枚特效交换的效果。[三消规则与手势验收](../tasks/reports/1123-match-rules.md) · [九关验收](../tasks/reports/1123-mode-revision.md) · [初版记录](../tasks/reports/1123-pilot.md)
 
 [全年史书（5190）](http://127.0.0.1:5190/?date=0804) · [全年史书（5180）](http://127.0.0.1:5180/?date=0804) · [逐日 JSON 总表](level-catalog.json)
 
