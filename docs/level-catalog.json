@@ -1,11 +1,88 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "targetWebCount": {
     "min": 3,
     "max": 5
   },
   "days": {
     "0101": {
+      "dailyModes": [
+        {
+          "day": "0101",
+          "year": 1864,
+          "fact": "1864 年 1 月 1 日，画家、篆刻家齐白石出生。",
+          "source": "https://www.capitalmuseum.org.cn/exhibition/604e72abc3d3455da15369e587c3d7e6",
+          "souvenir": "落了朱印的画签",
+          "kind": "match",
+          "title": "画纸上的三枚印",
+          "goal": "将三枚印送到底部落款位",
+          "choice": "为印选落点，再消去承托它的棋子",
+          "layout": "落款棋盘",
+          "memory": "你为三枚印腾出了位置，在画纸上留下朱红落款。",
+          "id": "0101-match",
+          "chapterId": "0101-1864",
+          "playPath": "level.html?id=0101-match",
+          "verification": {
+            "checkedOn": "2026-11-23",
+            "harborEntry": "通过",
+            "bookEntry": "通过",
+            "completion": "通过",
+            "saveAndReturn": "通过",
+            "playerReview": "待用户试玩"
+          },
+          "verificationReport": "tasks/reports/1123-pilot.md"
+        },
+        {
+          "day": "0101",
+          "year": 1864,
+          "fact": "1864 年 1 月 1 日，画家、篆刻家齐白石出生。",
+          "source": "https://www.capitalmuseum.org.cn/exhibition/604e72abc3d3455da15369e587c3d7e6",
+          "souvenir": "落了朱印的画签",
+          "kind": "shot",
+          "title": "水巷里的墨团",
+          "goal": "打散躲在屏风后的墨团怪",
+          "choice": "守住桥头的射界，或游过水巷打侧面",
+          "layout": "两岸水巷与交叉射界",
+          "memory": "水巷重新安静下来，你把一枚朱印按在画签上。",
+          "id": "0101-shot",
+          "chapterId": "0101-1864",
+          "playPath": "level.html?id=0101-shot",
+          "verification": {
+            "checkedOn": "2026-11-23",
+            "harborEntry": "通过",
+            "bookEntry": "通过",
+            "completion": "通过",
+            "saveAndReturn": "通过",
+            "playerReview": "待用户试玩"
+          },
+          "verificationReport": "tasks/reports/1123-pilot.md"
+        },
+        {
+          "day": "0101",
+          "year": 1864,
+          "fact": "1864 年 1 月 1 日，画家、篆刻家齐白石出生。",
+          "source": "https://www.capitalmuseum.org.cn/exhibition/604e72abc3d3455da15369e587c3d7e6",
+          "souvenir": "落了朱印的画签",
+          "kind": "trial",
+          "title": "印坊借印",
+          "goal": "在印坊、水院和晾纸阁取印，最后亲手落款",
+          "choice": "自己决定三处取印顺序",
+          "layout": "多桥印坊水院",
+          "memory": "三处取得的印汇在纸角，这张画签有了你的落款。",
+          "id": "0101-trial",
+          "chapterId": "0101-1864",
+          "playPath": "level.html?id=0101-trial",
+          "verification": {
+            "checkedOn": "2026-11-23",
+            "harborEntry": "通过",
+            "bookEntry": "通过",
+            "completion": "通过",
+            "saveAndReturn": "通过",
+            "playerReview": "待用户试玩"
+          },
+          "verificationReport": "tasks/reports/1123-pilot.md"
+        }
+      ],
       "targetWebCount": {
         "min": 3,
         "max": 5
@@ -11663,6 +11740,83 @@
       ]
     },
     "0815": {
+      "dailyModes": [
+        {
+          "day": "0815",
+          "year": 1985,
+          "fact": "1985 年 8 月 15 日，侵华日军南京大屠杀遇难同胞纪念馆建成开放。",
+          "source": "https://www.19371213.com.cn/about/history/",
+          "souvenir": "庭院中的一束白花",
+          "kind": "match",
+          "title": "白花成束",
+          "goal": "逐区展开花瓣，让白花连成一束",
+          "choice": "在有限步数内安排花瓣开放顺序",
+          "layout": "花瓣庭院棋盘",
+          "memory": "最后一瓣舒展开来，你把白花聚成了一束。",
+          "id": "0815-match",
+          "chapterId": "0815-1985",
+          "playPath": "level.html?id=0815-match",
+          "verification": {
+            "checkedOn": "2026-11-23",
+            "harborEntry": "通过",
+            "bookEntry": "通过",
+            "completion": "通过",
+            "saveAndReturn": "通过",
+            "playerReview": "待用户试玩"
+          },
+          "verificationReport": "tasks/reports/1123-pilot.md"
+        },
+        {
+          "day": "0815",
+          "year": 1985,
+          "fact": "1985 年 8 月 15 日，侵华日军南京大屠杀遇难同胞纪念馆建成开放。",
+          "source": "https://www.19371213.com.cn/about/history/",
+          "souvenir": "庭院中的一束白花",
+          "kind": "shot",
+          "title": "隔水点灯",
+          "goal": "将分身稳稳投在灯座，护送灯光到对岸",
+          "choice": "选择占位和收回时机",
+          "layout": "分岸灯台与渡庭",
+          "memory": "你把光从一岸送到另一岸，庭院留下两盏安静的灯。",
+          "id": "0815-shot",
+          "chapterId": "0815-1985",
+          "playPath": "level.html?id=0815-shot",
+          "verification": {
+            "checkedOn": "2026-11-23",
+            "harborEntry": "通过",
+            "bookEntry": "通过",
+            "completion": "通过",
+            "saveAndReturn": "通过",
+            "playerReview": "待用户试玩"
+          },
+          "verificationReport": "tasks/reports/1123-pilot.md"
+        },
+        {
+          "day": "0815",
+          "year": 1985,
+          "fact": "1985 年 8 月 15 日，侵华日军南京大屠杀遇难同胞纪念馆建成开放。",
+          "source": "https://www.19371213.com.cn/about/history/",
+          "souvenir": "庭院中的一束白花",
+          "kind": "trial",
+          "title": "沿灯献花",
+          "goal": "跟随讲解员，在会合处献花",
+          "choice": "走缓坡护灯，或登高点亮远灯",
+          "layout": "庭院双径会合",
+          "memory": "两条路在庭院会合，你在灯前留下一束白花。",
+          "id": "0815-trial",
+          "chapterId": "0815-1985",
+          "playPath": "level.html?id=0815-trial",
+          "verification": {
+            "checkedOn": "2026-11-23",
+            "harborEntry": "通过",
+            "bookEntry": "通过",
+            "completion": "通过",
+            "saveAndReturn": "通过",
+            "playerReview": "待用户试玩"
+          },
+          "verificationReport": "tasks/reports/1123-pilot.md"
+        }
+      ],
       "targetWebCount": {
         "min": 3,
         "max": 5
@@ -15722,6 +15876,83 @@
       ]
     },
     "1123": {
+      "dailyModes": [
+        {
+          "day": "1123",
+          "year": 1963,
+          "fact": "1963 年 11 月 23 日，英国广播公司播出《神秘博士》第一集。",
+          "source": "https://www.doctorwho.tv/stories/an-unearthly-child",
+          "souvenir": "首播场记板",
+          "kind": "match",
+          "title": "雪花里的第一帧",
+          "goal": "接通三段画面，让监视器收到首播信号",
+          "choice": "选择先接通哪段，留下分身棋横扫信号带",
+          "layout": "断带演播盘",
+          "memory": "你接通最后一段信号。三台电视里，雪花变成了首播片名。",
+          "id": "1123-match",
+          "chapterId": "1123-1963",
+          "playPath": "level.html?id=1123-match",
+          "verification": {
+            "checkedOn": "2026-11-23",
+            "harborEntry": "通过",
+            "bookEntry": "通过",
+            "completion": "通过",
+            "saveAndReturn": "通过",
+            "playerReview": "待用户试玩"
+          },
+          "verificationReport": "tasks/reports/1123-pilot.md"
+        },
+        {
+          "day": "1123",
+          "year": 1963,
+          "fact": "1963 年 11 月 23 日，英国广播公司播出《神秘博士》第一集。",
+          "source": "https://www.doctorwho.tv/stories/an-unearthly-child",
+          "souvenir": "首播场记板",
+          "kind": "shot",
+          "title": "播出前，请保持安静",
+          "goal": "清除藏在布景后的干扰怪",
+          "choice": "留分身给轨道灯供电，或召回后绕行补射",
+          "layout": "灯架与布景侧翼",
+          "memory": "你扫清布景间的干扰，把首播信号送进了电视。",
+          "id": "1123-shot",
+          "chapterId": "1123-1963",
+          "playPath": "level.html?id=1123-shot",
+          "verification": {
+            "checkedOn": "2026-11-23",
+            "harborEntry": "通过",
+            "bookEntry": "通过",
+            "completion": "通过",
+            "saveAndReturn": "通过",
+            "playerReview": "待用户试玩"
+          },
+          "verificationReport": "tasks/reports/1123-pilot.md"
+        },
+        {
+          "day": "1123",
+          "year": 1963,
+          "fact": "1963 年 11 月 23 日，英国广播公司播出《神秘博士》第一集。",
+          "source": "https://www.doctorwho.tv/stories/an-unearthly-child",
+          "souvenir": "首播场记板",
+          "kind": "trial",
+          "title": "最后一张场记板",
+          "goal": "替场务把场记板送到导播台，推下推杆",
+          "choice": "登灯架或摊开钻过布景，解开舞台机关",
+          "layout": "上下层演播厅回环",
+          "memory": "场记板合上，你推下导播台的推杆。红灯亮起，节目开播。",
+          "id": "1123-trial",
+          "chapterId": "1123-1963",
+          "playPath": "level.html?id=1123-trial",
+          "verification": {
+            "checkedOn": "2026-11-23",
+            "harborEntry": "通过",
+            "bookEntry": "通过",
+            "completion": "通过",
+            "saveAndReturn": "通过",
+            "playerReview": "待用户试玩"
+          },
+          "verificationReport": "tasks/reports/1123-pilot.md"
+        }
+      ],
       "targetWebCount": {
         "min": 3,
         "max": 5

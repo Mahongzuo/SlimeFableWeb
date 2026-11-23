@@ -1,0 +1,74 @@
+{
+  "1123-match": {
+    "checkedOn": "2026-11-23",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待用户试玩"
+  },
+  "1123-shot": {
+    "checkedOn": "2026-11-23",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待用户试玩"
+  },
+  "1123-trial": {
+    "checkedOn": "2026-11-23",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待用户试玩"
+  },
+  "0101-match": {
+    "checkedOn": "2026-11-23",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待用户试玩"
+  },
+  "0101-shot": {
+    "checkedOn": "2026-11-23",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待用户试玩"
+  },
+  "0101-trial": {
+    "checkedOn": "2026-11-23",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待用户试玩"
+  },
+  "0815-match": {
+    "checkedOn": "2026-11-23",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待用户试玩"
+  },
+  "0815-shot": {
+    "checkedOn": "2026-11-23",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待用户试玩"
+  },
+  "0815-trial": {
+    "checkedOn": "2026-11-23",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待用户试玩"
+  }
+}
