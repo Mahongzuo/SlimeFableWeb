@@ -1,0 +1,83 @@
+{
+  "0101-match-euro-cash": {
+    "checkedOn": "2026-11-23",
+    "storyId": "euro-cash",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待新版试玩"
+  },
+  "0101-shot-ceres": {
+    "checkedOn": "2026-11-23",
+    "storyId": "ceres",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待新版试玩"
+  },
+  "0101-trial": {
+    "checkedOn": "2026-11-23",
+    "storyId": "qi-baishi",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待新版试玩"
+  },
+  "0815-match-panama-canal": {
+    "checkedOn": "2026-11-23",
+    "storyId": "panama-canal",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待新版试玩"
+  },
+  "0815-shot-wow-signal": {
+    "checkedOn": "2026-11-23",
+    "storyId": "wow-signal",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待新版试玩"
+  },
+  "0815-trial": {
+    "checkedOn": "2026-11-23",
+    "storyId": "nanjing-memorial",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待新版试玩"
+  },
+  "1123-match": {
+    "checkedOn": "2026-11-23",
+    "storyId": "doctor-who",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待新版试玩"
+  },
+  "1123-shot-tiros-2": {
+    "checkedOn": "2026-11-23",
+    "storyId": "tiros-2",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待新版试玩"
+  },
+  "1123-trial-life-weekly": {
+    "checkedOn": "2026-11-23",
+    "storyId": "life-weekly",
+    "harborEntry": "通过",
+    "bookEntry": "通过",
+    "completion": "通过",
+    "saveAndReturn": "通过",
+    "playerReview": "待新版试玩"
+  }
+}
