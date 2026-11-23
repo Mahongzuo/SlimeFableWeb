@@ -24,6 +24,7 @@
           "playPath": "level.html?id=0101-match",
           "chapterId": null,
           "saveId": "0101-match-euro-cash",
+          "gateSlot": 4,
           "verification": {
             "checkedOn": "2026-11-23",
             "storyId": "euro-cash",
@@ -52,6 +53,7 @@
           "playPath": "level.html?id=0101-shot",
           "chapterId": null,
           "saveId": "0101-shot-ceres",
+          "gateSlot": 3,
           "verification": {
             "checkedOn": "2026-11-23",
             "storyId": "ceres",
@@ -80,6 +82,7 @@
           "playPath": "level.html?id=0101-trial",
           "chapterId": "0101-1864",
           "saveId": "0101-trial",
+          "gateSlot": 3,
           "verification": {
             "checkedOn": "2026-11-23",
             "storyId": "qi-baishi",
@@ -11767,6 +11770,7 @@
           "playPath": "level.html?id=0815-match",
           "chapterId": null,
           "saveId": "0815-match-panama-canal",
+          "gateSlot": 4,
           "verification": {
             "checkedOn": "2026-11-23",
             "storyId": "panama-canal",
@@ -11795,6 +11799,7 @@
           "playPath": "level.html?id=0815-shot",
           "chapterId": null,
           "saveId": "0815-shot-wow-signal",
+          "gateSlot": 3,
           "verification": {
             "checkedOn": "2026-11-23",
             "storyId": "wow-signal",
@@ -11823,6 +11828,7 @@
           "playPath": "level.html?id=0815-trial",
           "chapterId": "0815-1985",
           "saveId": "0815-trial",
+          "gateSlot": 3,
           "verification": {
             "checkedOn": "2026-11-23",
             "storyId": "nanjing-memorial",
@@ -14931,6 +14937,50 @@
       ]
     },
     "1021": {
+      "dailyModes": [
+        {
+          "storyId": "trafalgar",
+          "year": 1805,
+          "title": "风帆之间",
+          "fact": "1805 年 10 月 21 日，特拉法加海战爆发。",
+          "source": "https://www.rmg.co.uk/stories/maritime-history/battle-trafalgar-background",
+          "souvenir": "海战画页",
+          "goal": "在甲板上击败帆布偶兵",
+          "choice": "守在桅杆后等待，或移动到开阔处用分身还击",
+          "layout": "桅杆与前甲板",
+          "memory": "帆影掠过甲板，你的分身在帆布偶兵身上绽开。",
+          "day": "1021",
+          "kind": "skirmish",
+          "id": "1021-skirmish",
+          "playPath": "level.html?id=1021-skirmish",
+          "chapterId": null,
+          "saveId": "1021-skirmish-trafalgar",
+          "gateSlot": 5,
+          "verification": null,
+          "verificationReport": null
+        },
+        {
+          "storyId": "sekigahara",
+          "year": 1600,
+          "title": "关原雾阵",
+          "fact": "1600 年 10 月 21 日，关原之战发生。",
+          "source": "https://www.japan.travel/en/spot/2341/",
+          "souvenir": "关原阵旗拓印",
+          "goal": "看清横扫并击败旗甲兵",
+          "choice": "在收招时近身连击，或切换元素触发反应",
+          "layout": "雾中阵旗与旗甲兵",
+          "memory": "你避过横扫，在旗尖陷入泥土的一刻反击。",
+          "day": "1021",
+          "kind": "rpg",
+          "id": "1021-rpg",
+          "playPath": "level.html?id=1021-rpg",
+          "chapterId": null,
+          "saveId": "1021-rpg-sekigahara",
+          "gateSlot": 6,
+          "verification": null,
+          "verificationReport": null
+        }
+      ],
       "targetWebCount": {
         "min": 3,
         "max": 5
@@ -15912,6 +15962,7 @@
           "playPath": "level.html?id=1123-match",
           "chapterId": "1123-1963",
           "saveId": "1123-match",
+          "gateSlot": 4,
           "verification": {
             "checkedOn": "2026-11-23",
             "storyId": "doctor-who",
@@ -15940,6 +15991,7 @@
           "playPath": "level.html?id=1123-shot",
           "chapterId": null,
           "saveId": "1123-shot-tiros-2",
+          "gateSlot": 3,
           "verification": {
             "checkedOn": "2026-11-23",
             "storyId": "tiros-2",
@@ -15968,6 +16020,7 @@
           "playPath": "level.html?id=1123-trial",
           "chapterId": null,
           "saveId": "1123-trial-life-weekly",
+          "gateSlot": 3,
           "verification": {
             "checkedOn": "2026-11-23",
             "storyId": "life-weekly",
