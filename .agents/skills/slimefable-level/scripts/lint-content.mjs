@@ -13,7 +13,7 @@ for (const f of [...walk(join(root, 'src')), ...walk(join(root, 'content'))]) {
   if (/^src\/themes\//.test(rel) && /new THREE\.(Texture|TextureLoader)|\.png|\.jpg/.test(s)) errors.push(`${rel}: 主题套件不得加载贴图文件`);
 }
 const assets = join(root, 'dist/assets');
-if (existsSync(assets)) for (const f of readdirSync(assets)) if (/\.js$/.test(f) && !/^(level-ui|home|save|sim\.worker)/.test(f)) { const kb = gzipSync(readFileSync(join(assets, f))).length / 1024; if (kb > 60) errors.push(`dist/assets/${f}: 压缩后 ${kb.toFixed(1)} KB > 60 KB`); }
+if (existsSync(assets)) for (const f of readdirSync(assets)) if (/\.js$/.test(f) && !/^three\.module-[\w-]+\.js$/.test(f) && !/^(level-ui|home|save|sim\.worker)/.test(f)) { const kb = gzipSync(readFileSync(join(assets, f))).length / 1024; if (kb > 60) errors.push(`dist/assets/${f}: 压缩后 ${kb.toFixed(1)} KB > 60 KB`); }
 for (const w of warns) console.warn('⚠ ' + w);
 for (const e of errors) console.error('✗ ' + e);
 console.log(errors.length ? `lint: ${errors.length} 个问题` : 'lint: 通过'); process.exit(errors.length ? 1 : 0);

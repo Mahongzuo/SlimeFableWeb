@@ -8,7 +8,7 @@ export const specialKind=(value:number):SpecialKind=>value<0?'normal':kinds[Math
 export const colour=(value:number)=>value===RAINBOW?-1:value<0?value:value%6;
 export type Swap=[number,number];
 export interface Board {
-  day:string;seed:string;stage:number;cells:number[];targets:number[];moves:number;turn:number;shuffles:number;score:number;
+  bonus?:{tile:number;drops:number};day:string;seed:string;stage:number;cells:number[];targets:number[];moves:number;turn:number;shuffles:number;score:number;
 }
 export interface TileFall {to:number; rows:number; spawn:boolean}
 export interface Created {at:number; value:number}
@@ -95,7 +95,7 @@ function fill(b:Board, reflow=false){
    locks.set(at(x,y),(tone+1)%6);locks.set(at(x===5?x-1:x+1,y),tone);
  };
  const coinPos=reflow?b.cells.indexOf(COIN):-1;
- if(b.day==='0101'){
+ if(!b.bonus&&b.day==='0101'){
    const x=goalsNow[0]%8;
    const oldRow=coinPos>=0?coinPos>>3:4;
    // Recoveries keep the coin's column and depth. A horizontal swap can line it up with the outlet.
@@ -112,7 +112,7 @@ function fill(b:Board, reflow=false){
    locks.set(at(4,3),(t+1)%6);locks.set(at(4,4),t);
  }else for(const i of goalsNow)vertical(i%8,i>>3);
  for(let attempt=0;attempt<64;attempt++){
-   b.cells=Array.from({length:64},(_,i)=>open(b.day,b.stage,i%8,i>>3)?(locks.get(i)??-3):HOLE);
+   b.cells=Array.from({length:64},(_,i)=>open(b.day,Math.min(2,b.stage),i%8,i>>3)?(locks.get(i)??-3):HOLE);
    if(coinPos>=0)b.cells[coinPos]=COIN;
    for(let i=0;i<64;i++)if(b.cells[i]===-3){
      const offset=random.int(0,5);
@@ -123,7 +123,7 @@ function fill(b:Board, reflow=false){
      }
    }
    if(lines(b.cells).length)continue;
-   if(b.day==='0101'&&coinPos<0){
+   if(!b.bonus&&b.day==='0101'&&coinPos<0){
      const original=b.cells.indexOf(COIN),aligned=at(goalsNow[0]%8,4);
      exchange(b.cells,original,aligned);
      const immediateCascade=lines(b.cells).length>0;
@@ -153,7 +153,7 @@ function canSwap(b:Board,a:number,c:number){
  exchange(b.cells,a,c);const allowed=lines(b.cells).some(l=>l.includes(a)||l.includes(c));exchange(b.cells,a,c);return allowed;
 }
 export function legalMoves(b:Board):Swap[]{
- return b.moves>0&&b.stage<3?availableSwaps(b):[];
+ return b.moves>0&&(b.stage<3||b.bonus)?availableSwaps(b):[];
 }
 function availableSwaps(b:Board):Swap[]{
  const result:Swap[]=[];
@@ -262,8 +262,15 @@ function resolveWave(cells:number[],runs:number[][],move:Swap|undefined,combo:bo
   return {hit,created,sweepRows:[...rows],sweepCols:[...cols],blasts:[...blasts],rainbows:[...rainbows]};
 }
 
+export function beginEncore(b:Board,seed:string){
+ if(b.stage!==3||b.bonus)return;
+ b.bonus={tile:-1,drops:0};b.moves+=3;b.seed=seed;
+ const coin=b.cells.indexOf(COIN);
+ if(coin>=0)b.cells[coin]=RAINBOW;
+ if(!availableSwaps(b).length)fill(b);
+}
 export function swap(b:Board,a:number,c:number,recordFrames=false):Result|null{
- if(!b.moves||b.stage===3||!canSwap(b,a,c))return null;
+ if(!b.moves||b.stage===3&&!b.bonus||!canSwap(b,a,c))return null;
  const goalsBefore=b.targets.length;
  const result:Result={groups:[],frames:[],cascades:[],madeClone:false,advanced:false,reshuffled:false};
  b.turn++;b.moves--;exchange(b.cells,a,c);
@@ -286,6 +293,17 @@ export function swap(b:Board,a:number,c:number,recordFrames=false):Result|null{
      sweepRows:wave.sweepRows,sweepCols:wave.sweepCols,blasts:wave.blasts,rainbows:wave.rainbows});
    gesture=undefined;combo=false;chain=lines(b.cells);
  }
+ if(b.bonus){
+   const bonus=b.bonus;
+   if(bonus.tile>=0&&result.groups.some(group=>group.includes(bonus.tile))){
+     b.moves+=2;bonus.tile=-1;
+   }else if(b.moves>0&&bonus.tile<0&&bonus.drops<2&&random.int(0,99)<10){
+     const choices=b.cells.flatMap((v,i)=>v>=0?[i]:[]);
+     bonus.tile=choices[random.int(0,choices.length-1)];bonus.drops++;
+   }
+   if(b.moves>0&&!availableSwaps(b).length){b.shuffles++;fill(b);result.reshuffled=true;}
+   return result;
+ }
  if(b.day==='0101'&&b.cells[b.targets[0]]===COIN)b.targets=[];
  if(b.day==='1123'&&b.stage===0&&b.targets.length===1){b.stage=1;result.advanced=true;}
  else if(!b.targets.length){
@@ -300,14 +318,14 @@ export function swap(b:Board,a:number,c:number,recordFrames=false):Result|null{
 }
 export function shuffle(b:Board){if(b.stage<3&&b.moves>1){b.moves--;b.shuffles++;fill(b,true);}}
 export function hint(b:Board):Swap|null{
- if(!b.moves||b.stage===3)return null;
+ if(!b.moves||b.stage===3&&!b.bonus)return null;
  let best=-Infinity,choice:Swap|null=null;
  for(const m of legalMoves(b)){
-   const after={...b,cells:[...b.cells],targets:[...b.targets]};
+   const after={...b,bonus:b.bonus?{...b.bonus}:undefined,cells:[...b.cells],targets:[...b.targets]};
    const r=swap(after,...m)!;
    const coin=after.cells.indexOf(COIN);
    const coinProgress=b.day==='0101'?(coin>>3)*20-Math.abs(coin%8-b.targets[0]%8)*200:0;
-   const value=(after.stage-b.stage)*10000+(b.targets.length-after.targets.length)*500+coinProgress+r.groups.length;
+   const value=b.bonus?after.score+(after.moves-b.moves)*100:(after.stage-b.stage)*10000+(b.targets.length-after.targets.length)*500+coinProgress+r.groups.length;
    if(value>best){best=value;choice=m;}
  }
  return choice;

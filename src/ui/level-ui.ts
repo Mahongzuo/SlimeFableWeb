@@ -1,8 +1,9 @@
 import './ui.css';
-import {elements} from '../slime/elements';
+import type {SlimeCharacter} from '../slime/character';
+import {mountSlimeHud} from './slime-hud';
 import type {QuestView} from '../game/quest';
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]!));
-export interface LevelHandlers {start(): void; resume(): void; restart(): void; home(): void; element(i: number): void}
+export interface LevelHandlers {start(): void; resume(): void; restart(): void; home(): void;}
 /** In-level HUD and cards. Shares ui.css with the harbour so both read as one game. */
 export class LevelUI {
   readonly root: HTMLElement; private toastTimer = 0; private speechTimer = 0; private h: LevelHandlers;
@@ -10,17 +11,19 @@ export class LevelUI {
     this.h = h; const root = this.root = document.createElement('div'); root.id = 'game-ui';
     root.innerHTML = `<div class="hud hidden"><div class="quest card grain"></div>
       <div class="hud-buttons"><button class="icon-btn" data-act="pause"><span class="key">Esc</span>暂停</button></div>
-      <div class="elements card">${elements.map((e, i) => `<button class="el" data-el="${i}" style="--c:${e.color}" aria-label="${e.name}属性"><i></i><kbd>${i + 1}</kbd><span>${e.name}</span></button>`).join('')}</div>
-      <div class="crosshair hidden"></div></div><div class="prompt card hidden"></div><div class="speech card hidden"></div><div class="banner-layer"></div><div class="toast card"></div><div class="layer-panel"></div>`;
+      <div class="crosshair hidden"><i></i><i></i><i></i><i></i></div></div><div class="prompt card hidden"></div><div class="speech card hidden"></div><div class="banner-layer"></div><div class="toast card"></div><div class="layer-panel"></div>`;
     document.body.appendChild(root);
     root.addEventListener('click', e => {
-      const t = (e.target as HTMLElement).closest('[data-act],[data-el]') as HTMLElement | null; if (!t) return;
-      if (t.dataset.el) { this.h.element(Number(t.dataset.el)); return; }
-      const a = t.dataset.act; if (a === 'start') this.h.start(); else if (a === 'resume') this.h.resume(); else if (a === 'restart') this.h.restart(); else if (a === 'home') this.h.home(); else if (a === 'pause') this.panelPause();
+      const t = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null; if (!t) return;
+      const a = t.dataset.act; if (a === 'start') this.h.start(); else if (a === 'resume') this.h.resume(); else if (a === 'restart') this.h.restart(); else if (a === 'home') this.h.home(); else if (a === 'pause') { this.actor?.pause(); this.showHud(false); this.panelPause(); }
     });
   }
   private $(s: string) { return this.root.querySelector(s) as HTMLElement; }
-  panel(html: string | null) { this.$('.layer-panel').innerHTML = html ?? ''; }
+  panel(html: string | null) {
+    const panel = this.$('.layer-panel');
+    panel.innerHTML = html ?? '';
+    if (html) panel.querySelector<HTMLButtonElement>('button.primary:not(:disabled)')?.focus({preventScroll:true});
+  }
   intro(title: string, intro: string, steps: string[], ready: boolean) {
     this.panel(`<div class="overlay"><div class="intro card grain"><div class="kicker">${esc(this.kicker)}</div><h2>${esc(title)}</h2><p>${esc(intro)}</p>
       <ol>${steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
@@ -32,17 +35,23 @@ export class LevelUI {
       ${souvenir ? `<p style="margin-top:-8px"><span class="chip ${got ? 'stamp' : 'mute'}">✦ ${got ? '纪念品已收进史书：' + esc(souvenir) : '这一关还藏着纪念品：' + esc(souvenir)}</span></p>` : ''}
       <div class="stack"><button class="btn primary" data-act="home">回到港口</button>${got ? '' : '<button class="btn" data-act="resume">再找找纪念品</button>'}</div></div></div>`);
   }
-  showHud(on: boolean) { this.$('.hud').classList.toggle('hidden', !on); if (!on) { this.prompt(null); this.speech(null); } }
+  showHud(on: boolean) { this.$('.hud').classList.toggle('hidden', !on); if (on) this.hud(this.actor?.aiming ?? false); else { this.characterHud?.update(false); this.prompt(null); this.speech(null); } }
   quest(v: QuestView) {
     this.$('.quest').innerHTML = `<div class="kicker">${esc(this.kicker)}</div><h3><span>◆</span>${esc(v.title)}</h3>
       <div class="branch"><span>${esc(v.branch)}</span>${v.total > 1 ? `<b>${v.count} / ${v.total}</b>` : ''}</div>
       ${v.side ? `<div class="side ${v.side.done ? 'done' : ''}">${v.side.done ? '✓' : '✦'} 支线 · ${esc(v.side.title)}</div>` : ''}
       <div class="steps">${Array.from({length: v.branches}, (_, i) => `<i class="${i < v.index ? 'on' : ''}"></i>`).join('')}</div>`;
   }
-  hud(element: number, aiming: boolean) {
-    this.root.style.setProperty('--accent', elements[element].color);
-    this.root.querySelectorAll<HTMLElement>('.el').forEach(b => b.classList.toggle('active', Number(b.dataset.el) === element));
-    this.$('.crosshair').classList.toggle('hidden', !aiming);
+  private actor?: SlimeCharacter;
+  private characterHud?: ReturnType<typeof mountSlimeHud>;
+  bindCharacter(actor: SlimeCharacter) {
+    this.actor = actor;
+    this.characterHud = mountSlimeHud(actor, undefined, this.$('.hud'));
+  }
+  hud(aiming: boolean) {
+    const active = this.actor?.mode === 'play';
+    this.characterHud?.update(active);
+    this.$('.crosshair').classList.toggle('hidden', !active || !aiming);
   }
   banner(small: string, text: string) { const el = document.createElement('div'); el.className = 'banner card grain'; el.innerHTML = `<small>${esc(small)}</small><strong>${esc(text)}</strong>`; this.$('.banner-layer').replaceChildren(el); }
   prompt(p: {x: number; y: number; title: string; sub: string} | null) {

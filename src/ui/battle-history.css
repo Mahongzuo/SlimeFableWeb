@@ -1,0 +1,9 @@
+.battle-history{margin:12px 0;border-block:1px solid currentColor;padding:8px 0;color:inherit;text-align:left}
+.battle-history summary{cursor:pointer;font-weight:700;line-height:1.55;list-style:revert}
+.battle-history .history-pages{max-height:min(40vh,24rem);overflow:auto;overscroll-behavior:contain;padding:0 9px 0 2px;scrollbar-width:thin}
+.battle-history .history-pages h4{font-size:1em;margin:1em 0 .3em;color:inherit}
+.battle-history .history-pages p{font-size:14px;line-height:1.75;margin:0 0 .7em;max-width:none}
+.battle-history .history-fiction{border-inline-start:2px solid currentColor;padding-inline-start:9px}
+.battle-history .history-pages nav{display:flex;position:static;flex-wrap:wrap;gap:5px 14px;margin:.75em 0}
+.battle-history nav a{color:inherit;text-decoration:underline;font-size:12px}
+.bp-card:has(.battle-history[open]){width:min(480px,83vw);max-width:calc(100vw - 32px);box-sizing:border-box;max-height:91dvh;overflow:auto}

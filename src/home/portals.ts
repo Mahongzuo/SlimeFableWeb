@@ -1,4 +1,4 @@
-import {ChapterMeta} from '../../content/types';
+import {gateTitle,gateSummary,gatePalette,type Gate} from '../game/mode-gates';
 import {Vec} from '../slime/types';
 import {PortalSlot, pillarOffset} from './layout';
 import {SERIF, SANS, tagTexture, paperCard} from './paper';
@@ -17,10 +17,12 @@ void main(){
   col += (h(floor(vP * 90.0) + floor(uTime * 8.0)) - .5) * .05;
   gl_FragColor = vec4(col, uOpen * (.78 + .18 * uHover) * edge);
 }`;
-/** A stone arch with a living year inside. Sealed (grey, empty) when the shown day has fewer chapters than doors. */
+/** Three chapter arches and three mode arches, all facing the lectern. */
 export class TimePortal {
-  readonly group: any; chapter: ChapterMeta | null = null; hover = 0; private open = 0;
+  readonly group: any; gate: Gate | null = null; hover = 0; private open = 0;
   private disc: any; private uniforms: any; private tag: any; private keystone: any; private glow: any; private T: any;
+  private tokens:any[]=[];
+
   constructor(private ctx: any, readonly slot: PortalSlot) {
     const T = this.T = ctx.THREE, toon = ctx.mats.toon;
     const g = this.group = new T.Group(); g.name = `time-portal-${slot.slot}`;
@@ -42,23 +44,56 @@ export class TimePortal {
     this.glow = ctx.mats.glowSprite(0xffffff, 3.4, .0); this.glow.position.y = BASE + 1.7; g.add(this.glow);
     this.tag = new T.Sprite(new T.SpriteMaterial({transparent: true, depthWrite: false})); this.tag.layers.set(1); this.tag.renderOrder = 12;
     this.tag.scale.set(2.3, 1.15, 1); this.tag.position.y = BASE + ARCH_H + pillarOffset + 1.05; g.add(this.tag);
+    this.addEmblem(g);
     ctx.scene.add(g);
   }
-  setChapter(chapter: ChapterMeta | null, visited: boolean) {
-    this.chapter = chapter;
+  private addEmblem(parent:any) {
+    const T=this.T,slot=this.slot.slot;
+    if(slot<4)return;
+    const group=new T.Group();group.name='fx-mode-symbol';group.userData.walkThrough=true;
+    group.position.set(0,2.1,.28);parent.add(group);
+    const mesh=(shape:any,color:string,x:number,y:number,z:number=0,root=group)=>{
+      const m=new T.Mesh(shape,new T.MeshBasicMaterial({color}));m.layers.set(1);m.renderOrder=7;
+      m.position.set(x,y,z);root.add(m);return m;
+    };
+    if(slot===4){
+      this.tokens=[
+        mesh(new T.SphereGeometry(.19,16,10),'#87dec5',-.48,0),
+        mesh(new T.OctahedronGeometry(.24),'#fae4a7',0,0),
+        mesh(new T.BoxGeometry(.30,.30,.26),'#ef9b8d',.48,0)
+      ];
+    } else if(slot===5){
+      const base=mesh(new T.SphereGeometry(.24,16,12),'#fbdaa5',-.46,-.12);base.scale.y=.76;
+      this.tokens=[mesh(new T.SphereGeometry(.12,14,10),'#f8c792',0,0)];
+      for(let i=1;i<=5;i++){const t=i/6;mesh(new T.SphereGeometry(.023,8,6),'#faf0c8',-.45+t,.58*Math.sin(t*Math.PI)-.12);}
+    } else {
+      // An enamel shield identifies the sparring gate at every date.
+      const shield=new T.Shape();
+      shield.moveTo(-.38,.34);shield.lineTo(.38,.34);shield.lineTo(.31,-.07);
+      shield.quadraticCurveTo(.2,-.3,0,-.45);shield.quadraticCurveTo(-.2,-.3,-.31,-.07);
+      shield.closePath();
+      mesh(new T.ExtrudeGeometry(shield,{depth:.08,bevelEnabled:false}),'#e0be8b',0,0);
+      const gem=mesh(new T.OctahedronGeometry(.19),'#518985',0,0,.16);
+      gem.scale.set(.8,1.25,.45);
+    }
+  }
+  setGate(gate: Gate | null, complete: boolean) {
+    this.gate = gate;
     const T = this.T;
     this.tag.material.map?.dispose();
-    if (!chapter) { this.tag.visible = false; this.keystone.material = this.ctx.mats.toon(0xb9ad97); this.glow.material.opacity = 0; return; }
-    this.uniforms.uA.value.set(chapter.palette[0]); this.uniforms.uB.value.set(chapter.palette[1]);
-    this.keystone.material = this.ctx.mats.toon(new T.Color(chapter.palette[0]).getHex());
-    this.glow.material.color.set(chapter.palette[0]);
+    this.tag.material.map = null;
+    if (!gate) { this.tag.visible = false; this.keystone.material = this.ctx.mats.toon(0xb9ad97); this.glow.material.opacity = 0; return; }
+    const palette=gatePalette(gate);
+    this.uniforms.uA.value.set(palette[0]); this.uniforms.uB.value.set(palette[1]);
+    this.keystone.material = this.ctx.mats.toon(new T.Color(palette[0]).getHex());
+    this.glow.material.color.set(palette[0]);
     this.tag.material.map = tagTexture(T, (g2, w, h) => {
       paperCard(g2, w, h);
       g2.fillStyle = '#2f2a24'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
-      g2.font = `700 104px ${SERIF}`; g2.fillText(String(chapter.year), w / 2, 92);
+      g2.font = `700 ${gate.type==="mode"||gate.archive.length?65:96}px ${SERIF}`; g2.fillText(gateTitle(gate), w / 2, 96);
       g2.font = `500 34px ${SANS}`; g2.fillStyle = '#5b5249';
-      const e = chapter.event.length > 13 ? chapter.event.slice(0, 12) + '…' : chapter.event; g2.fillText(e, w / 2, 178);
-      if (visited) { g2.fillStyle = '#c8553d'; g2.beginPath(); g2.arc(w - 64, 50, 24, 0, Math.PI * 2); g2.fill(); g2.fillStyle = '#fff'; g2.font = `700 28px ${SANS}`; g2.fillText('✓', w - 64, 52); }
+      const subtitle=gateSummary(gate); const e = subtitle.length > 13 ? subtitle.slice(0, 12) + '…' : subtitle; g2.fillText(e, w / 2, 178);
+      if (complete) { g2.fillStyle = '#c8553d'; g2.beginPath(); g2.arc(w - 64, 50, 24, 0, Math.PI * 2); g2.fill(); g2.fillStyle = '#fff'; g2.font = `700 28px ${SANS}`; g2.fillText('✓', w - 64, 52); }
     });
     this.tag.material.needsUpdate = true; this.tag.visible = true;
   }
@@ -68,7 +103,20 @@ export class TimePortal {
     return [dx * c - dz * s, p[1], dx * s + dz * c];
   }
   update(t: number, dt: number) {
-    const target = this.chapter ? 1 : 0;
+    const target = this.gate ? 1 : 0;
+    if(this.slot.slot===4){
+      const phase=(t*.42)%1;
+      const drop = Math.max(0,1-phase/.25);
+      const merge = Math.min(1,Math.max(0,(phase-.55)/.25));
+      this.tokens.forEach((m,i)=>{
+        m.position.x=(i-1)*(.56-.45*merge);
+        m.position.y=.55*drop;
+        m.scale.setScalar(phase<.74?1:Math.max(0,(.94-phase)/.2));
+      });
+    }else if(this.slot.slot===5){
+      const flight=(1-Math.cos(t*2.6))/2,ball=this.tokens[0];
+      ball.position.set(-.45+flight,.58*Math.sin(flight*Math.PI)-.12,.03);
+    }
     this.open += (target - this.open) * (1 - Math.exp(-dt * 3));
     this.uniforms.uTime.value = t; this.uniforms.uOpen.value = this.open; this.uniforms.uHover.value = this.hover;
     this.disc.visible = this.open > .01;

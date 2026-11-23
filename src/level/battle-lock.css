@@ -1,0 +1,11 @@
+.battle-lock-marker{--lock:#f8e7ab;position:fixed;z-index:3;pointer-events:none;transform:translate(-50%,-50%);color:var(--lock);filter:drop-shadow(0 1px 2px #28261b)}
+.battle-lock-marker i{display:block;width:11px;height:11px;border:1.5px solid currentColor;transform:rotate(45deg)}
+.battle-lock-marker[data-hard=true] i{outline:1px solid currentColor;outline-offset:3px;background:#f9edc333}
+.battle-lock-marker span{position:absolute;left:50%;top:18px;transform:translateX(-50%);white-space:nowrap;padding:2px 5px;border-radius:4px;color:#fff7df;background:#302e25d9;font:600 10px/1.25 system-ui,"Microsoft YaHei",sans-serif}
+.battle-lock-marker[data-status=far]{--lock:#d9d2c4}
+.battle-lock-marker[data-status=blocked]{--lock:#edb285}
+.battle-lock-controls{position:fixed;display:none;z-index:5;right:max(12px,env(safe-area-inset-right));bottom:calc(182px + env(safe-area-inset-bottom));gap:6px}
+.battle-lock-controls button{min-height:40px;min-width:45px;padding:5px 8px;border:1px solid #abbaa6;border-radius:12px;background:#273c36ed;color:#fff6de;touch-action:manipulation;font:700 13px system-ui,"Microsoft YaHei",sans-serif}
+.battle-lock-controls button[aria-pressed=true]{background:#435a41;border-color:#f8dc97}
+@media(pointer:coarse){.battle-lock-controls{display:flex}}
+.battle-lock-marker[hidden],.battle-lock-controls[hidden]{display:none}

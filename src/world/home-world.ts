@@ -3,22 +3,57 @@ import type {HeightFieldData} from '../slime/height-field';
 import {harborDefinition} from '../home/harbor-world';
 import {bakeHarborCollision} from '../home/harbor-collision';
 import {SEA_LEVEL} from '../home/layout';
+import {spawnPackModel} from '../home/model-pack';
 import {buildZones, type BuiltZones} from '../zones';
 import {bakeRegion} from './bake';
 import {buildChineseHouses} from '../home/chinese-houses';
 import type {LifeData} from '../life/state';
 import type {ZoneContext} from '../zones/types';
 import {buildInlandGround} from './terrain-mesh';
-import {inlandSurfaces, lakeFluid, WORLD, ZONES} from './map';
+import {inland, inlandSurfaces, LAKE, lakeFluid, WORLD, ZONES} from './map';
+
+/** Subtle DreamWorld scenic anchors placed outside buildable lawns so the world feels cohesive out of the box. */
+function addDreamWorldLandmarks(ctx: any) {
+  const T = ctx.THREE;
+  const g = new T.Group();
+  g.name = 'dreamworld-scenic-anchors';
+  const spots: {asset: string; x: number; z: number; y?: number; yaw: number; width: number; outline?: boolean}[] = [
+    // Mirror Lake waterside willow + lilies + shore stones (Jiangnan waterlane vibe)
+    {asset: 'nature-willow', x: -16, z: 96, yaw: 0.4, width: 4.2, outline: false},
+    {asset: 'waterside-lily', x: -8, z: 103, y: LAKE.level, yaw: 0.6, width: 1.8, outline: false},
+    {asset: 'waterside-reeds', x: -13, z: 99, y: LAKE.level, yaw: 0.2, width: 2.1, outline: false},
+    {asset: 'waterside-shore-stones', x: 18, z: 97, yaw: -0.5, width: 2.6, outline: false},
+    // Park meadow moon-gate welcome arch
+    {asset: 'build-moon-gate', x: 8, z: 42, yaw: -0.35, width: 3.4, outline: true},
+    // Farm terrace ornamental bamboo & bonsai beside entrance
+    {asset: 'nature-bamboo', x: -35, z: 12, yaw: 0.5, width: 2.4, outline: false},
+    {asset: 'nature-wisteria', x: -35, z: -8, yaw: 1.2, width: 3.4, outline: false},
+  ];
+  for (const s of spots) {
+    const spawned = spawnPackModel(T, s.asset, s.width, {castShadow: s.width > 2.5, outline: s.outline});
+    const y = s.y ?? inland(s.x, s.z);
+    spawned.group.position.set(s.x, y, s.z);
+    spawned.group.rotation.y = s.yaw;
+    g.add(spawned.group);
+  }
+  ctx.scene.add(g);
+}
+
 /**
  * Build the whole Home: harbour (already in the scene) + new land + zone scenery, then bake collision:
  * the harbour tile as before, one more 0.1 m tile per zone that has solid props, analytic ground everywhere.
  */
-export function buildHomeWorld(ctx: any, life: LifeData, save: () => void, extra: Pick<ZoneContext, 'hud' | 'historyDay'> = {}): {world: WorldDefinition; zones: BuiltZones} {
+export function buildHomeWorld(
+  ctx: any,
+  life: LifeData,
+  save: () => void,
+  extra: Pick<ZoneContext, 'hud' | 'historyDay' | 'openSeedShop' | 'openSeedPicker' | 'farmRegistry' | 'dayKey'> = {},
+): {world: WorldDefinition; zones: BuiltZones} {
   const started = performance.now();
   buildChineseHouses(ctx);
   buildInlandGround(ctx);
   const zones = buildZones(ctx, life, save, extra);
+  addDreamWorldLandmarks(ctx);
   const base: WorldDefinition = {
     ...harborDefinition, boxes: [], water: ctx.puddles,
     surfaces: [...harborDefinition.surfaces, ...inlandSurfaces()],

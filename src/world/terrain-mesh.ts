@@ -33,7 +33,7 @@ export function buildInlandGround(ctx: any) {
   ];
   for (const [x0, z0, x1, z1] of edges) {
     const len = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(len), verts: number[] = [], idx: number[] = [];
-    for (let i = 0; i <= n; i++) { const t = i / n, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t; verts.push(x, inland(x, z) + .02, z, x, -8, z); if (i) { const a = (i - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }
+    for (let i = 0; i <= n; i++) { const t = i / n, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t; verts.push(x, inland(x, z) - .02, z, x, -8, z); if (i) { const a = (i - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }
     const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(verts, 3)); geo.setIndex(idx); geo.computeVertexNormals();
     const m = new T.Mesh(geo, skirt); m.material.side = T.DoubleSide; m.name = 'inland-skirt'; group.add(m);
   }

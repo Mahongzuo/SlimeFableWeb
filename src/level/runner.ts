@@ -47,10 +47,11 @@ big.position.set(pole.max[0] + 1.2, pole.min[1] + 1.2, 0); big.rotation.y = -Mat
 const halves = ribbonFinish ? [-1, 1].map(s => { const m = new THREE.Mesh(new THREE.BoxGeometry(.05, .16, 3.1), stage.toon('#d8322a')); m.geometry.translate(0, 0, -s * 1.55); m.position.set((pole.min[0] + pole.max[0]) / 2, 1.3, s * 3.1); m.name = 'finish-ribbon-fx'; stage.scene.add(m); return {m, s}; }) : [];
 let raise = 0, raising = false;
 // ---- slime, ui
-const ui = new LevelUI({start: () => start(), resume: () => resume(), restart: () => location.reload(), home: () => goHome(), element: i => slime.setElement(i)}, `${dayLabel(day)} · ${year}`);
+const ui = new LevelUI({start: () => start(), resume: () => resume(), restart: () => location.reload(), home: () => goHome()}, `${dayLabel(day)} · ${year}`);
 const ctx = {THREE, renderer: stage.renderer, scene: stage.scene, camera: stage.camera, sun: stage.sun, controls: stage.controls};
 type State = 'intro' | 'play' | 'pause' | 'done'; let state: State = 'intro';
 const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, ui: false, trainingTargets: [], title: spec.title, onToast: () => {}, onReady: () => { if (state === 'intro') showIntro(); }}).attach();
+ui.bindCharacter(slime);
 applyLevelQuality(stage, slime, save.data.quality);
 (window as any).__slime = slime; (window as any).__level = {spec, layout, check};
 stage.camera.position.set(-6, 5, 8); stage.camera.lookAt(6, 1.5, 0);
@@ -92,7 +93,7 @@ const loop = () => {
   }
   if (raising) { raise = Math.min(1, raise + dt / 4); if (ribbonFinish) for (const h of halves) { h.m.rotation.x = -h.s * Math.min(1.4, raise * 4); h.m.position.y = 1.3 - raise * .2; } else big.position.y = pole.min[1] + 1.2 + raise * (pole.max[1] - pole.min[1] - 2.2); }
   big.rotation.x = Math.sin(t * 2.2) * .05;
-  hud -= dt; if (hud <= 0 && state === 'play') { hud = .1; ui.quest(view()); ui.hud(slime.element, slime.aiming); }
+  hud -= dt; if (hud <= 0 && state === 'play') { hud = .1; ui.quest(view()); ui.hud(slime.aiming); }
   stage.render(dt, slime);
 };
 stage.renderer.setAnimationLoop(loop);

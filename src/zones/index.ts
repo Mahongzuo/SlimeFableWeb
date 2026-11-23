@@ -11,7 +11,12 @@ import type {LifeData} from '../life/state';
 export const zoneBuilders: Partial<Record<ZoneId, ZoneBuilder>> = {harbor, park, lake, farm, forest};
 
 export interface BuiltZones {roots: any[]; interactables: Interactable[]; updates: ((t: number, dt: number, p: PlayerHandle) => void)[]}
-export function buildZones(ctx: any, life: LifeData, save: () => void, extra: Pick<ZoneContext, 'hud' | 'historyDay'> = {}): BuiltZones {
+export function buildZones(
+  ctx: any,
+  life: LifeData,
+  save: () => void,
+  extra: Pick<ZoneContext, 'hud' | 'historyDay' | 'openSeedShop' | 'openSeedPicker' | 'farmRegistry' | 'dayKey'> = {},
+): BuiltZones {
   const T = ctx.THREE, out: BuiltZones = {roots: [], interactables: [], updates: []};
   for (const rect of ZONES) {
     const build = zoneBuilders[rect.id]; if (!build) continue;

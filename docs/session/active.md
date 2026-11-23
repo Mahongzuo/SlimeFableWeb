@@ -1,6 +1,56 @@
 # 会话检查点
 
+10 月 21 日两关现以鼠标右键闪避，Alt 备用。两场战斗已在出发页、门前、史书及纪念品加入同源的「事件始末」，介绍国家与阵营、人物、当日经过和后续。用户决定先玩这两关，再决定其他日期的推广。
+
+10 月 21 日五、六号门已从短遭遇扩为完整任务。继续时先看[双船与关原报告](../../tasks/reports/1021-campaign.md)、[任务卡](../../tasks/cards/1021-campaign.md)和逐日总表的 1021。实机复测用 qa-battle-fleet-play.py、qa-battle-rpg-campaign.py 和 qa-battle-lock-live.py。请记录玩家首次航行用时、是否自行找到铺位捷径，以及能否从动作读出守将追击，再决定怎样调节节奏。
+
+三消通关自动入册，可携余步再加 3 步继续冲分。冲分有效交换有 10% 机会在空闲棋面标出沙漏，消除该格加 2 步，每局最多出现两枚。「近十局」按得分排列本日期最近十次有过有效交换的对局，正式与练习分别保存在本机。
+
+
+三消棋盘显示目标完成数、得分、本日期正式或练习最佳分与已入册通关次数。最佳分每次有效交换即时写入本机存档。
+
 > 每次收工更新。下次开工先读这里，再读最近的 `tasks/reports/`。
+
+## 2026-11-23 · 可扩展「玩法教程」手册（开始界面 & ESC 暂停菜单）
+
+- **数据驱动可扩展教程目录**（`src/ui/guide-catalog.ts`）：按 `GuideSection` 结构化收录全项目 6 大玩法模块（移动/形态/滑翔伞、六属性 ARPG 战斗与反应、农田种植与 32 种作物、家园建造与无限领土扩建、生态来客/钓鱼与手账、历史上的今天与六扇时光门）。提供 `BUILTIN_GUIDE_SECTIONS` 与运行时动态注册接口 `registerGuideSection(section)`，未来新增 ARPG 副本、Boss 或其他玩法无需修改任何 UI 代码即可自动纳入目录并按 `order` 排序。
+- **双入口教程弹窗与状态闭环**（`src/ui/game-ui.ts`、`src/ui/ui.css`、`src/game/game.ts`）：在游戏开始标题界面和 ESC 暂停菜单均增加 **「📖 玩法教程」** 入口，采用绘本双栏布局（左侧模块目录 + 右侧按键条/功能卡/技巧提示 + 上下章翻页），关闭或按 `Esc` 精准返回进入前界面（标题页或暂停菜单）。
+- **验证与证据**：`npm run check`、`npm test`（**427/427 PASS**，含新增 `tests/guide-catalog.test.ts`）、`npm run build` 全通过；无头浏览器验证标题页/暂停菜单双入口开关与 `Esc` 状态回退 0 报错，截图已归档至 `qa/evidence/guide-modal-combat.jpg`。
+
+## 2026-11-23 · 农田防穿模 × 6属性 ARPG（E/R/Q 技能与11种元素反应）× 1秒切换冷却与HUD美化 × DreamWorld 无限扩建
+
+- **修复自建农田碰撞穿模**（`src/home/build-catalog.ts`）：将 3 款自建农田（木框/石砌/大型田垄）设为 `solid: true`，生成与外框 1:1 严丝合缝的实体碰撞盒（高度 `0.36–0.38m` 高于 `0.32m` 自动踏步阈值），平地走近外墙严格阻挡穿模，轻跳可站上田面。
+- **二次元 ARPG 战斗体系与 HUD 升级**（`src/slime/skills.ts`、`skill-vfx.ts`、`combat.ts`、`character.ts`、`src/ui/game-ui.ts`、`ui.css`、`src/game/game.ts`）：
+  - 6 属性职业定位 × 18 套 E/R/Q 技能（水·控场法师 / 风·高速刺客 / 火·爆破法师 / 雷·链式雷法 / 暗·领域召唤 / 物·重装破韧）及全套 3D 特效（投射物、水穹顶、龙卷旋风、天雷柱、闪电链、火柱阵、黑洞领域、高空陨石、剑气波、地震碎石）；
+  - 完整 11 种 UE 元素反应（蒸发/感电/超载/扩散/余烬/虚空震/墨潮/破韧），风车公园边缘新增 3 座带血条与元素附着标签的练功木靶，技能同样联动农田交互；
+  - 新增 **1.0 秒全局属性切换冷却** 防止秒切连发技能；重构底部属性栏彻底修复文字溢出边框问题，并加入冷却遮罩倒计时与右下角 E/R/Q 技能快捷栏（Q 键带元素能量充能环）。
+- **DreamWorld 风格无限自由领土扩建**（`src/world/expansion.ts`、`src/home/frontier.ts`、`builder.ts`、`src/ui/build-ui.ts`、`src/life/state.ts`）：
+  - 取消 12 块上限，升级为无限整数晶格 `tileKey(gx, gz)` + 焦点动态边疆（实时预览镜头周边 8 块，平移镜头自动刷新）+ 2m 轻量网格；
+  - 首块免费，后续封顶 `50 🐚/块`，并提供 **「🏖️ 自由沙盒模式（免费无限扩建）」** 一键开关。
+- **验证与证据**：`npm run check`、`npm test`（**413/413 PASS**，含新增 `tests/slime-arpg-and-infinite-expand.test.ts` 4 项单测）、`npm run build`、`npm run catalog:check` 全通过；后台无头 Chrome 0 报错验证并归档 4 张证据图至 `qa/evidence/v3-*.jpg`。已更新 `dist/`，下一步待用户实机试玩验收。
+
+## 2026-11-23 · UE 6属性刀光 × 作物元素摧毁与32种作物 × 可摆农田 × DreamWorld 领土扩建
+
+- **UE 6 属性刀光特效**（`src/slime/slash-vfx.ts`、`combat.ts`、`character.ts`）：按 `USlimePathSwordComponent` 参数实现 4 段连击挥砍弧面丝带（水平双扫 + 斜砍 + 1.30× 终结挑斩与冲击波环）及水/风/火/雷/暗/物 6 套专属 GLSL 纹路与碎屑粒子池，命中窗口通过 `onElementAttack` 广播元素范围判定。
+- **元素攻击交互作物 + 32 种 UE 作物 + 可摆放农田**（`src/life/catalog.ts`、`cultivation.ts`、`src/zones/farm-registry.ts`、`src/home/build-catalog.ts`、`builder.ts`、`src/ui/build-ui.ts`）：
+  - 扩充至 **32 种 UE 作物**与 6 大差异化 3D 植株造型（叶菜/高秆/藤蔓瓜/灌木果/花穗/根茎菌），按 `F` 对空田弹出 UE 同款「选种面板」（支持一键再种同款），种子铺支持分类筛选与 1/5 包购入；
+  - 建造模式新增 **🌱 农田**页签（木框高架农田、石砌防草花床、大型高产田垄）与「田园自耕小菜园」一键景组，建造卡片附带 `🐾 吸引动物` 提示徽章；
+  - 攻击挥砍直连全部农田：火砍非喜火作物 1 刀烧毁、水砍怕涝/湿润作物或终结水浪冲毁、雷劈干田、水+火触发「♨️ 蒸汽温室」、水+雷触发「⚡ 雷击催熟 ✨」、风授粉、暗/物增肥清枯，均带 3D 飘字与元素粒子爆发。
+- **DreamWorld 风格家园领土扩建**（`src/world/expansion.ts`、`src/home/frontier.ts`、`src/slime/sim.worker.ts`、`character.ts`、`game.ts`）：
+  - 在北境、西境与东岬规划 12 块无缝拼接领土（支持二级向外蔓延），首块免费体验、后续逐级消耗贝壳；
+  - 建造模式新增 **🗺️ 扩建领土** 页签，提供 3D 绿色虚线边疆预览与连接光环，支持 4 种主题地貌（沃土农庄/江南水乡/林缘牧场/潮汐花岬）与天然生态风物（自动助力吸引动物来客）；
+  - 开垦即时动态拼接无闪烁地形与 6m 边缘草色融合，并同步热更新主线程与 `sim.worker.ts` 碰撞面和边界。
+- **验证与证据**：`npm run check`、`npm test`（**409/409 PASS**，含新增 `tests/slime-slash-and-farm.test.ts` 10 项测试）、`npm run build`、`npm run catalog:check` 全通过；后台无头 Chrome 0 报错验证并留存 5 张验收截图至 `qa/evidence/`（`v2-slash-fire-water.jpg`、`v2-placed-farm-beds.jpg`、`v2-crop-burn-destroy.jpg`、`v2-expansion-frontier.jpg`、`v2-expansion-seam-closeup.jpg`）。已更新 `dist/`，下一步待用户实机试玩验收。
+
+## 2026-11-23 · 三消特效和按住拖动
+
+三个试玩日的 4 号门支持鼠标和单指拖动，也保留两次轻点与键盘操作。横纹、竖纹、爆芯、虹彩有各自的生成、互换和连锁范围，提示只标出建议的两格。固定练习种子 `prism-26` 能在第一步做出五连。后续复测可用第 6 行第 6 列向下拖，再将虹彩左拖到雷凝露。手势和小屏检查在独立无头 Chrome 中运行，实体手机手感待试玩。[固定练习](http://127.0.0.1:5190/level.html?id=0101-match&practice=prism-26) · [规则、来源和验收](../../tasks/reports/1123-match-rules.md)
+
+## 2026-11-23 · UE 角色手感/钟型/滑翔伞/准星对齐 & 史莱姆家园升级（DreamWorld 预设/自由建造/种植培养/栖地来访）
+
+- **UE 角色 3C 与形态对齐**（`src/slime/`、`src/ui/`）：重构移动与跳跃手感（0.12s 土狼时间、跳跃缓冲、轻跳截断、非对称重力、高速质心弹簧与惯性拉伸）；完整还原 UE `Dome` 钟型裙摆（`ApplyBellFlare` EDT 距离场与圆角收口，按 `8` 键与圆球切换）；复刻 UE `SlimeUmbrellaComponent`（二段跳后按空格撑 6 元素 3D 滑翔伞，0.28s 刹降至 `1.8 m/s`，回程高空分身自动撑迷你伞）；修复过肩瞄准镜头并接入 40m 解析低弧炮弹、`G`/右键双瞄准与 UE 中心四段极简十字准星。
+- **史莱姆家园大升级**（`public/models/dreamworld/`、`src/home/model-pack.ts`、`build-catalog.ts`、`builder.ts`、`src/ui/build-ui.ts`、`src/life/cultivation.ts`、`habitat.ts`、`unlocks.ts`）：引入 35 个 DreamWorld 轻量化 GLB 与缩略图；新增 `V` 键家园自由建造模式（贴地预览、旋转/缩放/退壳拆除、3 套一键景组预设与实时动态碰撞同步）；升级梯田可视化种子铺、每日特供稀缺苗、四元素深度培育（水双倍/火暖阳+35%/风授粉金色变异/雷充能洒水泉 12h 保水）、10 种栖地来访动画动物、今日家园手账与 Lv.1–Lv.10 解锁成长树。
+- **验证与证据**：`npm run check`、`npm test`（390/390 PASS）、`npm run build`、`npm run catalog:check` 全通过；后台无头 Chrome 0 报错验证并归档 5 张证据图至 `qa/evidence/`（`ue-dome-shape.jpg`、`ue-umbrella-glide.jpg`、`ue-aim-crosshair.jpg`、`home-build-mode.jpg`、`home-journal-habitat.jpg`）。下一步待用户实机试玩确认画面、手感与家园建造体验。
 
 ## 2026-11-23 · 三种模式各讲一件史事，修复一月几何闪烁
 

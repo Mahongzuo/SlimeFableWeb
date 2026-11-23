@@ -60,5 +60,49 @@ export interface FlybySpec {
   hidden: {position: [number, number]; radius: number};
 }
 export const defineFlyby = (spec: FlybySpec) => spec;
-export type AnyLevel = LevelSpec | RunnerSpec | LanderSpec | FlybySpec;
+export type LandmarkPoint = [number, number, number];
+export interface LandmarkLeg {
+  action: 'walk' | 'climb' | 'jump' | 'slide';
+  end: LandmarkPoint; prompt: string;
+}
+export interface PixelBoardSpec {
+  rows: string[];
+  sections: {name: string; end: number; color: string}[];
+}
+export interface LandmarkSpec {
+  id: string; template: 'landmark'; theme: 'arecibo-1974'; seed: string;
+  title: string; intro: string; outro: string; souvenir: string;
+  spawn: LandmarkPoint; route: LandmarkLeg[]; board: PixelBoardSpec; medals: {gold: number; silver: number};
+}
+export interface AlmanacSpec {
+  id:string; template:'almanac'; title:string; fact:string; theme:string;
+  activity:'align'|'dock'|'observe'|'beat'|'hover'|'aux'|'logic'|'drive'|'kick'|'tide'|'pong';
+  stops:[string,string,string]; souvenir:string; finale:string;
+}
+export type SolsticeBiome = 'aurora' | 'cosmos' | 'lantern' | 'clockwork' | 'ocean' | 'sanctuary';
+export type SolsticeMonument = 'biplane' | 'earthrise' | 'telescope' | 'reactor' | 'cinema' | 'lighthouse' | 'ship' | 'chronometer' | 'tree' | 'helix' | 'compass';
+export type SolsticeMode = 'resonance' | 'split-bridge' | 'glide-dash' | 'ascend';
+export interface SolsticeSpec {
+  id: string; template: 'solstice'; title: string; fact: string; outro: string;
+  biome: SolsticeBiome; monument: SolsticeMonument; mode: SolsticeMode;
+  elements: [number, number, number]; stops: [string, string, string];
+  souvenir: string; finale: string; palette: [string, string];
+  tone: 'bright' | 'solemn'; medals: {gold: number; silver: number};
+}
+/** October autumn-night causeway: three element rites, then the day's landmark performs its finale. */
+export type FolioRite = 'lamp' | 'arc' | 'wind' | 'moon';
+export type FolioMotion = 'lift' | 'spin' | 'turn' | 'orbit' | 'surface' | 'sail' | 'glow' | 'broadcast' | 'flare' | 'fly' | 'kick' | 'pulse' | 'notes';
+export interface FolioSpec {
+  id: string; template: 'folio'; title: string; fact: string; source: string; intro: string; outro: string;
+  rite: FolioRite; landmark: string; motion: FolioMotion; stops: [string, string, string]; finale: string;
+  souvenir: string; palette: [string, string]; medals: {gold: number; silver: number};
+}
+export type AtlasKind = 'orbit' | 'score' | 'race' | 'atelier' | 'span' | 'field' | 'ink' | 'signal' | 'flight';
+export interface AtlasSpec {
+  id:string; template:'atlas'; kind:AtlasKind; title:string; fact:string; source:string; souvenir:string;
+}
+export type AbilityMode='relay'|'circuit'|'combo'|'climb'|'tide'|'duet';
+export type AbilityKind=AtlasKind|'memorial';
+export interface AbilitySpec {id:string;template:'ability';kind:AbilityKind;mode:AbilityMode;element:number;title:string;fact:string;source:string;souvenir:string}
+export type AnyLevel = AbilitySpec | LevelSpec | RunnerSpec | LanderSpec | FlybySpec | LandmarkSpec | AlmanacSpec | SolsticeSpec | FolioSpec | AtlasSpec;
 export const defineRunner = (spec: RunnerSpec) => spec;

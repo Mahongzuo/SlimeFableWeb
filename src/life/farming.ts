@@ -9,12 +9,18 @@ export const WATER_MS = 10 * 60_000, WITHER_MS = 24 * 3600_000, WEED_CHANCE = .1
 export const PLOT_IDS = [1, 2, 3].flatMap(t => [0, 1, 2].map(r => `farm-${t}-${r}`));
 export type PlotPhase = 'empty' | 'sprout' | 'growing' | 'ripe' | 'withered';
 const spec = (p: PlotState) => CROPS[p.crop];
+const rateOf = (p: PlotState, now?: number) => {
+  const weedMul = p.weeds ? .5 : 1;
+  const warmMul = p.warmBoost ? 1.35 : 1;
+  const steamMul = p.steamUntil && (now === undefined || now < p.steamUntil) ? 1.45 : 1;
+  return weedMul * warmMul * steamMul;
+};
 /** Growth since the last watering that has not been banked yet. Wet window ends at `watered`. */
-function pending(p: PlotState, now: number, wetFrom: number) { const ms = Math.max(0, Math.min(now, p.watered) - wetFrom); return p.weeds ? ms / 2 : ms; }
+function pending(p: PlotState, now: number, wetFrom: number) { const ms = Math.max(0, Math.min(now, p.watered) - wetFrom); return ms * rateOf(p, now); }
 const wetFrom = (p: PlotState) => p.wetFrom ?? p.planted;
 export function growth(p: PlotState, now: number) { const s = spec(p); return s ? Math.min(1, (p.grown + pending(p, now, wetFrom(p))) / s.growMs) : 0; }
 /** When the crop became (or will become) ripe, assuming no more watering. */
-function ripeAt(p: PlotState) { const s = spec(p), left = s.growMs - p.grown, rate = p.weeds ? .5 : 1, at = wetFrom(p) + left / rate; return at <= p.watered ? at : Infinity; }
+function ripeAt(p: PlotState) { const s = spec(p), left = s.growMs - p.grown, rate = rateOf(p), at = wetFrom(p) + left / rate; return at <= p.watered ? at : Infinity; }
 export function phase(p: PlotState | null | undefined, now: number): PlotPhase {
   if (!p) return 'empty'; const g = growth(p, now);
   if (g >= 1) return now - (p.grown >= spec(p).growMs ? p.ripeSince ?? wetFrom(p) : ripeAt(p)) > WITHER_MS ? 'withered' : 'ripe';

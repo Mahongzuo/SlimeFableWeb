@@ -6,5 +6,16 @@ import level1112_1954 from './1112-1954';
 import level1112_1936 from './1112-1936';
 import level1112_2014 from './1112-2014';
 import level1112_1980 from './1112-1980';
+import level1116_1974 from './1116-1974';
+import {novemberLevels} from '../november';
+import {decemberLevels} from '../december';
+import {octoberLevels} from '../october';
+import {abilityLevels} from '../ability';
+import {atlasLevels} from '../atlas';
 /** Chapters with a playable web level. Hand-maintained until `scripts/new-level` generates it. */
-export const levels: Record<string, AnyLevel> = {[level0815_1920.id]: level0815_1920, [level1001_1949.id]: level1001_1949, [level1112_1866.id]: level1112_1866, [level1112_1954.id]: level1112_1954, [level1112_1936.id]: level1112_1936, [level1112_2014.id]: level1112_2014, [level1112_1980.id]: level1112_1980};
+export const levels: Record<string, AnyLevel> = {[level0815_1920.id]: level0815_1920, [level1001_1949.id]: level1001_1949, [level1112_1866.id]: level1112_1866, [level1112_1954.id]: level1112_1954, [level1112_1936.id]: level1112_1936, [level1112_2014.id]: level1112_2014, [level1112_1980.id]: level1112_1980, [level1116_1974.id]: level1116_1974};
+for (const level of novemberLevels) levels[level.id]=level;
+for (const level of decemberLevels) levels[level.id] = level;
+for (const level of octoberLevels) levels[level.id] ??= level;
+for (const level of abilityLevels) levels[level.id] = level;
+for (const level of atlasLevels) levels[level.id] = level;

@@ -1,0 +1,2 @@
+## 通关冲分
+可改文件：src/templates/mode-match.ts、src/level/mode-match.ts、src/level/mode-session.ts、src/level/mode-match.css、tests/mode-match.test.ts、docs/session/active.md、docs/progress.md、qa/evidence/match-encore.jpg。保留通关、有限随机补步、同日最近十局本机排名。

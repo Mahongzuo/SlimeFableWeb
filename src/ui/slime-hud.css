@@ -1,0 +1,80 @@
+.slime-hud {
+  --paper:#f7f1e3; --paper-2:#efe5cf; --ink:#2f2a24; --ink-2:#5b5249;
+  --sans:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+  position:fixed; z-index:8; pointer-events:none; user-select:none; color:var(--ink); font-family:var(--sans);
+  left:max(20px,env(safe-area-inset-left)); right:max(20px,env(safe-area-inset-right));
+  bottom:max(20px,env(safe-area-inset-bottom)); display:flex; justify-content:space-between; align-items:flex-end; gap:10px;
+}
+.slime-hud[hidden] {display:none}
+.slime-hud * {box-sizing:border-box}
+.slime-hud .card {background:var(--paper);border:2px solid var(--ink);box-shadow:4px 5px 0 rgba(47,42,36,.2)}
+.slime-hud button {color:var(--ink);cursor:pointer;touch-action:manipulation}
+.slime-hud .element-stack {display:grid;gap:6px}
+.slime-hud .skills-dock {margin-left:auto}
+.slime-hud .health-meter {display:flex;align-items:center;gap:8px;width:fit-content;border-radius:20px;padding:4px 10px;font:800 12px/1 var(--sans)}
+.slime-hud .health-meter progress {width:clamp(55px,8vw,115px);height:8px;accent-color:#267965}
+.slime-hud .elements{display:flex;align-items:center;gap:8px;padding:8px 11px;pointer-events:auto;border-radius:20px}
+.slime-hud .el{position:relative;width:52px;height:62px;border-radius:14px;border:2px solid rgba(47,42,36,.22);background:rgba(255,252,245,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:4px 0 3px;overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease,background .16s ease}
+.slime-hud .el:hover{transform:translateY(-2px);border-color:var(--c)}
+.slime-hud .el i{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.72),transparent 42%),var(--c);border:1.5px solid rgba(47,42,36,.35);box-shadow:inset -2px -3px 0 rgba(0,0,0,.18),0 2px 5px rgba(0,0,0,.12);transition:transform .16s ease;flex:none}
+.slime-hud .el kbd{position:absolute;right:3px;top:3px;width:15px;height:15px;border-radius:5px;background:var(--ink);color:var(--paper);font:800 9.5px/15px var(--sans);text-align:center;z-index:2}
+.slime-hud .el span{position:static;font:800 11.5px/1 var(--sans);color:var(--ink-2);letter-spacing:.04em;white-space:nowrap}
+.slime-hud .el.active{transform:translateY(-3px);border-color:var(--c);background:color-mix(in srgb,var(--c) 16%,#fffaf0);box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 35%,transparent),0 5px 10px rgba(47,42,36,.18)}
+.slime-hud .el.active i{transform:scale(1.12);border-color:var(--ink)}
+.slime-hud .el.active span{color:var(--ink);font-weight:900}
+.slime-hud .el .el-cd{position:absolute;inset:0;display:grid;place-items:center;font:900 13px/1 var(--sans);font-style:normal;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.9);background:rgba(24,20,18,.34);pointer-events:none;z-index:3;opacity:0;transition:opacity .06s}
+.slime-hud .el .el-cd::before{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--cd-pct,0%);background:rgba(22,18,16,.56);z-index:-1}
+.slime-hud .el.cooling .el-cd{opacity:1}
+.slime-hud .el.cooling{cursor:not-allowed}
+
+/* ---- Anime ARPG E / R / Q Skill Dock ---- */
+.slime-hud .skills-dock{padding:8px 12px 10px;pointer-events:auto;display:flex;flex-direction:column;gap:6px;align-items:center;border-radius:20px}
+.slime-hud .sk-role{font:800 11px/1.2 var(--sans);color:var(--ink-2);letter-spacing:.03em;padding:2px 8px;border-radius:999px;background:var(--paper-2);border:1px solid rgba(47,42,36,.18)}
+.slime-hud .sk-row{display:flex;align-items:flex-end;gap:10px}
+.slime-hud .sk-btn{position:relative;width:58px;height:58px;border-radius:50%;border:2.5px solid var(--ink);background:radial-gradient(circle at 35% 25%,#fffdf7,var(--paper-2));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;box-shadow:0 4px 0 rgba(47,42,36,.22);transition:transform .14s ease,box-shadow .14s ease,border-color .15s ease}
+.slime-hud .sk-btn:hover{transform:translateY(-2px)}
+.slime-hud .sk-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(47,42,36,.22)}
+.slime-hud .sk-btn .sk-key{position:absolute;top:-6px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:7px;background:var(--ink);color:var(--paper);font:900 11px/20px var(--sans);text-align:center;z-index:4;box-shadow:0 2px 0 rgba(0,0,0,.22)}
+.slime-hud .sk-btn .sk-ico{font-size:21px;line-height:1;z-index:2}
+.slime-hud .sk-btn .sk-name{font:800 10.5px/1 var(--sans);color:var(--ink);z-index:2}
+.slime-hud .sk-btn .sk-cd{position:absolute;inset:0;border-radius:50%;overflow:hidden;display:grid;place-items:center;font:900 15px/1 var(--sans);font-style:normal;color:#fff;text-shadow:0 1px 5px rgba(0,0,0,.85);z-index:3;opacity:0;pointer-events:none}
+.slime-hud .sk-btn .sk-cd::before{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--cd-pct,0%);background:rgba(24,20,22,.72);z-index:-1}
+.slime-hud .sk-btn.cooling .sk-cd{opacity:1}
+.slime-hud .sk-btn.cooling{opacity:.86}
+.slime-hud .sk-btn.ready{border-color:var(--accent)}
+.slime-hud .sk-btn.sk-ult{width:68px;height:68px;border-width:3px}
+.slime-hud .sk-btn.sk-ult .sk-ico{font-size:25px}
+.slime-hud .sk-btn.sk-ult .sk-ring{position:absolute;inset:-6px;border-radius:50%;background:conic-gradient(var(--accent) var(--energy,0%),rgba(47,42,36,.16) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4.5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 4.5px),#000 calc(100% - 4px));pointer-events:none}
+.slime-hud .sk-btn.ult-full{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 42%,transparent),0 0 18px color-mix(in srgb,var(--accent) 70%,transparent);animation:ult-pulse 1.5s ease-in-out infinite}
+@keyframes ult-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+
+@media(max-width:760px) {
+  .slime-hud {left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));gap:4px}
+  .slime-hud .elements {padding:5px;gap:2px;border-radius:13px}
+  .slime-hud .el {width:clamp(30px,6vw,44px);height:46px;border-radius:9px}
+  .slime-hud .el i {width:22px;height:22px}
+  .slime-hud .el kbd {font-size:8px;width:12px;height:12px;line-height:12px;top:1px;right:1px}
+  .slime-hud .sk-role {font-size:9px}
+  .slime-hud .skills-dock {padding:5px 8px 7px;gap:7px;border-radius:13px}
+  .slime-hud .sk-row {gap:5px}
+  .slime-hud .sk-btn {width:34px;height:34px}
+  .slime-hud .sk-btn.sk-ult {width:38px;height:38px}
+  .slime-hud .sk-btn .sk-ico,.slime-hud .sk-btn.sk-ult .sk-ico {font-size:14px}
+  .slime-hud .sk-btn .sk-key {font-size:8px;min-width:12px;height:12px;line-height:12px;padding:0 2px;right:-2px;top:-4px}
+  .slime-hud .sk-btn .sk-name {font-size:9px}
+}
+@media(max-width:357px) {
+  .slime-hud {align-items:flex-start;flex-direction:column}
+  .slime-hud .skills-dock {order:-1}
+}
+@media(prefers-reduced-motion:reduce) {
+  .slime-hud .sk-btn.ult-full {animation:none}
+  .slime-hud button {transition:none}
+}
+
+/* Legacy puzzles route Q to an aiming tool. Their lower-left objective sits above the element dock. */
+body:has(.slime-hud) #ability-ui aside, body:has(.slime-hud) #mw-ui aside {bottom:111px}
+@media(max-width:760px) {
+  body:has(.slime-hud) #ability-ui aside, body:has(.slime-hud) #mw-ui aside {bottom:128px}
+  body:has(.slime-hud) #ability-ui footer, body:has(.slime-hud) #mw-ui nav {bottom:74px}
+}

@@ -6,7 +6,7 @@ import {applyLevelQuality} from '../game/graphics';
 import {Save} from '../game/save';
 import {SlimeCharacter} from '../slime/character';
 import {elements} from '../slime/elements';
-import {createBoard,swap,hint,shuffle,colour,specialKind,HOLE,COIN} from '../templates/mode-match';
+import {beginEncore,createBoard,swap,hint,shuffle,colour,specialKind,HOLE,COIN} from '../templates/mode-match';
 import {MatchMotion,MatchSound,powers} from './match-effects';
 import {bindMatchPointer} from './match-pointer';
 import {buildMatchObjects} from '../themes/match-objects';
@@ -15,7 +15,7 @@ import {buildModeLandmark} from '../themes/mode-landmarks';
 // The studio, currency counter and canal lock controls are fictional.
 const {spec}=session;
 const coins=spec.day==='0101',canal=spec.day==='0815';
-const rules=coins?'左右挪动欧元硬币，消除它下方的凝露，让硬币掉进描金的零钱盘。':
+const rules=coins?'14 步内送入 3 枚硬币。先让 € 对准底部金框「币盘」，再消除它下方的凝露。':
  canal?'消除黄铜水标上的凝露，转开人字闸门，让安康号驶过三段航道。':
  '消除金边接点，把两侧的画面送进对应监视器。最后横向接通 02 号中屏。';
 const captions=coins?['第一格零钱盘','为第二枚硬币换道','补齐最后一格','欧元柜台开张']:
@@ -58,12 +58,29 @@ applyLevelQuality(stage,actor,new Save().data.quality);
 actor.forward=[0,0,1];
 
 let board=createBoard(spec.day,session.seed);
+const recordKey=spec.saveId+(session.practice?'-practice':'-daily');
+let records=new Save().data.life.records;
+let best=records[recordKey+'-score']??0;
+let run=0;
+const historyKey=recordKey+'-round';
+function rememberScore(){
+ const save=new Save();records=save.data.life.records;
+ if(!run){run=(records[historyKey]??0)+1;records[historyKey]=run;}
+ if(run>records[historyKey]-10)records[historyKey+'-'+(run%10)]=board.score;
+ best=Math.max(board.score,records[recordKey+'-score']??0);
+ records[recordKey+'-score']=best;save.write();
+}
+function rankings(){
+ const data=new Save().data.life.records,last=data[historyKey]??0;
+ return Array.from({length:Math.min(10,last)},(_,i)=>({id:last-i,score:data[historyKey+'-'+((last-i)%10)]??0}))
+   .sort((a,b)=>b.score-a.score||b.id-a.id);
+}
 let phase:'intro'|'play'|'resolving'|'lost'|'finale'='intro';
 let selected=-1,time=0,finale=0,recallAt=0,shownProgress=0;
 const ui=document.createElement('main');ui.id='match-lab';ui.dataset.theme=coins?'euro':canal?'canal':'studio';
 ui.innerHTML='<div class="ml-haze"></div><header class="ml-top"><div><p class="ml-kicker"></p><h1></h1></div><div class="ml-actions"><button data-rules aria-haspopup="dialog">规则</button><button data-mute aria-pressed="false"></button><button data-home>回到港口</button></div></header>'+
  '<aside class="ml-caption"><small></small><h2></h2><p></p></aside><article class="ml-console"><div class="ml-instrument"><span class="ml-status"></span><span class="ml-moves"></span></div>'+
- '<div class="ml-grid" role="group" aria-label="六色凝露棋盘"></div><div class="ml-meter"></div><p class="ml-message" role="status"></p><footer></footer></article>';
+ '<div class="ml-score" style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><strong></strong><span></span><button data-ranking>近十局</button></div><div class="ml-grid" role="group" aria-label="六色凝露棋盘"></div><div class="ml-meter"></div><p class="ml-message" role="status"></p><footer></footer></article>';
 document.body.append(ui);
 const $=<E extends HTMLElement=HTMLElement>(s:string)=>ui.querySelector(s) as E;
 const grid=$('.ml-grid'),foot=$('footer');
@@ -77,6 +94,19 @@ ui.append(guide);
 $('[data-rules]').onclick=()=>{if(!guide.open)guide.showModal();};
 guide.querySelector<HTMLButtonElement>('[data-close-guide]')!.onclick=()=>guide.close();
 guide.onclick=e=>{if(e.target===guide){const box=guide.getBoundingClientRect();if(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom)guide.close();}};
+const ranking=document.createElement('dialog');ranking.className='ml-guide';ranking.setAttribute('aria-label','最近十局得分');ui.append(ranking);
+function showRanking(){
+ ranking.replaceChildren();
+ const title=document.createElement('h2');title.textContent=(session.practice?'练习':'正式')+' · 最近十局';ranking.append(title);
+ const list=document.createElement('ol');
+ for(const row of rankings()){
+   const item=document.createElement('li');item.textContent='第 '+row.id+' 局　'+row.score+' 分'+(row.id===run?'　· 本局':'');list.append(item);
+ }
+ if(!list.children.length)list.textContent='完成第一步交换后开始记分。';
+ ranking.append(list);
+ const close=document.createElement('button');close.textContent='合上';close.onclick=()=>ranking.close();ranking.append(close);ranking.showModal();
+}
+$('[data-ranking]').onclick=showRanking;
 function button(label:string,attr:string,act:()=>void){
  const b=document.createElement('button');b.textContent=label;b.setAttribute(attr,'');b.onclick=act;foot.append(b);
 }
@@ -108,14 +138,26 @@ function paint(values=board.cells,targets=board.targets,act=board.stage){
    b.querySelector('b')!.textContent=value===COIN?'€':kind==='rainbow'?'':el.icon;
    b.querySelector('.ml-power')!.textContent=power?.symbol??'';
    b.querySelector('em')!.textContent=targets.includes(i)?(coins?'币盘':canal?'水标':act>=2?'02':i%8<4?'01':'03'):'';
+   b.classList.toggle('time-drop',board.bonus?.tile===i);
    b.disabled=phase!=='play'||value===HOLE;
    const piece=value===HOLE?'空洞':value===COIN?'欧元硬币':kind==='rainbow'?'虹彩':el.name+(power?' · '+power.name:'');
-   b.setAttribute('aria-label',(Math.floor(i/8)+1)+' 行 '+(i%8+1)+' 列 '+piece+(targets.includes(i)?' 目标':''));
+   b.setAttribute('aria-label',(Math.floor(i/8)+1)+' 行 '+(i%8+1)+' 列 '+piece+(board.bonus?.tile===i?' 沙漏，加两步':'')+(targets.includes(i)?' 目标':''));
  });
  $('.ml-moves').textContent='余 '+board.moves+' 步';
- $('.ml-status').textContent=captions[act];
+ $('.ml-status').textContent=board.bonus?'加演冲分':(coins?'送硬币入盘':canal?'开启三段船闸':'接通三屏')+'　'+act+'/3';
+ $('.ml-score strong').textContent='得分 '+board.score;
+ $('.ml-score span').textContent=(session.practice?'练习':'正式')+'最佳 '+best+' · 通关 '+(records[recordKey+'-wins']??0)+' 次';
  const meter=$('.ml-meter');meter.replaceChildren();
  for(let i=0;i<3;i++){const s=document.createElement('span');s.classList.toggle('on',i<act);meter.append(s);}
+}
+function settle(){
+ session.finish();
+ const result=document.querySelector('.mode-keepsake article');
+ if(!result||result.querySelector('.ml-final-score'))return;
+ const line=document.createElement('p');line.className='ml-final-score';
+ const place=rankings().findIndex(row=>row.id===run)+1;
+ line.textContent='本局 '+board.score+' 分'+(place?' · 最近十局第 '+place+' 名':'');
+ result.querySelector('footer')?.before(line);
 }
 function controls(){
  foot.replaceChildren();
@@ -129,14 +171,19 @@ function controls(){
      paint();const next=hint(board);
      if(next)for(const i of next)cells[i].classList.add('suggest');
    });
-   if(board.moves>1)button('重排 · 1 步','data-match-shuffle',()=>{
+   if(board.bonus)button('结束冲分','data-match-bank',settle);
+   if(!board.bonus&&board.moves>1)button('重排 · 1 步','data-match-shuffle',()=>{
      selected=-1;shuffle(board);paint();message('重排完成，已接通的目标保留。');
    });
  }
  if(phase==='lost')button('从头再试','data-match-retry',()=>{
-   board=createBoard(spec.day,session.seed);litScreens.fill(false);shownProgress=0;phase='play';selected=-1;paint();controls();message(rules);
+   run=0;board=createBoard(spec.day,session.seed);litScreens.fill(false);shownProgress=0;phase='play';selected=-1;paint();controls();message(rules);
  });
- if(phase==='finale')button('收进史书','data-match-keep',()=>session.finish());
+ if(phase==='finale'&&!board.bonus)button('继续冲分 · +3 步','data-match-encore',()=>{
+   beginEncore(board,String(crypto.getRandomValues(new Uint32Array(1))[0]));phase='play';paint();controls();
+   message('消除带沙漏的格子可得 2 步，每局最多出现两枚。');
+ });
+ if(phase==='finale')button('查看通关纪念品','data-match-keep',settle);
 }
 function message(s:string){$('.ml-message').textContent=s;}
 async function sendKeepsake(i:number,step:number){
@@ -172,7 +219,9 @@ const delay=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
 async function resolve(a:number,b:number,dragFraction=0){
  if(phase!=='play'||Math.abs(a%8-b%8)+Math.abs((a>>3)-(b>>3))!==1||board.cells[a]===HOLE||board.cells[b]===HOLE)return;
  const tone=Math.max(0,colour(board.cells[a])>=0?colour(board.cells[a]):colour(board.cells[b]));
+ const previousMoves=board.moves,previousTile=board.bonus?.tile;
  const startStage=board.stage,targets=board.targets.slice(),result=swap(board,a,b,true);selected=-1;
+ if(result)rememberScore();
  phase='resolving';foot.replaceChildren();
  await motion.exchange(a,b,!!result,dragFraction);
  if(!result){phase='play';paint();controls();message(coins?'同色连成线、相邻特效组合，或将硬币左右换道，才能完成交换。':'普通棋须连成三枚同色。两枚相邻特效可直接交换，虹彩可交换选色。');return;}
@@ -185,6 +234,14 @@ async function resolve(a:number,b:number,dragFraction=0){
    if(step)message('连锁 × '+(step+1));
    await motion.clear(indices,cascade,step);
    paint(cascade.after,targets,startStage);await motion.drop(cascade);
+ }
+ if(board.bonus){
+   phase=board.moves?'play':'finale';
+   const rank=rankings().findIndex(row=>row.id===run)+1;
+   message(!board.moves?'冲分结束 · '+board.score+' 分'+(rank?' · 最近十局第 '+rank+' 名':''):
+     board.moves>previousMoves?'收集沙漏，增加 2 步！':board.bonus.tile>=0?'消除沙漏所在格，获得 2 步。':'继续连消冲分。');
+   if(previousTile!==board.bonus.tile&&board.bonus.tile>=0)sound.play('objective');
+   paint();controls();return;
  }
  const received=targets.filter(i=>result.advanced||!board.targets.includes(i));
  if(received.length){
@@ -203,9 +260,10 @@ async function resolve(a:number,b:number,dragFraction=0){
  if(board.stage===3&&displays.length)await delay(420);
  phase=board.stage===3?'finale':board.moves?'play':'lost';
  if(phase==='finale'){
+   session.recordWin();records=new Save().data.life.records;
    sound.finish();actor.keys.add('KeyX');actor.setMood('Happy',3);ui.classList.add('complete');
    $('.ml-caption h2').textContent=captions[3];$('.ml-caption p').textContent=spec.memory;
-   message(spec.fact);
+   message('已通关！可带剩余步数继续冲分，或查看通关纪念品。');
  }else if(phase==='lost')message('这一次的步数用完了。重新推演，棋盘开局相同。');
  else if(result.advanced){$('.ml-caption h2').textContent=captions[board.stage];message(captions[board.stage]+'　·　'+rules);}
  else{

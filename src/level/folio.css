@@ -1,0 +1,13 @@
+#game-ui .toast:empty{display:none}
+#game-ui .overlay:has(.intro){align-items:flex-end;justify-content:flex-start;padding:clamp(14px,4vw,54px);background:linear-gradient(90deg,#060b1f99,transparent 68%);backdrop-filter:none}
+#game-ui .intro{margin:0 auto 0 0;width:min(410px,92vw);padding:24px 28px;background:#f8efd9f5;border:2px solid #2a2f52;border-radius:6px;box-shadow:6px 7px 0 #0a0f2a88,0 0 60px #f2c14e33}
+#game-ui .intro h2{font-size:clamp(24px,3vw,36px);line-height:1.14;color:#1d2246}
+#game-ui .intro ol{font-size:13px;line-height:1.7}
+#game-ui .intro .kicker,#game-ui .quest .kicker{color:#b07a26;letter-spacing:.14em}
+#game-ui .quest{max-width:min(380px,78vw);border-radius:6px;background:#10173af0;color:#f7ecd2;border-color:#e0b562}
+#game-ui .quest .branch{background:#f8efd9;color:#1d2246}#game-ui .quest h3{color:#ffe7b0}#game-ui .quest .branch b{color:#ffd45e}#game-ui .quest .steps i.on{background:#f2c14e}
+#game-ui .quest .side{color:#f6d99a}#game-ui .quest .side.done{color:#9fe0a8}
+#game-ui .folio-clock{position:absolute;right:20px;top:74px;font:600 14px/1.5 var(--sans);background:#10173ae8;color:#ffe7b0;padding:6px 12px;border-radius:4px;border:1px solid #e0b56288;font-variant-numeric:tabular-nums}
+#game-ui .folio-rite{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);max-width:min(560px,90vw);text-align:center;font:600 13px/1.5 var(--sans);color:#fff1cf;background:#10173acc;padding:7px 14px;border-radius:999px;border:1px solid #e0b56266;pointer-events:none}
+#game-ui .complete{border-color:#2a2f52;box-shadow:6px 7px 0 #0a0f2a88,0 0 80px #f2c14e44}
+@media(max-width:680px){#game-ui .quest{padding:8px 12px}#game-ui .quest .side{display:none}#game-ui .folio-rite{bottom:132px;font-size:12px}#game-ui .folio-clock{top:auto;bottom:14px;right:12px}}

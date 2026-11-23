@@ -2,6 +2,7 @@ import type {Vec} from '../slime/types';
 import type {ZoneRect} from '../world/map';
 import type {LifeData} from '../life/state';
 import type {LifeUI} from '../ui/life-ui';
+import type {FarmRegistry} from './farm-registry';
 /** Something the player can press F at. The nearest one in range gets the prompt. */
 export interface Interactable {id: string; position: Vec; radius: number; prompt: () => {title: string; sub: string} | null; act: () => void}
 /** What a zone builder gets: the shared THREE context, its rectangle, the ground, and seeded randomness. */
@@ -19,6 +20,10 @@ export interface ZoneContext {
   life: LifeData; save: () => void;
   /** Loop UI (fishing meter, coins); absent in tests. */ hud?: LifeUI;
   /** True when today has a playable history level (the history fish bites). */ historyDay?: () => boolean;
+  /** Opens the interactive seed selection & daily special shop modal. */ openSeedShop?: () => void;
+  /** Opens the UE-style seed picker for an empty farm plot. */ openSeedPicker?: (plotId: string, onPick: (seedId: string) => void) => void;
+  /** Shared farm plot registry (terrace + player-placed raised beds). */ farmRegistry?: FarmRegistry;
+  /** Current local YYYY-MM-DD key for daily home journal & special seed rotation. */ dayKey?: () => string;
 }
 /** What zone code may do to / read from the slime at runtime (passed to `update`). */
 export interface PlayerHandle {

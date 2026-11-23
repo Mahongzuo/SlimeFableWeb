@@ -1,9 +1,13 @@
 /** 历史事实附各自来源；人物委托、设备操作和场景是游戏演绎。 */
-export const modeKinds = ['match','shot','trial'] as const;
-export type ModeKind = typeof modeKinds[number];
-export const modeNames:Record<ModeKind,string> = {match:'史莱姆三消',shot:'分身射击',trial:'NPC 试炼'};
+export const modeKinds = ['match','skirmish','rpg'] as const;
+export type ModeKind = typeof modeKinds[number] | 'shot' | 'trial';
+export const modeNames:Record<ModeKind,string> = {match:'史莱姆三消',shot:'分身射击',trial:'NPC 试炼',skirmish:'分身交火',rpg:'战斗试炼'};
 
+export interface BattleHistory {
+ title:string; chapters:[string,string][]; fiction:string; sources:[string,string][];
+}
 interface ModeStory {
+ history?:BattleHistory;
  storyId:string; year:number; fact:string; source:string; souvenir:string;
  title:string; goal:string; choice:string; layout:string; memory:string;
 }
@@ -17,6 +21,38 @@ function challenge(day:string,kind:ModeKind,story:ModeStory,existingChapter?:str
 }
 
 export const dailyModes = [
+ challenge('1021','skirmish',{
+   storyId:'trafalgar',year:1805,title:'风帆之间',fact:'1805 年 10 月 21 日，特拉法加海战爆发。',
+   source:'https://www.rmg.co.uk/stories/maritime-history/battle-trafalgar-background',souvenir:'海战画页',
+   history:{
+     title:'特拉法加海战',
+     chapters:[
+       ['两支舰队为什么出现在这里？','拿破仑战争期间，法国和西班牙结为盟友。法国海军将领维尔纳夫奉命率联合舰队离开西班牙加的斯港，驶向地中海。英国海军将领纳尔逊已在港外等候。'],
+       ['10 月 21 日，海上发生了什么？','清晨，两支舰队在西班牙西南的特拉法加角外发现了彼此。英舰分成两列，分别由纳尔逊和科林伍德率领。到中午，两列英舰先后切入对方的舰列，整齐的阵线变成了一场场近距离的舰船交锋。'],
+       ['胜利的消息里还有一个噩耗','英国舰队获胜。纳尔逊在旗舰“胜利号”的甲板上中弹，当天下午去世。随后风暴袭来，英军被迫放弃许多缴获的舰船。这一战巩固了英国的海上优势，欧洲大陆上的战争仍在继续。']
+     ],
+     fiction:'关卡里的三层帆船和帆布偶兵是游戏演绎。历史上的“胜利号”是纳尔逊的旗舰。',
+     sources:[['格林尼治皇家博物馆 · 战前背景','https://www.rmg.co.uk/stories/maritime-history/battle-trafalgar-background'],['英国国家海事博物馆 · 当日时间线','https://www.rmg.co.uk/stories/maritime-history/battle-trafalgar-timeline']]
+   },
+   goal:'带回记录船的图匣，在海图桌补全航迹',choice:'从艉楼跳板登船，或沿下舱舷门潜入；循灯寻找领航员留下的日志',
+   layout:'双船上层跳板与下层舷门、记录室、领航员铺位和返航海图桌',memory:'你把图匣带回海图桌，纳尔逊和科林伍德各领一列的航迹在纸上接合。'
+ }),
+ challenge('1021','rpg',{
+   storyId:'sekigahara',year:1600,title:'关原雾阵',fact:'1600 年 10 月 21 日，关原之战发生。',
+   source:'https://www.japan.travel/en/spot/2341/',souvenir:'关原阵旗拓印',
+   history:{
+     title:'关原之战',
+     chapters:[
+       ['丰臣秀吉死后，谁来主政？','丰臣秀吉曾统一日本。他去世后，各地领主围绕政权归属分成几个阵营。德川家康领东军，石田三成是组织西军的核心人物。“东军”和“西军”是后人对日本国内两方势力的称呼。'],
+       ['山上的一支军队改变了战局','双方在今天日本岐阜县的关原交战。松尾山上的小早川秀秋原属西军，战斗中却率部下山，攻向西军的大谷吉继。另有几支部队也转向东军，西军阵势随之崩溃。'],
+       ['为什么日历上写着 10 月 21 日？','当时日本记作庆长五年九月十五日，换算成公历是 1600 年 10 月 21 日。东军的胜利让政权重心从丰臣家转向德川家。三年后，德川家康在江户建立幕府。']
+     ],
+     fiction:'旗甲兵和史莱姆的交手是游戏演绎。史实中的转折，是同一面山坡上有人在交战中改变了立场。',
+     sources:[['岐阜关原古战场纪念馆 · 两军与战果','https://sekigahara.pref.gifu.lg.jp/en/about/'],['纪念馆 · 小早川秀秋的行迹','https://sekigahara.pref.gifu.lg.jp/en/tour/kobayakawa-hideaki/'],['纪念馆 · 新旧历对照','https://sekigahara.pref.gifu.lg.jp/news/p3253/'],['日本政府 · 江户幕府开设年份','https://www.gov-online.go.jp/eng/publicity/book/hlj/html/202210/202210_04_en.html']]
+   },
+   goal:'穿过雾口与山道，击败阵地守将',choice:'绕坡先破护旗，或引开轻兵逐个还击；读出守将变招再反击',
+   layout:'雾口、分岔山道与双阶段守将阵地',memory:'你等过了守将的回身一击。雾散开，山坡上的旗转向了东军。'
+ }),
  challenge('1123','match',{
    storyId:'doctor-who',year:1963,fact:'1963 年 11 月 23 日，英国广播公司播出《神秘博士》第一集。',
    source:'https://www.doctorwho.tv/stories/an-unearthly-child',souvenir:'首播场记板',title:'雪花里的第一帧',

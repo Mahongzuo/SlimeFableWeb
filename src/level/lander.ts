@@ -24,7 +24,7 @@ let state: State = 'intro', pausedFrom: 'play' | 'transmit' = 'play';
 let elapsed = 0, simulation = 0, battery = spec.battery.capacity, bounces = 0, firstLanding = false;
 let impact = -1, reveal = 0, jet = 0, jetCooldown = 0, transmission = 0, hud = 0, interact = false, hidden = false;
 const collected = [false, false, false];
-const ui = new LevelUI({start, resume, restart: () => location.reload(), home: () => location.href = './?from=' + encodeURIComponent(id), element: i => slime.setElement(i)}, '11月12日 · 2014');
+const ui = new LevelUI({start, resume, restart: () => location.reload(), home: () => location.href = './?from=' + encodeURIComponent(id)}, '11月12日 · 2014');
 const ctx = {THREE, renderer: stage.renderer, scene: stage.scene, camera: stage.camera, sun: stage.sun, controls: stage.controls};
 const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, gravityScale: spec.gravityScale, ui: false, trainingTargets: [], title: spec.title,
   onToast: text => { if (state === 'play') ui.toast(text); },
@@ -37,6 +37,7 @@ const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, gravityScale:
   },
   onLand: speed => { if (state === 'play') impact = speed; },
 }).attach();
+ui.bindCharacter(slime);
 applyLevelQuality(stage, slime, save.data.quality);
 // Battery is local to this runtime; existing level UI and other chapters stay unchanged.
 const batteryUI = document.createElement('div'); batteryUI.className = 'card grain';
@@ -113,7 +114,7 @@ function updateHud() {
     side: {title: hidden ? '鸭形岩石已找到' : '寻找彗星背面的鸭形岩石', done: hidden}});
   batteryLabel.textContent = `电池 ${battery.toFixed(0)}% · ${sunny ? '阳光充电' : '阴影耗电'}`; batteryBar.value = battery;
   flightLabel.textContent = `${elapsed.toFixed(0)} 秒 · 反弹 ${bounces} 次 · ${slime.cling ? '冰崖贴墙中' : slime.spread > .5 ? '摊开缓冲' : 'C 摊开 / 火属性空格喷气'}`;
-  ui.hud(slime.element, false);
+  ui.hud(false);
 }
 // Capture jet input before the character can also turn it into a normal double jump.
 addEventListener('keydown', e => {

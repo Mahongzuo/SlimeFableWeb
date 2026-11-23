@@ -9,14 +9,14 @@ description: 为 SlimeFable Web 设计、搭建或更新“历史上的今天”
 
 ## 流程（按顺序，不许跳）
 
-1. **读设计页**：`docs/days/MMDD.md`。设计页由 Opus 写或审。没有设计页就先写一份，交给 Opus 审，**审过之前不动工**。
+1. **读设计页**：从 `docs/progress.md` 找到目标关卡，再读 `docs/days/MMDD.md`。新日期由 Codex 核实史料、完成设计页并定稿，再按任务卡开工。
 2. **读参考**：`references/design-bar.md`（必须满足的标准）、`references/art-bible.md`（画面）、`references/templates.md`（玩法模板接口），以及设计页点名的好例子文件。
 3. **搭建**：只改任务卡 `files:` 列出的文件。数据写在 `content/`，玩法写在 `src/templates/` 和 `src/level/`，画面写在 `src/themes/`。能复用的套件和模板先复用。
 4. **自检**：
    - `node .agents/skills/slimefable-level/scripts/lint-content.mjs` 检查禁用内容和体积；
-   - `npm run check && npm test`；
+   - `npm run check`、`npm test`、`npm run build`；
    - 按 `references/design-bar.md` 末尾的评分表自评，任何一项低于 4 分，先改再交。
-5. **交付**：一段中文总结，写清楚做了什么、设计页的每一条是怎么落实的、自评分数、还没做到的地方。截图由 Opus 在浏览器里拍，你在总结里列出建议的截图机位（坐标和朝向）。
+5. **交付**：一段中文总结，写清楚做了什么、设计页的每一条是怎么落实的、自评分数、还没做到的地方。改动画面时由 Codex 负责将浏览器截图归入 `qa/evidence/`；总结中列出截图位置和建议机位（坐标和朝向）。用户试玩确认画面与手感。
 
 ## 硬规则
 

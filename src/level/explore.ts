@@ -50,10 +50,10 @@ const world = {boxes: layout.boxes, surfaces: [{min: [-40, -40] as [number, numb
 const quest = new QuestRunner(spec);
 const ui = new LevelUI({
   start: () => start(), resume: () => resume(), restart: () => location.reload(), home: () => goHome(),
-  element: i => slime.setElement(i),
 }, `${dayLabel(day)} · ${year}`);
 const ctx = {THREE, renderer: stage.renderer, scene: stage.scene, camera: stage.camera, sun: stage.sun, controls: stage.controls};
 const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, ui: false, trainingTargets: [], title: spec.title, onToast: () => {}, onReady: () => { if (state === 'intro') showIntro(); }}).attach();
+ui.bindCharacter(slime);
 applyLevelQuality(stage, slime, save.data.quality);
 (window as any).__slime = slime; (window as any).__level = {spec, layout, quest, check};
 stage.camera.position.set(-27.5, 8.5, 8); stage.camera.lookAt(-15, 1, 0);
@@ -117,7 +117,7 @@ const loop = () => {
   focus = null; let best = 2.1;
   if (state === 'play') for (const a of actors) { const d = Math.hypot(p[0] - a.spot[0], p[2] - a.spot[2]); if (d < best) { best = d; focus = a; } }
   if (focus) { const at = screen(focus.spot, 2.1); ui.prompt(at && !ui.speaking ? {...at, title: `和${focus.name}说话`, sub: quest.wants(focus.id) ? quest.view().branch : '聊两句'} : null); if (at && ui.speaking) ui.placeSpeech(at.x, at.y); } else ui.prompt(null);
-  hudTimer -= dt; if (hudTimer <= 0) { hudTimer = .15; ui.hud(slime.element, slime.aiming); }
+  hudTimer -= dt; if (hudTimer <= 0) { hudTimer = .15; ui.hud(slime.aiming); }
   stage.render(dt, slime);
 };
 stage.renderer.setAnimationLoop(loop);

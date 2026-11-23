@@ -1,3 +1,4 @@
+import {beginEncore} from '../src/templates/mode-match';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createBoard,hint,swap,shuffle,HOLE,COIN,RAINBOW,specialKind,colour,legalMoves} from '../src/templates/mode-match';
@@ -194,3 +195,21 @@ test('保留的两枚分身在换幕和洗牌后仍可用',()=>{
  assert.ok(count>=2);shuffle(b);assert.equal(b.cells.filter(v=>v>=6).length,count);
 });
 
+
+test('加演继承剩余步数和分数；提示不消耗道具，每局最多额外七步',()=>{
+ for(const day of ['0101','0815','1123']){
+   const b=createBoard(day,'qa-0');
+   while(b.stage<3)swap(b,...hint(b)!);
+   const left=b.moves,score=b.score;
+   beginEncore(b,'bonus-0');beginEncore(b,'again');
+   assert.equal(b.moves,left+3);assert.equal(b.score,score);
+   let turns=0;
+   while(b.moves){
+     const before=structuredClone(b),pair=hint(b);
+     assert.deepEqual(b,before);assert.ok(pair);
+     const result=swap(b,...pair);assert.ok(result);turns++;
+     assert.ok(turns<=left+7);assert.ok(b.bonus!.drops<=2);
+   }
+   assert.equal(b.stage,3);assert.ok(b.score>score);assert.equal(hint(b),null);
+ }
+});

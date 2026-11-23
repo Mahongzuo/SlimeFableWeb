@@ -1,0 +1,63 @@
+{
+  "testedBase": "http://127.0.0.1:5231",
+  "assets": [
+    "/assets/level-HZN09x4U.js",
+    "/assets/battle-preview-BnTrvpHg.js"
+  ],
+  "route": "upper",
+  "journal": false,
+  "checkpoint": {
+    "name": "记录室 · 已取得图匣",
+    "hp": 73,
+    "pos": [
+      18.545996608858303,
+      0,
+      1.5935628143480443
+    ],
+    "journal": false
+  },
+  "nativeInputOnly": true,
+  "stations": {
+    "rejectedDecoy": true,
+    "blueFlag": true,
+    "firstRouteAloneIncomplete": true,
+    "pairedRoutes": [
+      "nelson/north",
+      "collingwood/south"
+    ]
+  },
+  "combat": [
+    {
+      "enemy": "sailor",
+      "fires": 7,
+      "dodges": 0,
+      "maxShots": 3,
+      "observedRecall": false
+    },
+    {
+      "enemy": "gunner",
+      "fires": 8,
+      "dodges": 0,
+      "maxShots": 4,
+      "observedRecall": true
+    },
+    {
+      "enemy": "guardian",
+      "fires": 27,
+      "dodges": 7,
+      "maxShots": 4,
+      "observedRecall": true
+    }
+  ],
+  "harbor": {
+    "local": [
+      1.3322676295501878e-15,
+      0,
+      2.299999999999999
+    ],
+    "wins": 1,
+    "best": 55694,
+    "completed": true,
+    "keepsake": true
+  }
+}
