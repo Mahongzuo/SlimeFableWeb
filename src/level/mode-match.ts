@@ -11,23 +11,28 @@ import {MatchMotion,MatchSound,powers} from './match-effects';
 import {bindMatchPointer} from './match-pointer';
 import {buildMatchObjects} from '../themes/match-objects';
 import {buildModeLandmark} from '../themes/mode-landmarks';
+import {januaryMatches,targetLabel} from '../templates/january-match';
+import {buildJanuaryMatch} from '../themes/january-match';
+import {makeFinalPrint} from './january-match';
 
 // The studio, currency counter and canal lock controls are fictional.
 const {spec}=session;
+const january=januaryMatches[spec.day];
 const coins=spec.day==='0101',canal=spec.day==='0815';
-const rules=coins?'14 步内送入 3 枚硬币。先让 € 对准底部金框「币盘」，再消除它下方的凝露。':
+const rules=january?.rules??(coins?'14 步内送入 3 枚硬币。先让 € 对准底部金框「币盘」，再消除它下方的凝露。':
  canal?'消除黄铜水标上的凝露，转开人字闸门，让安康号驶过三段航道。':
- '消除金边接点，把两侧的画面送进对应监视器。最后横向接通 02 号中屏。';
-const captions=coins?['第一格零钱盘','为第二枚硬币换道','补齐最后一格','欧元柜台开张']:
- canal?['上游水标','平衡闸室水位','开启出口闸门','安康号通过运河']:['左右信号','另一侧信号','接通横带','首播信号已送出'];
-const stage=new Stage({skyTop:coins?'#758f8c':canal?'#7b9292':'#24394b',skyHorizon:coins?'#e0d1ab':canal?'#cfdbc7':'#899c9e',
+ '消除金边接点，把两侧的画面送进对应监视器。最后横向接通 02 号中屏。');
+const captions=january?.stages??(coins?['第一格零钱盘','为第二枚硬币换道','补齐最后一格','欧元柜台开张']:
+ canal?['上游水标','平衡闸室水位','开启出口闸门','安康号通过运河']:['左右信号','另一侧信号','接通横带','首播信号已送出']);
+const stage=new Stage({skyTop:january?.sky?.[0]??(january?.theme==='titan'?'#633636':january?'#365048':coins?'#758f8c':canal?'#7b9292':'#24394b'),skyHorizon:january?.sky?.[1]??(january?.theme==='titan'?'#d9955e':january?'#cfb794':coins?'#e0d1ab':canal?'#cfdbc7':'#899c9e'),
  fog:[28,85],sun:'#ffe1b4',sunIntensity:2.2,hemiSky:'#fff3cf',hemiGround:'#676f6c',ink:'#344144',wash:'#b7b4a1'});
 const studio=spec.day==='1123';
 const landmark=studio?buildModeLandmark(stage,spec.day,[0,0,-1.5]):null;
-const objects=studio?null:buildMatchObjects(stage,spec.day);
+const januaryScene=january?buildJanuaryMatch(stage,january.theme,spec.day):null;
+const objects=januaryScene??(studio?null:buildMatchObjects(stage,spec.day));
 const sound=new MatchSound();
 // Original monochrome stage art for the three fictional signal fragments.
-const displays=coins||canal?[]:[0,1,2].map(n=>{
+const displays=!studio?[]:[0,1,2].map(n=>{
  const canvas=document.createElement('canvas');canvas.width=240;canvas.height=160;
  const c=canvas.getContext('2d')!;c.fillStyle='#26343a';c.fillRect(0,0,240,160);
  const white='#eee9dc';c.strokeStyle=white;c.fillStyle=white;
@@ -49,7 +54,7 @@ const displays=coins||canal?[]:[0,1,2].map(n=>{
  return {picture,src:canvas.toDataURL()};
 });
 const litScreens=[false,false,false];
-const base=new THREE.Mesh(new THREE.CylinderGeometry(4.1,4.4,.48,48),stage.toon(coins?'#ad9980':canal?'#aebba6':'#58716f'));
+const base=new THREE.Mesh(new THREE.CylinderGeometry(4.1,4.4,.48,48),stage.toon(january?.baseColor??(january?.theme==='titan'?'#ae714d':january?'#947965':coins?'#ad9980':canal?'#aebba6':'#58716f')));
 base.position.y=-.25;stage.add(base);
 const ring=new THREE.Mesh(new THREE.TorusGeometry(3.92,.024,6,96),stage.toon('#dcbf86'));
 ring.rotation.x=Math.PI/2;ring.position.y=.01;stage.add(ring);
@@ -62,6 +67,7 @@ const recordKey=spec.saveId+(session.practice?'-practice':'-daily');
 let records=new Save().data.life.records;
 let best=records[recordKey+'-score']??0;
 let run=0;
+let pairedContact=false;
 const historyKey=recordKey+'-round';
 function rememberScore(){
  const save=new Save();records=save.data.life.records;
@@ -77,7 +83,7 @@ function rankings(){
 }
 let phase:'intro'|'play'|'resolving'|'lost'|'finale'='intro';
 let selected=-1,time=0,finale=0,recallAt=0,shownProgress=0;
-const ui=document.createElement('main');ui.id='match-lab';ui.dataset.theme=coins?'euro':canal?'canal':'studio';
+const ui=document.createElement('main');ui.id='match-lab';ui.dataset.theme=january?.theme??(coins?'euro':canal?'canal':'studio');
 ui.innerHTML='<div class="ml-haze"></div><header class="ml-top"><div><p class="ml-kicker"></p><h1></h1></div><div class="ml-actions"><button data-rules aria-haspopup="dialog">规则</button><button data-mute aria-pressed="false"></button><button data-home>回到港口</button></div></header>'+
  '<aside class="ml-caption"><small></small><h2></h2><p></p></aside><article class="ml-console"><div class="ml-instrument"><span class="ml-status"></span><span class="ml-moves"></span></div>'+
  '<div class="ml-score" style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><strong></strong><span></span><button data-ranking>近十局</button></div><div class="ml-grid" role="group" aria-label="六色凝露棋盘"></div><div class="ml-meter"></div><p class="ml-message" role="status"></p><footer></footer></article>';
@@ -91,6 +97,11 @@ guide.innerHTML='<div class="ml-guide-head"><h2 id="ml-guide-title">凝露合成
  '<p>掉落形成的四连按连线方向生成条纹。横纹、竖纹、爆芯随同色连线或被其他特效击中时激活。</p>'+
  '<h3>相邻特效可直接交换</h3><ul><li>两枚条纹划出十字。</li><li>条纹加爆芯，沿条纹方向扫过四行或四列。</li><li>两枚爆芯一起引爆 5×5 格。</li><li>虹彩加条纹，把对方颜色的凝露变成随机横纹或竖纹并触发；虹彩加爆芯则变成爆芯并触发。</li><li>两枚虹彩消除全盘凝露。</li></ul><p>点「提示一步」后，棋盘只标出建议交换的两格。</p>';
 ui.append(guide);
+if(january){
+ const brief=document.createElement('p');
+ brief.textContent='本关复玩挑战：'+january.marks.join('、')+'。通关时分别登记，正式与练习分开。';
+ guide.append(brief);
+}
 $('[data-rules]').onclick=()=>{if(!guide.open)guide.showModal();};
 guide.querySelector<HTMLButtonElement>('[data-close-guide]')!.onclick=()=>guide.close();
 guide.onclick=e=>{if(e.target===guide){const box=guide.getBoundingClientRect();if(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom)guide.close();}};
@@ -112,8 +123,8 @@ function button(label:string,attr:string,act:()=>void){
 }
 $('.ml-kicker').textContent=(session.practice?'随机练习':'每日三消')+'　/　'+spec.year+' · '+Number(spec.day.slice(0,2))+' 月 '+Number(spec.day.slice(2))+' 日';
 $('h1').textContent=spec.title;$('[data-home]').onclick=session.home;
-$('.ml-caption small').textContent=coins?'零 钱 柜 台':canal?'巴 拿 马 运 河':'一 号 演 播 室';
-$('.ml-caption h2').textContent=coins?'准备找零':canal?'安康号待闸':'等待播出';
+$('.ml-caption small').textContent=january?.zone??(coins?'零 钱 柜 台':canal?'巴 拿 马 运 河':'一 号 演 播 室');
+$('.ml-caption h2').textContent=january?.stages[0]??(coins?'准备找零':canal?'安康号待闸':'等待播出');
 $('.ml-caption p').textContent=spec.fact;
 for(let i=0;i<64;i++){
  const b=document.createElement('button');b.type='button';b.dataset.cell=String(i);
@@ -121,6 +132,8 @@ for(let i=0;i<64;i++){
  grid.append(b);
 }
 const cells=Array.from(grid.children) as HTMLButtonElement[];
+const print=january?makeFinalPrint(january.theme,spec):null;
+if(print)grid.append(print);
 const motion=new MatchMotion(cells,grid,sound);
 const mute=$<HTMLButtonElement>('[data-mute]');
 function showMute(){mute.textContent=sound.muted?'音效关':'音效开';mute.setAttribute('aria-pressed',String(sound.muted));mute.setAttribute('aria-label',sound.muted?'开启三消声音':'静音三消声音');}
@@ -137,14 +150,15 @@ function paint(values=board.cells,targets=board.targets,act=board.stage){
    b.style.setProperty('--tone',el.color);b.style.setProperty('--rim',el.rim);
    b.querySelector('b')!.textContent=value===COIN?'€':kind==='rainbow'?'':el.icon;
    b.querySelector('.ml-power')!.textContent=power?.symbol??'';
-   b.querySelector('em')!.textContent=targets.includes(i)?(coins?'币盘':canal?'水标':act>=2?'02':i%8<4?'01':'03'):'';
+   b.querySelector('em')!.textContent=targets.includes(i)?(january?targetLabel(january,act,i):coins?'币盘':canal?'水标':act>=2?'02':i%8<4?'01':'03'):'';
    b.classList.toggle('time-drop',board.bonus?.tile===i);
    b.disabled=phase!=='play'||value===HOLE;
    const piece=value===HOLE?'空洞':value===COIN?'欧元硬币':kind==='rainbow'?'虹彩':el.name+(power?' · '+power.name:'');
-   b.setAttribute('aria-label',(Math.floor(i/8)+1)+' 行 '+(i%8+1)+' 列 '+piece+(board.bonus?.tile===i?' 沙漏，加两步':'')+(targets.includes(i)?' 目标':''));
+   b.setAttribute('aria-label',(Math.floor(i/8)+1)+' 行 '+(i%8+1)+' 列 '+piece+(board.bonus?.tile===i?' 沙漏，加两步':'')+(targets.includes(i)?' 目标 '+(january?targetLabel(january,act,i):''):''));
  });
  $('.ml-moves').textContent='余 '+board.moves+' 步';
- $('.ml-status').textContent=board.bonus?'加演冲分':(coins?'送硬币入盘':canal?'开启三段船闸':'接通三屏')+'　'+act+'/3';
+ if(print)print.hidden=phase!=='finale'||!!board.bonus;
+ $('.ml-status').textContent=board.bonus?'加演冲分':(january?.zone??(coins?'送硬币入盘':canal?'开启三段船闸':'接通三屏'))+'　'+act+'/3';
  $('.ml-score strong').textContent='得分 '+board.score;
  $('.ml-score span').textContent=(session.practice?'练习':'正式')+'最佳 '+best+' · 通关 '+(records[recordKey+'-wins']??0)+' 次';
  const meter=$('.ml-meter');meter.replaceChildren();
@@ -157,11 +171,12 @@ function settle(){
  const line=document.createElement('p');line.className='ml-final-score';
  const place=rankings().findIndex(row=>row.id===run)+1;
  line.textContent='本局 '+board.score+' 分'+(place?' · 最近十局第 '+place+' 名':'');
+ if(january)line.textContent+='　'+january.marks.map((name,i)=>(records[recordKey+'-mark-'+i]?'✓ ':'○ ')+name).join('　');
  result.querySelector('footer')?.before(line);
 }
 function controls(){
  foot.replaceChildren();
- if(phase==='intro')button('开始'+(coins?'分币':canal?'开闸':'接线'),'data-match-start',()=>{
+ if(phase==='intro')button('开始'+(january?.action??(coins?'分币':canal?'开闸':'接线')),'data-match-start',()=>{
    if(!actor.ready){message('史莱姆正在凝聚，稍候即可开始。');return;}
    sound.start(studio);phase='play';actor.mode='play';session.start();message(rules);paint();controls();
  });
@@ -177,7 +192,7 @@ function controls(){
    });
  }
  if(phase==='lost')button('从头再试','data-match-retry',()=>{
-   run=0;board=createBoard(spec.day,session.seed);litScreens.fill(false);shownProgress=0;phase='play';selected=-1;paint();controls();message(rules);
+   run=0;pairedContact=false;board=createBoard(spec.day,session.seed);litScreens.fill(false);shownProgress=0;phase='play';selected=-1;$('.ml-caption h2').textContent=captions[0];paint();controls();message(rules);
  });
  if(phase==='finale'&&!board.bonus)button('继续冲分 · +3 步','data-match-encore',()=>{
    beginEncore(board,String(crypto.getRandomValues(new Uint32Array(1))[0]));phase='play';paint();controls();
@@ -194,11 +209,11 @@ async function sendKeepsake(i:number,step:number){
  const x=from.left+from.width/2,y=from.top+from.height/2;
  const dx=(end.x+1)*innerWidth/2-x,dy=(1-end.y)*innerHeight/2-y;
  const tile=document.createElement('span');tile.className='ml-delivery';
- tile.setAttribute('aria-hidden','true');tile.textContent=coins?'€':canal?'≈':'';
- if(!coins&&!canal){
+ tile.setAttribute('aria-hidden','true');tile.textContent=january?.symbol??(january?.theme==='titan'?'◈':january?'✦':coins?'€':canal?'≈':'');
+ if(studio){
    const frame=document.createElement('img');frame.src=displays[screen].src;tile.append(frame);
  }
- const land=()=>{tile.remove();if(!coins&&!canal)litScreens[screen]=true;};
+ const land=()=>{tile.remove();if(studio)litScreens[screen]=true;};
  tile.style.left=x+'px';tile.style.top=y+'px';ui.append(tile);
  if(matchMedia('(prefers-reduced-motion: reduce)').matches){land();return;}
  const flight=tile.animate([{transform:'translate(-50%,-50%) scale(.65)',opacity:0},
@@ -244,14 +259,19 @@ async function resolve(a:number,b:number,dragFraction=0){
    paint();controls();return;
  }
  const received=targets.filter(i=>result.advanced||!board.targets.includes(i));
+ if(january&&targets.length===2&&result.advanced)pairedContact=true;
  if(received.length){
    const active=coins?received:received.filter(i=>result.groups.some(row=>row.includes(i)));
    // A bridge can involve two contacts, but both carry the same middle picture.
-   if(!coins&&!canal&&startStage===2)active.splice(1);
+   if(studio&&startStage===2)active.splice(1);
    if(active.length)sound.play('objective');
    await Promise.all(active.map(i=>sendKeepsake(i,startStage)));
  }
- shownProgress=canal?(board.stage<1?0:board.stage===3?5:
+ if(januaryScene&&january&&board.stage<3){
+   const targets=january.tableaux[board.stage].targets;
+   januaryScene.contacts?.(!board.targets.includes(targets[0]),!board.targets.includes(targets[1]));
+   shownProgress=(board.stage+1-board.targets.length/targets.length)/3;
+ }else shownProgress=canal?(board.stage<1?0:board.stage===3?5:
    (board.stage===1?1:3)+2-board.targets.length)/5:board.stage/3;
  if(board.stage===3&&canal&&objects){
    message('出口闸门打开，安康号正在驶离闸室。');
@@ -260,7 +280,13 @@ async function resolve(a:number,b:number,dragFraction=0){
  if(board.stage===3&&displays.length)await delay(420);
  phase=board.stage===3?'finale':board.moves?'play':'lost';
  if(phase==='finale'){
-   session.recordWin();records=new Save().data.life.records;
+   session.recordWin();
+   const saved=new Save();records=saved.data.life.records;
+   if(january){
+     if(board.moves>=10)records[recordKey+'-mark-0']=1;
+     if(pairedContact)records[recordKey+'-mark-1']=1;
+     saved.write();
+   }
    sound.finish();actor.keys.add('KeyX');actor.setMood('Happy',3);ui.classList.add('complete');
    $('.ml-caption h2').textContent=captions[3];$('.ml-caption p').textContent=spec.memory;
    message('已通关！可带剩余步数继续冲分，或查看通关纪念品。');
@@ -283,11 +309,14 @@ function frame(dt:number){
  if(recallAt&&time>=recallAt){actor.keys.add('KeyX');if(!actor.latest?.shots?.length){actor.keys.delete('KeyX');recallAt=0;}}
  if(phase==='finale')finale+=dt;
  const compact=innerWidth<760,aspect=innerWidth/innerHeight;
- stage.camera.fov=compact?48:36;stage.camera.aspect=aspect;
+ const portraitTable=!!january&&compact&&aspect<1;
+ stage.camera.fov=portraitTable?61:compact?48:36;stage.camera.aspect=aspect;
  const cropX=compact?0:Math.round(innerWidth*(canal?.29:.23));
- const cropY=compact?Math.round(innerHeight*.30):0;
+ const cropY=compact?Math.round(innerHeight*(portraitTable?.24:.30)):0;
  stage.camera.setViewOffset(innerWidth,innerHeight,cropX,cropY,innerWidth,innerHeight);
- stage.camera.position.set(canal?2.55:compact?4.5:4.1,canal?5.2:compact?4.8:3.8,compact||canal?9:7.4);stage.camera.lookAt(0,.9,-.1);
+ if(portraitTable)stage.camera.position.set(4.3,5.4,11.3);
+ else stage.camera.position.set(canal?2.55:compact?4.5:4.1,canal?5.2:compact?4.8:3.8,compact||canal?9:7.4);
+ stage.camera.lookAt(0,.9,-.1);
  for(let i=0;i<displays.length;i++)displays[i].picture.visible=litScreens[i]&&finale===0;
  landmark?.update(time,shownProgress,finale,litScreens);objects?.update(performance.now()/1000,shownProgress,finale);stage.render(dt,actor);
 }

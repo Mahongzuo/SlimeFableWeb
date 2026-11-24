@@ -1,5 +1,6 @@
 """Sample RPG lock-on and free-aim shooting from the playable October 21 entries."""
 import argparse
+import base64
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
@@ -41,7 +42,24 @@ with sync_playwright() as pw:
     page.mouse.click(400,275)
     page.wait_for_function('(__slime.latest?.shots.length||0)>0')
     page.wait_for_function('window.sceneryHit && Math.abs(sceneryHit[0]+1)<.65 && Math.abs(sceneryHit[2]+.6)<.65')
-    assert page.evaluate('__level.enemies[0].target.hits===0')
+    assert page.evaluate('__level.enemies[0].target.hits===0 && __slime.latest.shots.some(s=>s.phase==="active")')
+    page.keyboard.down('x')
+    page.wait_for_function('__slime.latest.shots.some(s=>["returning","merging"].includes(s.phase))')
+    page.wait_for_function('__slime.latest.shots.length===0')
+    page.keyboard.up('x')
+    page.evaluate('''()=>{const a=__slime,old=a.options.onBattleHit,stage=a.ctx,render=stage.render.bind(stage);stage.renderer.setPixelRatio(1);
+      stage.render=(...args)=>{render(...args);
+        if(window.cloneBurst&&!window.burstImage&&__level.encounter.clock>=window.cloneBurst.time+.13
+          &&stage.scene.children.some(m=>m.name==="clone impact wave"&&m.visible&&m.scale.x>.35))
+          window.burstImage=stage.renderer.domElement.toDataURL("image/jpeg",.94);
+      };
+      a.options.onBattleHit=(target,damage,el,reaction,p)=>{
+        const ev=a.latest.impacts.find(i=>i.targetId===target.id);
+        if(ev)window.cloneBurst={time:__level.encounter.clock,id:ev.shotId,element:el,current:a.element,
+          remaining:a.latest.shots.map(s=>s.id),hits:target.hits,point:ev.point};
+        old(target,damage,el,reaction,p);
+      };
+    }''')
     page.evaluate('__slime.yaw=0')
     # Reproduce a known clear firing lane after verifying the mast in the previous shot.
     page.evaluate('__slime.teleport([1.7,0,1.7])')
@@ -49,7 +67,10 @@ with sync_playwright() as pw:
         if page.evaluate('__level.enemies[0].target.hits>0'): break
         page.evaluate("()=>{const p=__level.enemies[0].target.position;aimAt(p[0],p[1]+.8,p[2]);}")
         page.wait_for_function('__slime.aimReady && __slime.launchCooldown<=0')
-        page.mouse.click(400,275)
+        page.evaluate('''()=>{const a=__slime; a.setElement(3,true);
+          a.ctx.renderer.domElement.dispatchEvent(new PointerEvent("pointerdown",{button:0,bubbles:true}));
+          a.setElement(0,true);
+        }''')
         now=page.evaluate('__level.encounter.clock')
         page.wait_for_function("t=>__level.encounter.clock>=t+.68",arg=now)
         if shot%3==2:
@@ -57,7 +78,12 @@ with sync_playwright() as pw:
             page.wait_for_function('(__slime.latest?.shots.length||0)===0')
             page.keyboard.up('x')
     assert page.evaluate('__level.enemies[0].target.hits>0'),page.evaluate("({phase:__level.phase,alive:__level.life,actor:__slime.position,enemy:__level.enemies[0].target,aimPoint:__slime.launchTarget,ready:__slime.aimReady,scenery:window.sceneryHit})")
-    print('PASS live ship manual aim, moving sailor hit, mast blocked clone, Tab/T isolation',flush=True)
+    burst=page.evaluate('window.cloneBurst')
+    assert burst and burst['id'] not in burst['remaining'] and burst['element']==3 and burst['current']==0,burst
+    assert page.evaluate('__level.enemies[0].target.hits')==1,burst
+    page.wait_for_function('window.burstImage')
+    (shots/'native-clone-burst.jpg').write_bytes(base64.b64decode(page.evaluate('window.burstImage.split(",")[1]')))
+    print('PASS airborne element retained, moving sailor hit once, slot freed on impact, mast cloneling recalled, Tab/T isolation',flush=True)
 
     start('rpg')
     page.wait_for_function('__slime.battleAim?.target?.health>0')

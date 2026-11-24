@@ -6,7 +6,7 @@ export interface Particle {p:Vec;old:Vec;v:Vec;rest:Vec;group:number;lambda:numb
 interface Shot {
   id:number;phase:ShotView['phase'];center:Vec;v:Vec;start:Vec;target:Vec;
   age:number;phaseAge:number;radius:number;grounded:boolean;umbrella:boolean;
-  cannon?:CannonLaunchSpec;impact?:CannonImpact;
+  cannon?:CannonLaunchSpec;
 }
 const SPACING=.046,H=SPACING*2.4,H2=H*H;
 const POLY=315/(64*Math.PI*Math.pow(H,9)),SPIKY=45/(Math.PI*Math.pow(H,6));
@@ -22,11 +22,13 @@ const DOME = {widthScale: 1.14, heightScale: 0.86, upwardRestore: 0.72, anchorHe
 export class SlimeSolver {
  particles:Particle[]=[]; shots:Shot[]=[];center:Vec=[0,.2,0];centerVelocity:Vec=[0,0,0];nextId=1;time=0;spread=0;grounded=true;foot:Vec=[3,0,19];
  shapeBlend=1;
+ private impacts:CannonImpact[]=[];
+ takeImpacts(){return this.impacts.splice(0)}
  private inertiaForward:Vec=[0,0,-1];private inertiaAmount=0;
  private neighbors:number[][]=[];private grid=new Map<number,number[]>();private restCenterY=.20;
  constructor(foot:Vec=[0,0,0],public readonly world:CollisionWorld=flatWorld){this.reset(foot)}
  private lattice(count:number):Vec[]{const candidates:{p:Vec;d:number}[]=[];for(let x=-10;x<=10;x++)for(let y=-10;y<=10;y++)for(let z=-10;z<=10;z++){let p:Vec=[x*SPACING,y*SPACING*.92,z*SPACING];candidates.push({p,d:p[0]**2+p[2]**2+(p[1]*1.05)**2})}candidates.sort((a,b)=>a.d-b.d);let pts=candidates.slice(0,count).map(v=>v.p);let cy=pts.reduce((s,p)=>s+p[1],0)/count;return pts.map(p=>[p[0],p[1]-cy,p[2]] as Vec)}
- reset(foot:Vec){this.shots=[];this.foot=[...foot];this.spread=0;this.shapeBlend=1;this.restCenterY=.20;const startY=this.restCenterY*DOME.anchorHeightScale;this.center=[foot[0],foot[1]+startY,foot[2]];this.centerVelocity=[0,0,0];this.inertiaForward=[0,0,-1];this.inertiaAmount=0;this.particles=this.lattice(384).map((rest,index)=>{const p=rest.map((v,i)=>v+this.center[i]) as Vec;const r=1.30*Math.sqrt((index+.5)/384),angle=index*2.399963229728653;return {p,old:[...p],v:[0,0,0],rest,flat:[Math.cos(angle)*r,0,Math.sin(angle)*r] as Vec,group:0,lambda:0}});this.nextId=1;this.time=0}
+ reset(foot:Vec){this.shots=[];this.impacts.length=0;this.foot=[...foot];this.spread=0;this.shapeBlend=1;this.restCenterY=.20;const startY=this.restCenterY*DOME.anchorHeightScale;this.center=[foot[0],foot[1]+startY,foot[2]];this.centerVelocity=[0,0,0];this.inertiaForward=[0,0,-1];this.inertiaAmount=0;this.particles=this.lattice(384).map((rest,index)=>{const p=rest.map((v,i)=>v+this.center[i]) as Vec;const r=1.30*Math.sqrt((index+.5)/384),angle=index*2.399963229728653;return {p,old:[...p],v:[0,0,0],rest,flat:[Math.cos(angle)*r,0,Math.sin(angle)*r] as Vec,group:0,lambda:0}});this.nextId=1;this.time=0}
 
  launch(target:Vec,forward:Vec,cannon?:CannonLaunchSpec):boolean {
   if(this.shots.length>=5)return false;
@@ -73,9 +75,10 @@ export class SlimeSolver {
     const contact=input.battleTargets?.length&&s.cannon?firstBattleContact(s.center,next,s.radius,input.battleTargets,hit?.t??Infinity):null;
     if(contact){
      s.center=contact.center;s.phase='active';s.phaseAge=0;s.v=[0,0,0];
-     s.impact={targetId:contact.id,point:contact.point,element:s.cannon!.element??0};
+     this.impacts.push({shotId:s.id,targetId:contact.id,point:contact.point,element:s.cannon!.element??0});
+     if(s.cannon!.burstOnEnemy){gone.add(s.id);continue;}
     }else if(hit){
-     if(input.battleTargets&&s.cannon)s.impact={targetId:null,point:[...hit.point],element:s.cannon.element??0};
+     if(input.battleTargets&&s.cannon)this.impacts.push({shotId:s.id,targetId:null,point:[...hit.point],element:s.cannon.element??0});
      s.center=hit.point;
      const floor=this.world.support(s.center[0],s.center[2],s.center[1]+.4);
      if(floor!==null)s.center[1]=Math.max(s.center[1],floor+s.radius*.65);
@@ -85,7 +88,7 @@ export class SlimeSolver {
    }else if(s.phase==='active'){
     s.umbrella=false;
     if(distance(s.center,this.center)<.45&&s.age>.6){s.phase='merging';s.phaseAge=0;s.start=[...s.center]}
-    else if(s.age>7){s.phase='returning';s.phaseAge=0}
+    else if(s.age>7&&!s.cannon?.burstOnEnemy){s.phase='returning';s.phaseAge=0}
    }else if(s.phase==='returning'){
     const target:Vec=[...this.center];
     const floor=this.world.support(s.center[0],s.center[2],s.center[1]+.3);
@@ -272,5 +275,5 @@ export class SlimeSolver {
   for(let i=0;i<ps.length;i++){const a=ps[i];let x=0,y=0,z=0;for(const j of this.neighbors[i]){const b=ps[j],w=kernel((a.p[0]-b.p[0])**2+(a.p[1]-b.p[1])**2+(a.p[2]-b.p[2])**2)/restDensity*.22;x+=(b.v[0]-a.v[0])*w;y+=(b.v[1]-a.v[1])*w;z+=(b.v[2]-a.v[2])*w}visc[i]=[x,y,z]}
   for(let i=0;i<ps.length;i++)for(let k=0;k<3;k++)ps[i].v[k]+=visc[i][k];
  }
- views():ShotView[]{return this.shots.map(s=>({id:s.id,phase:s.phase,center:[...s.center],radius:s.radius,age:s.age,mergeProgress:s.phase==='merging'?smooth(s.phaseAge/1.8):0,umbrella:s.umbrella,impact:s.impact}))}
+ views():ShotView[]{return this.shots.map(s=>({id:s.id,phase:s.phase,center:[...s.center],radius:s.radius,age:s.age,mergeProgress:s.phase==='merging'?smooth(s.phaseAge/1.8):0,umbrella:s.umbrella}))}
 }

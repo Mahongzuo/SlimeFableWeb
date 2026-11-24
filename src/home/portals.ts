@@ -49,14 +49,20 @@ export class TimePortal {
   }
   private addEmblem(parent:any) {
     const T=this.T,slot=this.slot.slot;
-    if(slot<4)return;
+    if(slot<3)return;
     const group=new T.Group();group.name='fx-mode-symbol';group.userData.walkThrough=true;
     group.position.set(0,2.1,.28);parent.add(group);
     const mesh=(shape:any,color:string,x:number,y:number,z:number=0,root=group)=>{
       const m=new T.Mesh(shape,new T.MeshBasicMaterial({color}));m.layers.set(1);m.renderOrder=7;
       m.position.set(x,y,z);root.add(m);return m;
     };
-    if(slot===4){
+    if(slot===3){
+      for(const [x,y,colour] of [[-.34,-.1,'#87c7a3'],[0,.20,'#b5e4c3'],[.34,-.1,'#74b2a0']] as const){
+        mesh(new T.CylinderGeometry(.20,.24,.11,12),'#e5c781',x,y-.14,.05);
+        const jelly=mesh(new T.SphereGeometry(.18,14,10),colour,x,y,.05);jelly.scale.y=.85;
+        for(const dx of [-.063,.063])mesh(new T.SphereGeometry(.018,6,5),'#264940',x+dx,y+.015,.216);
+      }
+    } else if(slot===4){
       this.tokens=[
         mesh(new T.SphereGeometry(.19,16,10),'#87dec5',-.48,0),
         mesh(new T.OctahedronGeometry(.24),'#fae4a7',0,0),

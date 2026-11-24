@@ -2,9 +2,9 @@ export type Vec = [number, number, number];
 export type Quality = 'high' | 'balanced';
 export type BodyShape = 'dome' | 'ball';
 export interface Box {min:Vec; max:Vec; camera?:boolean; name:string}
-export interface CannonLaunchSpec {muzzle:Vec; start:Vec; target:Vec; velocity:Vec; flightTime:number; gravity:number; element?:number}
+export interface CannonLaunchSpec {muzzle:Vec; start:Vec; target:Vec; velocity:Vec; flightTime:number; gravity:number; element?:number; burstOnEnemy?:boolean}
 export interface BattleCollider {id:number; center:Vec; radius:number}
-export interface CannonImpact {targetId:number|null; point:Vec; element:number}
+export interface CannonImpact {shotId:number; targetId:number|null; point:Vec; element:number}
 /** First contact of an optional swept sphere with any target on the finite segment. */
 export function firstBattleContact(a:Vec,b:Vec,radius:number,targets:readonly BattleCollider[],limit=Infinity){
  const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],length2=dx*dx+dy*dy+dz*dz;
@@ -38,8 +38,8 @@ export interface FrameInput {
   umbrella?:boolean;
   battleTargets?:BattleCollider[];
 }
-export interface ShotView {id:number; phase:'separating'|'flying'|'active'|'returning'|'merging'; center:Vec; radius:number; age:number; mergeProgress:number; umbrella?:boolean; impact?:CannonImpact}
-export interface MeshFrame {positions:Float32Array; normals:Float32Array; slots:Float32Array; count:number; centers:Vec[]; radii:Vec[]; clusterIds:number[]; shots:ShotView[]; simMs:number; meshMs:number; particleCount:number; generation:number; overflow:boolean; spread:number; grounded:boolean; shapeBlend?:number}
+export interface ShotView {id:number; phase:'separating'|'flying'|'active'|'returning'|'merging'; center:Vec; radius:number; age:number; mergeProgress:number; umbrella?:boolean}
+export interface MeshFrame {positions:Float32Array; normals:Float32Array; slots:Float32Array; count:number; centers:Vec[]; radii:Vec[]; clusterIds:number[]; shots:ShotView[]; impacts?:CannonImpact[]; simMs:number; meshMs:number; particleCount:number; generation:number; overflow:boolean; spread:number; grounded:boolean; shapeBlend?:number}
 export const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 export const mix=(a:number,b:number,t:number)=>a+(b-a)*t;
 export const smooth=(v:number)=>{v=clamp(v,0,1);return v*v*(3-2*v)};

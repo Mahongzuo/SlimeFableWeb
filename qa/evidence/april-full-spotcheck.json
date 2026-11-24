@@ -1,0 +1,58 @@
+[
+  {
+    "id": "0401-defense",
+    "header": "正式挑战　·　2017 / 04 / 01",
+    "vertices": 7176,
+    "shot": "april-full-0401-defense.jpg",
+    "errors": []
+  },
+  {
+    "id": "0429-defense",
+    "header": "正式挑战　·　2021 / 04 / 29",
+    "vertices": 7110,
+    "shot": "april-full-0429-defense.jpg",
+    "errors": []
+  },
+  {
+    "id": "0417-match",
+    "header": "每日三消　/　1987 · 4 月 17 日",
+    "vertices": 7380,
+    "shot": "april-full-0417-match.jpg",
+    "errors": []
+  },
+  {
+    "id": "0420-match",
+    "header": "每日三消　/　2010 · 4 月 20 日",
+    "vertices": 7344,
+    "shot": "april-full-0420-match.jpg",
+    "errors": []
+  },
+  {
+    "id": "0425-skirmish",
+    "header": "2024　·　4 月 25 日",
+    "vertices": 8988,
+    "shot": "april-full-0425-skirmish.jpg",
+    "errors": []
+  },
+  {
+    "id": "0430-skirmish",
+    "header": "2022　·　4 月 30 日",
+    "vertices": 8988,
+    "shot": "april-full-0430-skirmish.jpg",
+    "errors": []
+  },
+  {
+    "id": "0423-rpg",
+    "header": "4 月 23 日　·　6 号门 · 战斗 RPG",
+    "vertices": 6924,
+    "shot": "april-full-0423-rpg.jpg",
+    "errors": []
+  },
+  {
+    "id": "0430-rpg",
+    "header": "4 月 30 日　·　6 号门 · 战斗 RPG",
+    "vertices": 6924,
+    "shot": "april-full-0430-rpg.jpg",
+    "errors": []
+  }
+]

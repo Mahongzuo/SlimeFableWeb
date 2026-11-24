@@ -1,0 +1,88 @@
+{
+  "1001-defense": {
+    "daily": {
+      "vertices": 7248,
+      "collision": {
+        "triangles": 12,
+        "meshCount": 1
+      },
+      "resource": "/assets/january-defense-C-DNAH1c.js",
+      "spreadAfterDeployment": 0.8803174603174603,
+      "workerSpread": 0.9153809523809524,
+      "additionalDrawCalls": 71,
+      "record": "1001-defense-cn-hkmetro-1979-daily",
+      "unobstructedPlates": 6,
+      "visibleSceneMeshesAtFinish": 22
+    },
+    "practice": {
+      "vertices": 7260,
+      "collision": {
+        "triangles": 12,
+        "meshCount": 1
+      },
+      "resource": "/assets/january-defense-C-DNAH1c.js",
+      "spreadAfterDeployment": 0.8803174603174603,
+      "workerSpread": 0.8901650793650794,
+      "additionalDrawCalls": 71,
+      "record": "1001-defense-cn-hkmetro-1979-practice",
+      "unobstructedPlates": 6,
+      "visibleSceneMeshesAtFinish": 22
+    }
+  },
+  "1001-match": {
+    "正式": {
+      "stage": 3,
+      "swaps": 5,
+      "shapes": 13,
+      "vertices": 6396,
+      "save": "1001-match-cn-macaubridge-2024"
+    },
+    "练习": {
+      "stage": 3,
+      "swaps": 5,
+      "shapes": 11,
+      "vertices": 4848,
+      "save": "1001-match-cn-macaubridge-2024"
+    }
+  },
+  "1001-skirmish": {
+    "day": "1001",
+    "base": "http://127.0.0.1:5271",
+    "module": "/assets/january-skirmish-5TtAAmZm.js",
+    "introFrameDrawCalls": 71,
+    "nativeShots": [
+      1,
+      1,
+      1,
+      2
+    ],
+    "heightBeforeSpread": 0.3924616016447544,
+    "heightDuringSpread": 0.23869993537664413,
+    "saveId": "1001-skirmish-cn-tianwenportrait-2025",
+    "returnPath": "http://127.0.0.1:5271/?date=1001&from=1001-skirmish",
+    "bakedFloorProbes": 30,
+    "bothRoutes": true,
+    "reentry": true,
+    "workerErrors": []
+  },
+  "1001-rpg": {
+    "meshVertices": 3630,
+    "spread": 0.4792857142830534,
+    "additionalCalls": 52,
+    "asset": "/assets/january-rpg-R7LbTYPO.js",
+    "id": "1001-rpg",
+    "practice": false,
+    "finished": true,
+    "returnedAndReopened": true
+  },
+  "1021-rpg-cn-jinchuan-2025": {
+    "meshVertices": 7584,
+    "spread": 0.6773809523809526,
+    "additionalCalls": 52,
+    "asset": "/assets/january-rpg-1lm-5WQ_.js",
+    "id": "1021-rpg-cn-jinchuan-2025",
+    "practice": false,
+    "finished": true,
+    "returnedAndReopened": true
+  }
+}

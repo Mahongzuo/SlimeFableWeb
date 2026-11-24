@@ -1,0 +1,58 @@
+[
+  {
+    "id": "0301-defense",
+    "header": "正式挑战　·　2011 / 03 / 01",
+    "vertices": 7344,
+    "shot": "march-full-0301-defense.jpg",
+    "errors": []
+  },
+  {
+    "id": "0320-defense",
+    "header": "正式挑战　·　2024 / 03 / 20",
+    "vertices": 7368,
+    "shot": "march-full-0320-defense.jpg",
+    "errors": []
+  },
+  {
+    "id": "0314-match",
+    "header": "每日三消　/　2019 · 3 月 14 日",
+    "vertices": 8172,
+    "shot": "march-full-0314-match.jpg",
+    "errors": []
+  },
+  {
+    "id": "0320-match",
+    "header": "每日三消　/　2021 · 3 月 20 日",
+    "vertices": 7308,
+    "shot": "march-full-0320-match.jpg",
+    "errors": []
+  },
+  {
+    "id": "0312-skirmish",
+    "header": "2025　·　3 月 12 日",
+    "vertices": 8988,
+    "shot": "march-full-0312-skirmish.jpg",
+    "errors": []
+  },
+  {
+    "id": "0331-skirmish",
+    "header": "2008　·　3 月 31 日",
+    "vertices": 8988,
+    "shot": "march-full-0331-skirmish.jpg",
+    "errors": []
+  },
+  {
+    "id": "0307-rpg",
+    "header": "3 月 7 日　·　6 号门 · 战斗 RPG",
+    "vertices": 6924,
+    "shot": "march-full-0307-rpg.jpg",
+    "errors": []
+  },
+  {
+    "id": "0331-rpg",
+    "header": "3 月 31 日　·　6 号门 · 战斗 RPG",
+    "vertices": 8988,
+    "shot": "march-full-0331-rpg.jpg",
+    "errors": []
+  }
+]

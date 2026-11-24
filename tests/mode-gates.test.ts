@@ -13,7 +13,7 @@ test('644 个可玩章节仍可直达且拥有唯一的左侧回港门',()=>{
       const returns=gates.map((g,i)=>gateContains(g,c.id)?i+1:0).filter(Boolean);
       if(c.status==='web'){
         assert.equal(returns.length,1,c.id);
-        assert.ok(returns[0]<=3,c.id);
+        assert.ok(returns[0]<=2,c.id);
         assert.deepEqual(journeyFor(c.id),{day:c.day,path:'level.html?id='+c.id});
         count++;
       }else{
@@ -24,21 +24,22 @@ test('644 个可玩章节仍可直达且拥有唯一的左侧回港门',()=>{
   }
   assert.equal(count,644);
 });
-test('11月12日第三扇门明确选择后三个年份',()=>{
+test('11月12日第二扇门可选四个后续年份',()=>{
   const gates=gatesFor(days['1112']);
-  for(let i=0;i<2;i++)assert.equal(defaultEntry(gates[i]),days['1112'].chapters[i].id);
-  assert.equal(defaultEntry(gates[2]),undefined);
-  assert.ok(gates[2]?.type==='story');
-  assert.deepEqual(gates[2].stories.map(c=>c.id),days['1112'].chapters.slice(2).map(c=>c.id));
+  assert.equal(defaultEntry(gates[0]),days['1112'].chapters[0].id);
+  assert.equal(defaultEntry(gates[1]),undefined);
+  assert.ok(gates[1]?.type==='story');
+  assert.deepEqual(gates[1].stories.map(c=>c.id),days['1112'].chapters.slice(1).map(c=>c.id));
 });
 test('三个试玩日的三扇门分别呈现三件史事，拥有独立的收藏和进度',()=>{
   for(const day of ['0101','0815','1123']){
     const events=modesFor(day);
-    assert.equal(events.length,3);
+    const count=6;
+    assert.equal(events.length,count);
     for(const key of ['storyId','fact','source','souvenir','saveId'] as const){
-      assert.equal(new Set(events.map(m=>m[key])).size,3,day+' '+key);
+      assert.equal(new Set(events.map(m=>m[key])).size,count,day+' '+key);
     }
-    assert.equal(collectedMemories(events.map(m=>m.saveId)).length,3);
+    assert.equal(collectedMemories(events.map(m=>m.saveId)).length,count);
     for(const m of events)assert.equal(progressId(m.id),m.saveId);
   }
 });
@@ -53,27 +54,43 @@ test('旧试玩纪念品保存原史实，新题材独立记通关',()=>{
   assert.deepEqual(collectedMemories([...keys,progressId('0101-match')]).map(records=>records[0].year).sort(),[1864,2002]);
   assert.equal(progressId('0101-1864'),'0101-1864');
 });
-test('三个模式固定在右侧，未开放日期只能明确选择试玩日',()=>{
+test('四个模式固定在三至六号门，未开放日期只能明确选择试玩日',()=>{
+  const openDays=[
+    ...Array.from({length:31},(_,i)=>'01'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:29},(_,i)=>'02'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:31},(_,i)=>'03'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:30},(_,i)=>'04'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:31},(_,i)=>'05'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:30},(_,i)=>'06'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:31},(_,i)=>'07'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:31},(_,i)=>'08'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:30},(_,i)=>'09'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:31},(_,i)=>'10'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:30},(_,i)=>'11'+String(i+1).padStart(2,'0')),
+    ...Array.from({length:31},(_,i)=>'12'+String(i+1).padStart(2,'0')),
+  ];
+  assert.equal(openDays.length,366);
   for(const day of Object.values(days)){
     const gates=gatesFor(day);
     for(const [i,kind] of modeKinds.entries()){
-      const g=gates[i+3];assert.ok(g?.type==='mode');assert.equal(g.kind,kind);
-      const m=dailyModes.find(s=>s.day===day.day&&s.kind===kind);
-      assert.equal(defaultEntry(g),m?.id);
-      if(m){assert.equal(gateContains(g,m.id),true);assert.equal(journeyFor(m.id)?.path,m.playPath);}
-      else assert.deepEqual(pilotChoices(kind).map(p=>p.day).sort(),kind==='match'?['0101','0815','1123']:['1021']);
+      const g=gates[i+2];assert.ok(g?.type==='mode');assert.equal(g.kind,kind);
+      const m=dailyModes.find(s=>s.day===day.day&&s.kind===kind&&!s.additional);
+      assert.ok(m,day.day+'-'+kind);
+      assert.equal(defaultEntry(g),m.id);
+      assert.equal(gateContains(g,m.id),true);
+      assert.equal(journeyFor(m.id)?.path,m.playPath);
     }
   }
 });
 
 
-test('往期投射与试炼从第三门和史书保留原直链与唯一的回港门位',()=>{
+test('往期投射与试炼从第二门和史书保留原直链与唯一的回港门位',()=>{
   for(const day of ['0101','0815','1123']){
-    const gates=gatesFor(days[day]),third=gates[2];assert.ok(third?.type==='story');
+    const gates=gatesFor(days[day]),third=gates[1];assert.ok(third?.type==='story');
     assert.deepEqual(third.archive.map(m=>m.id),[day+'-shot',day+'-trial']);
     for(const m of third.archive){
       assert.equal(journeyFor(m.id)?.path,m.playPath);
-      assert.deepEqual(gates.flatMap((g,i)=>gateContains(g,m.id)?[i+1]:[]),[3]);
+      assert.deepEqual(gates.flatMap((g,i)=>gateContains(g,m.id)?[i+1]:[]),[2]);
     }
     assert.equal(defaultEntry(third),undefined);
   }

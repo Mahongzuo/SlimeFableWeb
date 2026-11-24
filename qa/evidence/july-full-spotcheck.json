@@ -1,0 +1,58 @@
+[
+  {
+    "id": "0701-defense",
+    "header": "正式挑战　·　1997 / 07 / 01",
+    "vertices": 7176,
+    "shot": "july-full-0701-defense.jpg",
+    "errors": []
+  },
+  {
+    "id": "0727-defense",
+    "header": "正式挑战　·　2024 / 07 / 27",
+    "vertices": 7164,
+    "shot": "july-full-0727-defense.jpg",
+    "errors": []
+  },
+  {
+    "id": "0703-match",
+    "header": "每日三消　/　2016 · 7 月 3 日",
+    "vertices": 8064,
+    "shot": "july-full-0703-match.jpg",
+    "errors": []
+  },
+  {
+    "id": "0707-match",
+    "header": "每日三消　/　2008 · 7 月 7 日",
+    "vertices": 7944,
+    "shot": "july-full-0707-match.jpg",
+    "errors": []
+  },
+  {
+    "id": "0712-skirmish",
+    "header": "2006　·　7 月 12 日",
+    "vertices": 7056,
+    "shot": "july-full-0712-skirmish.jpg",
+    "errors": []
+  },
+  {
+    "id": "0731-skirmish",
+    "header": "2024　·　7 月 31 日",
+    "vertices": 7056,
+    "shot": "july-full-0731-skirmish.jpg",
+    "errors": []
+  },
+  {
+    "id": "0721-rpg",
+    "header": "7 月 21 日　·　6 号门 · 战斗 RPG",
+    "vertices": 8988,
+    "shot": "july-full-0721-rpg.jpg",
+    "errors": []
+  },
+  {
+    "id": "0731-rpg",
+    "header": "7 月 31 日　·　6 号门 · 战斗 RPG",
+    "vertices": 6900,
+    "shot": "july-full-0731-rpg.jpg",
+    "errors": []
+  }
+]

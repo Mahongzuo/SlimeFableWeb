@@ -1,0 +1,61 @@
+{
+  "saveId": "1021-skirmish-trafalgar",
+  "progress": {
+    "step": "complete",
+    "route": "upper",
+    "journal": false,
+    "reward": null
+  },
+  "assets": [
+    "/assets/battle-preview-Bbtye4jJ.js"
+  ],
+  "harbor": {
+    "day": "1021",
+    "completed": true,
+    "souvenir": true,
+    "wins": 1,
+    "ms": 40479,
+    "local": [
+      1.3322676295501878e-15,
+      0,
+      2.299999999999999
+    ]
+  },
+  "combat": [
+    {
+      "index": 0,
+      "kind": "sailor",
+      "initial": 76,
+      "hits": 4,
+      "fired": 8
+    },
+    {
+      "index": 4,
+      "kind": "sailor",
+      "initial": 76,
+      "hits": 1,
+      "fired": 5
+    },
+    {
+      "index": 1,
+      "kind": "gunner",
+      "initial": 88,
+      "hits": 3,
+      "fired": 8
+    },
+    {
+      "index": 5,
+      "kind": "rigger",
+      "initial": 84,
+      "hits": 4,
+      "fired": 9
+    },
+    {
+      "index": 3,
+      "kind": "guardian",
+      "initial": 295,
+      "hits": 8,
+      "fired": 20
+    }
+  ]
+}

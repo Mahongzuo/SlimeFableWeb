@@ -1,0 +1,95 @@
+{
+  "contentAsset": "august-pilots-ChKTeqrg.js",
+  "0801-defense": {
+    "daily": {
+      "vertices": 7248,
+      "collision": {
+        "triangles": 12,
+        "meshCount": 1
+      },
+      "resource": "/assets/january-defense-BrrTX1u9.js",
+      "spreadAfterDeployment": 0.8553999999999998,
+      "workerSpread": 0.8898666666666667,
+      "additionalDrawCalls": 72,
+      "record": "0801-defense-cn-jingjin-2008-daily",
+      "unobstructedPlates": 6,
+      "visibleSceneMeshesAtFinish": 22
+    },
+    "practice": {
+      "vertices": 7260,
+      "collision": {
+        "triangles": 12,
+        "meshCount": 1
+      },
+      "resource": "/assets/january-defense-BrrTX1u9.js",
+      "spreadAfterDeployment": 0.8803174603174603,
+      "workerSpread": 0.8904634920634922,
+      "additionalDrawCalls": 71,
+      "record": "0801-defense-cn-jingjin-2008-practice",
+      "unobstructedPlates": 6,
+      "visibleSceneMeshesAtFinish": 22
+    }
+  },
+  "0810-skirmish": {
+    "day": "0810",
+    "base": "http://127.0.0.1:5268",
+    "module": "/assets/january-skirmish-BTMwJ-WR.js",
+    "introFrameDrawCalls": 95,
+    "nativeShots": [
+      1,
+      2,
+      1,
+      2
+    ],
+    "heightBeforeSpread": 0.3924586772918701,
+    "heightDuringSpread": 0.2378094419836998,
+    "saveId": "0810-skirmish-cn-pearlwater-2023",
+    "returnPath": "http://127.0.0.1:5268/?date=0810&from=0810-skirmish",
+    "bakedFloorProbes": 30,
+    "bothRoutes": true,
+    "reentry": true,
+    "workerErrors": []
+  },
+  "0827-rpg": {
+    "meshVertices": 8772,
+    "spread": 0.9354761904770775,
+    "additionalCalls": 52,
+    "asset": "/assets/january-rpg-sc558c4d.js",
+    "id": "0827-rpg",
+    "practice": false,
+    "finished": true,
+    "returnedAndReopened": true
+  },
+  "0801-match": {
+    "正式": {
+      "stage": 3,
+      "swaps": 4,
+      "shapes": 9,
+      "vertices": 4800,
+      "save": "0801-match-cn-parks-2023"
+    },
+    "练习": {
+      "stage": 3,
+      "swaps": 5,
+      "shapes": 10,
+      "vertices": 4788,
+      "save": "0801-match-cn-parks-2023"
+    }
+  },
+  "0815-match": {
+    "正式": {
+      "stage": 3,
+      "swaps": 5,
+      "shapes": 30,
+      "vertices": 6696,
+      "save": "0815-match-panama-canal"
+    },
+    "练习": {
+      "stage": 3,
+      "swaps": 5,
+      "shapes": 36,
+      "vertices": 6708,
+      "save": "0815-match-panama-canal"
+    }
+  }
+}

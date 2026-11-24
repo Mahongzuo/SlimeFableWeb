@@ -1,0 +1,20 @@
+{
+  "day": "0101",
+  "base": "http://127.0.0.1:5242",
+  "module": "/assets/january-skirmish-DW9XrkNd.js",
+  "introFrameDrawCalls": 89,
+  "nativeShots": [
+    1,
+    2,
+    2,
+    2
+  ],
+  "heightBeforeSpread": 0.3924664407968521,
+  "heightDuringSpread": 0.09920101426541805,
+  "saveId": "0101-skirmish-tampa-flight",
+  "returnPath": "http://127.0.0.1:5242/?date=0101&from=0101-skirmish",
+  "bakedFloorProbes": 30,
+  "bothRoutes": true,
+  "reentry": true,
+  "workerErrors": []
+}

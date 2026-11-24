@@ -1,5 +1,91 @@
 # 会话检查点
 
+## 2026-11-24 · 全年 366 天四扇门大满贯收官！（十一月 120 关 + 十二月 124 关全部补齐，中国：海外 = 3：1）
+
+- **十一月全月补齐（30 天 / 120 关）**：新增 [november-four-gates.md](../days/november-four-gates.md)、[november-pilots.ts](../../content/november-pilots.ts)（`42.16 KB gzip`）及 [november-defense.ts](../../src/templates/november-defense.ts)、[november-match.ts](../../src/templates/november-match.ts)、[november-skirmish.ts](../../src/templates/november-skirmish.ts)、[november-rpg.ts](../../src/templates/november-rpg.ts)（新增 118 关，完整保留 `1116` 三号门阿雷西博塔防与 `1123` 四号门神秘博士三消及二号门往期投射/试炼原存档键；全月 90 中国 + 30 海外 = 3 : 1，保留原 34 个十一月 Web 章节）。
+- **十二月全月补齐（31 天 / 124 关）**：新增 [december-four-gates.md](../days/december-four-gates.md)、[december-pilots.ts](../../content/december-pilots.ts)（`48.23 KB gzip`）及 [december-defense.ts](../../src/templates/december-defense.ts)、[december-match.ts](../../src/templates/december-match.ts)、[december-skirmish.ts](../../src/templates/december-skirmish.ts)、[december-rpg.ts](../../src/templates/december-rpg.ts)（全月 93 中国 + 31 海外 = 3 : 1，保留原 31 个十二月 Web 章节）。
+- **全年大满贯总指标**：全年 **366 天（含闰日 0229）、644 个 Web 历史章节、652 条历史记录、1,471 个固定模式挑战**全部贯通！全部非豁免分包均严格 ≤ 60 KB gzip（各月单模板 `2.2–6.7 KB gzip`）。
+- **全量验证与消幕后视觉证据**：
+  - `npm run catalog`、`npm run catalog:check`、`npm run check`、`npm run build`、`lint-content.mjs`（`lint: 通过`）全部通过；
+  - `npm test` **1,572 / 1,572 PASS**（0 失败，覆盖全年 366 天 × 40 种子全模式仿真、全 644 章节与全部特例回港门校验）；
+  - 无头 Chrome 在消幕后（`stage.time >= 2.0`，`uFade = 1.0`）完成 11 月 8 关 + `1116`/`1123` 港口验证（`qa/evidence/nov-full-*.jpg`）与 12 月 8 关 + `1231` 除夕港口验证（`qa/evidence/dec-full-*.jpg`），全部 0 报错、清晰无白幕。
+- **下一步（进入“后优化”阶段）**：按用户规划，全 366 天基础闭环已完成，后续可集中发力**场景视觉差异化与关卡玩法特色升级**（例如按题材动态生成标志性 3D 剪影地标、差异化场地材质/天空盒/天气粒子、扩充塔防/交火/RPG 机关与敌人变体等）。
+
+## 2026-11-24 · 九月全月 30 天四扇门补齐（新增 120 关，中国：海外 = 3：1）
+
+- **九月设计总表与注册**：新增 [september-four-gates.md](../days/september-four-gates.md) 与 [september-pilots.ts](../../content/september-pilots.ts)（含 9 月 1 日至 30 日全部 **120 关**，严格按每日 3 关中国历史 + 1 关海外历史编排，总计 **90 关中国 + 30 关海外 = 3 : 1**；全带权威 `https://` 史料，且与九月既有 60 个历史章节及全年其他月份零重复）。连同工作区中同步合入的十月，**一至十月连续 305 天**固定模式门已全部贯通，全项目现含 **366 天、644 个 Web 章节、1,229 个固定模式挑战**。
+- **四套九月模板与自动分包**：新增 [september-defense.ts](../../src/templates/september-defense.ts)（5.35 KB gzip）、[september-match.ts](../../src/templates/september-match.ts)（6.15 KB gzip）、[september-skirmish.ts](../../src/templates/september-skirmish.ts)（6.01 KB gzip）、[september-rpg.ts](../../src/templates/september-rpg.ts)（3.98 KB gzip），`september-pilots` 为 40.51 KB gzip，全部非豁免 chunk 均严格 ≤ 60 KB gzip。
+- **全量验证与消幕清晰版实机证据**：`npm run catalog`、`npm run catalog:check`、`npm run check`、`npm test`（**1,391 / 1,391 PASS**，含 1–10 月全量 40 种子模拟）、`npm run build`、`lint-content.mjs`（`lint: 通过`）全通过；无头 Chrome 在进场淡入完全结束后（`stage.time >= 2.0`，`uFade = 1.0`）抽验 8 个九月代表关（`0901` 京九铁路、`0925` 北京大兴国际机场、`0914` 中国首封电子邮件、`0925` 中国天眼启用、`0923` 广深港高铁动感号、`0930` 杭州亚运百金、`0905` 旅行者 1 号、`0923` 笔尖上的海王星）及 `0925` 凝露港六门 0 报错，清晰无白幕截图已归档至 `qa/evidence/sept-full-*.jpg` 与 `qa/evidence/sept-full-spotcheck.json`。全年剩余最后两个月：**11 月**（需注意保留 `1116` 塔防与 `1123` 三消及旧存档键）与 **12 月**。
+
+## 2026-11-24 · 十月四门
+
+10 月 31 天的 124 个主关已经接入港口、史书和收藏，逐日为三件中国史事和一件海外史事。新增 123 关。10 月 21 日五号门保留《风帆之间》，六号门默认进入《大渡河的蓄水刻度》，也能选择沿用原链接与收藏的《关原雾阵》。该日六号门两项挑战均返回本门。[逐日事实卡和试玩入口](../days/october-four-gates.md) · [验收与证据](../../tasks/reports/october-four-gates.md)
+
+待用户试玩确认画面和手感。11 月和 12 月已有 34 和 31 个可玩历史章节，固定四门仍分别为 2/120 和 0/124。
+
+## 2026-11-24 · 七月全月 31 天四扇门补齐（新增 124 关，中国：海外 = 3：1）
+
+- **七月设计总表与注册**：新增 [july-four-gates.md](../days/july-four-gates.md) 与 [july-pilots.ts](../../content/july-pilots.ts)（含 7 月 1 日至 31 日全部 **124 关**，严格按每日 3 关中国历史 + 1 关海外历史编排，总计 **93 关中国 + 31 关海外 = 3 : 1**；全带权威 `https://` 史料，且与七月既有 62 个历史章节及全年其他月份零重复）。连同工作区中并行合入的六月与八月，**一至八月全 244 天**固定模式门已全部贯通，全项目现含 **366 天、644 个 Web 章节、986 个固定模式挑战**。
+- **四套七月模板与自动分包**：新增 [july-defense.ts](../../src/templates/july-defense.ts)（5.45 KB gzip）、[july-match.ts](../../src/templates/july-match.ts)（6.71 KB gzip）、[july-skirmish.ts](../../src/templates/july-skirmish.ts)（6.08 KB gzip）、[july-rpg.ts](../../src/templates/july-rpg.ts)（4.35 KB gzip），`july-pilots` 为 43.25 KB gzip，全部非豁免 chunk 均严格 ≤ 60 KB gzip。
+- **全量验证与消幕清晰版实机证据**：`npm run catalog`、`npm run catalog:check`、`npm run check`、`npm test`（**1,207 / 1,207 PASS**，含 1–8 月全量 40 种子模拟）、`npm run build`、`lint-content.mjs`（`lint: 通过`）全通过；无头 Chrome 在进场淡入完全结束后（`stage.time >= 2.0`，`uFade = 1.0`）抽验 8 个七月代表关（`0701` 香港回归、`0727` 北京中轴线、`0703` 中国天眼 FAST、`0707` 福建土楼、`0712` 刘翔洛桑 12.88、`0731` 潘展乐 46.40、`0721` 阿波罗 11 号登月、`0731` 阿波罗 15 号月球车）及 `0731` 凝露港六门 0 报错，清晰无白幕截图已归档至 `qa/evidence/july-full-*.jpg` 与 `qa/evidence/july-full-spotcheck.json`。下一步可继续推进 **9 月份**（或由用户实机试玩确认七、八月画面与手感）。
+
+## 2026-11-24 · 八月全月四扇门
+
+8 月 1–31 日的固定门位均已接通，共 124 关，每天三件中国史事和一件海外史事。新增 123 关；8 月 15 日保留安康号三消、旧存档键，以及二号门的往期投射与试炼。原有 62 个八月 Web 章节可继续从左侧两扇门进入。[逐日事实与试玩](../days/august-four-gates.md)
+
+独立无头浏览器已逐一打开 124 个关卡页面，四种模式各抽一关操作至结算。八月三消有 30 组新编三幕棋盘，运河继续使用逐闸开放的棋盘。下一步由用户在实际设备确认画面、操作和复玩手感。[验收记录](../../tasks/reports/august-four-gates.md) · [8 月 15 日港口](http://127.0.0.1:5190/?date=0815)
+
+## 2026-11-24 · 五月全月 31 天四扇门补齐（新增 124 关，中国：海外 = 3：1）与按月分包、塔防淡入步长修复
+
+- **五月设计总表与注册**：新增 [may-four-gates.md](../days/may-four-gates.md) 与 [may-pilots.ts](../../content/may-pilots.ts)（含 5 月 1 日至 31 日全部 **124 关**，严格按每日 3 关中国历史 + 1 关海外历史编排，总计 **93 关中国 + 31 关海外 = 3 : 1**；全带权威 `https://` 史料且与五月既有 62 个历史章节及六月零重复）。连同工作区同步合入的六月，**一至六月全半年 182 天（728 扇模板门）**均已贯通，全项目现含 **366 天、644 个 Web 章节、739 个固定模式挑战**。
+- **按月模板自动分包与塔防渲染修复**：
+  - [vite.config.ts](../../vite.config.ts) 升级 `manualChunks` 规则，自动按月拆分 `*-pilots` 与 `(february..december)-(defense|match|skirmish|rpg)` 模板数据，`mode-match` 回落至 **29.55 KB gzip**、各月单模板仅 **2.3–6.6 KB gzip**，为下半年 7–12 月铺平体积上限；
+  - [january-defense.ts](../../src/level/january-defense.ts) 将 `scene.stage.render(.016, ...)` 改为传入真实 `dt`，修复低帧率设备下进场 1.2 秒淡入被拉长的问题。
+- **四套五月模板接入**：新增 [may-defense.ts](../../src/templates/may-defense.ts)、[may-match.ts](../../src/templates/may-match.ts)、[may-skirmish.ts](../../src/templates/may-skirmish.ts)、[may-rpg.ts](../../src/templates/may-rpg.ts) 并并入对应注册表；修复 `0512` 塔防 `station` 主题匹配 `alternate` 拓扑。
+- **验证与清晰版实机证据**：`npm run catalog`、`npm run catalog:check`、`npm run check`、`npm test`（**1,019/1,019 PASS**，含 1–6 月 182 天 × 40 种子全模式仿真）、`npm run build`、`lint-content.mjs`（`lint: 通过`）全通过；无头 Chrome 在进场淡入完全结束后（`stage.time >= 2.0`，`uFade = 1.0`）抽验 8 个五月代表关（`0505` C919、`0515` 天问一号落火、`0511` 咸通九年敦煌雕版、`0522` 禾下乘凉梦、`0504` 武汉长江大桥、`0512` 银心黑洞、`0527` 金门大桥、`0531` 伦敦大本钟）与 `0515` 凝露港六门 0 报错，清晰截图归档至 `qa/evidence/may-full-*.jpg` 与 `qa/evidence/may-full-spotcheck.json`。下一步可无缝推进 **7 月份**（上半年 1–6 月已全部完成）。
+
+## 2026-11-24 · 六月 30 天的四扇门已可试玩
+
+六月共 120 个挑战。6 月 1 日至 30 日逐日校验，每天三件中国史事、一件海外史事。各关有独立来源、目标、收藏与存档键。港口按 3 号塔防、4 号三消、5 号分身交火、6 号战斗 RPG 排列。[六月完整试玩目录](../days/june-four-gates.md) · [6 月 4 日港口](http://127.0.0.1:5190/?date=0604)
+
+独立无头 Chrome 已逐一加载 120 关并检查原版流体角色。6 月 1 日塔防和三消、6 月 4 日分身交火、6 月 30 日 RPG 各完成一次以上通关。下一步由用户在实际设备确认画面与手感。[任务卡](../../tasks/cards/june-four-gates.md) · [技术验收和截图](../../tasks/reports/june-four-gates.md)
+
+## 2026-11-24 · 四月全月 30 天四扇门补齐（新增 120 关，中国：海外 = 3：1）
+
+- **四月设计总表与注册**：新增 [april-four-gates.md](../days/april-four-gates.md) 与 [april-pilots.ts](../../content/april-pilots.ts)（含 4 月 1 日至 30 日全部 **120 关**，严格按每日 3 关中国历史 + 1 关海外历史编排，总计 **90 关中国 + 30 关海外 = 3 : 1**；全带权威 `https://` 史料且与四月既有 60 个历史章节零重复）。`vite.config.ts` 将 `april-pilots` 独立拆包（**35.76 KB** gzip），所有非豁免 chunk 均低于 60 KB gzip。全项目现含 **366 天、644 个 Web 章节、495 个固定模式挑战**。
+- **四套四月模板接入**：新增 [april-defense.ts](../../src/templates/april-defense.ts)、[april-match.ts](../../src/templates/april-match.ts)、[april-skirmish.ts](../../src/templates/april-skirmish.ts)、[april-rpg.ts](../../src/templates/april-rpg.ts) 并并入对应月度模板注册表；全部通过 1–4 月共 121 天 × 40 种子全模式仿真验证。
+- **验证与证据**：`npm run catalog`、`npm run catalog:check`、`npm run check`、`npm test`（**835/835 PASS**）、`npm run build`、`lint-content.mjs`（`lint: 通过`）全部通过；无头 Chrome 抽验 8 个四月代表关（`0401` 雄安新区、`0429` 天和核心舱、`0417` 法门寺秘色青瓷、`0420` 联合国中文日、`0425` 神舟十八号斑马鱼、`0430` 东海海上发射、`0423` 莎士比亚环球剧场、`0430` 高斯正十七边形）与 `0424` 凝露港六门 0 报错，截图归档至 `qa/evidence/april-full-*.jpg` 与 `qa/evidence/april-full-spotcheck.json`。下一步可按同样结构继续推进五月份（注意后续月份 `mode-match` 已达 44.07 KB gzip，五月起可将月度模板数据按月拆 chunk 或动态加载以持续稳控 ≤ 60 KB）。
+
+## 2026-11-24 · 三月全月 31 天四扇门补齐（新增 124 关，中国：海外 = 3：1）
+
+- **三月设计总表与注册**：新增 [march-four-gates.md](../days/march-four-gates.md) 与 [march-pilots.ts](../../content/march-pilots.ts)（含 3 月 1 日至 31 日全部 **124 关**，严格按每日 3 关中国历史 + 1 关海外历史编排，总计 **93 关中国 + 31 关海外 = 3 : 1**；全部带权威 `https://` 史料且与三月既有 62 个历史章节互不重复）。`vite.config.ts` 将 `march-pilots` 独立拆包（**34.41 KB** gzip），所有非豁免 chunk 均低于 60 KB gzip。全项目现含 **366 天、644 个 Web 章节、375 个固定模式挑战**。
+- **四套三月模板接入**：新增 [march-defense.ts](../../src/templates/march-defense.ts)、[march-match.ts](../../src/templates/march-match.ts)、[march-skirmish.ts](../../src/templates/march-skirmish.ts)、[march-rpg.ts](../../src/templates/march-rpg.ts) 并并入对应月度模板注册表；全部通过 1–3 月共 91 天 × 40 种子全模式仿真验证。
+- **验证与证据**：`npm run catalog`、`npm run catalog:check`、`npm run check`、`npm test`（**745/745 PASS**）、`npm run build`、`lint-content.mjs`（`lint: 通过`）全部通过；无头 Chrome 抽验 8 个三月代表关（`0301` 国博新馆、`0320` 鹊桥二号、`0314` 割圆木盘、`0320` 三星堆黄金面具、`0312` 海南一箭十八星、`0331` 北京奥运祥云圣火、`0307` 精武木人桩、`0331` 埃菲尔铁塔）与 `0320` 凝露港六门 0 报错，截图归档至 `qa/evidence/march-full-*.jpg` 与 `qa/evidence/march-full-spotcheck.json`。下一步可按同样结构继续推进四月份（维持中 3 : 外 1 配比）或根据用户试玩反馈精修特定日期。
+
+## 2026-11-24 · 二月全月 29 天（含闰日）四扇门补齐（新增 116 关）
+
+- **二月设计总表与注册**：新增 [february-four-gates.md](../days/february-four-gates.md) 与 [february-pilots.ts](../../content/february-pilots.ts)（含 2 月 1 日至 29 日全部 **116 关**，与二月既有 58 个历史章节互不重复、全带权威 `https://` 史料）；`vite.config.ts` 将 `february-pilots` 独立拆包（**29.6 KB** gzip）。全项目现含 **366 天、644 个 Web 章节、251 个固定模式挑战**。
+- **多月日期适配**：将 `january-defense.ts`、`january-skirmish.ts`、`january-rpg.ts`、`january-match.ts` 中的抬头月日与纪念印样罗马月份改为按 `spec.day` 动态渲染，完整支持跨月份展示。
+- **四套二月模板接入**：新增 [february-defense.ts](../../src/templates/february-defense.ts)、[february-match.ts](../../src/templates/february-match.ts)、[february-skirmish.ts](../../src/templates/february-skirmish.ts)、[february-rpg.ts](../../src/templates/february-rpg.ts) 并分别并入对应月度模板注册表，全部通过 60 天 × 40 种子自动模拟验证。
+- **验证与证据**：`npm run check`、`npm test`、`npm run build`、`npm run catalog`、`npm run catalog:check`、`lint-content.mjs` 全通过；无头 Chrome 抽验 8 个二月代表关（含 `0203` 月球 9 号、`0204` 北京冬奥、`0211` LIGO 引力波、`0214` 暗淡蓝点、`0218` 毅力号、`0226` WorldWideWeb、`0210` 深蓝、`0229` 东京晴空塔）与闰日 `0229` 港口 6 扇时光门 0 报错，截图归档至 `qa/evidence/february-full-*.jpg`。下一步可按同样结构继续推进三月份或根据用户试玩反馈精修特定日期。
+
+## 2026-11-24 · 一月全月 31 天四扇门（3/4/5/6 号门）全量补齐
+
+- **内容与注册**：[january-pilots.ts](../../content/january-pilots.ts) 已按 [一月四扇门设计卡](../days/january-four-gates.md) 补齐 0102–0113、0115–0130 共 28 天 × 4 门 = **112 关**，连同 0101、0114、0131 原有 12 关，一月全月 31 天 **124 扇模板门** 全部可玩；全项目共 **366 天、644 个 Web 章节、135 个固定模式挑战**。
+- **3 号门 · 塔防**（`src/templates/january-defense.ts`、`src/themes/january-defense.ts`、`src/level/january-defense.ts`）：在原 `parade` / `station` / `eclipse` 基础上扩展 `harbor` / `lunar` / `workshop` / `ice` / `airship` / `rail` / `orbital` / `ocean` 八类程序化主题与 6 套数学验证路线拓扑，31 天 × 40 种子全零损通关、无人布防必败。
+- **4 号门 · 三消**（`src/templates/january-match.ts`、`src/themes/january-match.ts`、`src/level/january-match.ts`、`src/templates/mode-match.ts`、`src/level/mode-match.ts`）：补齐 0102–0130 全部 30 关异形三幕棋盘（支持清除与纵横压印双机制）、8 类 3D 展示台与程序化纪念印样，31 天 × 40 种子（1,240 局）真实交换与加演全通。
+- **5 号门 · 分身交火**（`src/templates/january-skirmish.ts`、`src/themes/january-skirmish.ts`、`src/level/january-skirmish.ts`）：补齐 31 天双路交火地图与 7 类主题场景（`air`/`sport`/`facade`/`space`/`workshop`/`maritime`/`court`），全部通过 40 种子拼缝平滑度与靶点高度验证。
+- **6 号门 · 战斗 RPG**（`src/templates/january-rpg.ts`、`src/themes/january-rpg.ts`、`src/level/january-rpg.ts`）：补齐 31 天战斗配置与 7 类主题场馆（`ice`/`stage`/`field`/`cosmos`/`atelier`/`expedition`/`court`），31 天 × 双路线 × 40 种子全通，原有 `ice`/`stage`/`field` 完全兼容。
+- **体积与验证**：`vite.config.ts` 将 `january-pilots` 独立拆包（29.9 KB gzip），所有非豁免 chunk 均满足 ≤ 60 KB gzip；`npm run check`、`npm test`（**565/565 PASS**）、`npm run build`、`npm run catalog`、`npm run catalog:check`、`lint-content.mjs` 全部通过；无头 Chrome 抽验多日新主题关卡与 0102 港口六扇门 0 报错，截图归档至 `qa/evidence/january-full-*.jpg`。下一步待用户实机试玩一月新增日期并确认画面与手感。
+
+## 2026-11-23 · 一月四门收工
+
+3 塔防、4 三消、5 分身交火、6 战斗 RPG 是每日固定门位。《冰场最后一轮》为元旦六号门冰球主题的动作 RPG。港口、史书和一月 RPG 关内均展示模式名。[三个代表日的试玩入口](../progress.md#一月四扇门)
+
+一月 124 张设计卡、逐日草图、来源及模型清单已齐。0101、0114、0131 的 12 关开放（11 个新增、1 个保留）。其余 28 天 112 关已有设计，留待后续逐日制作。一月原有 62 个历史章节保留。下次先听玩家对三个代表日，特别是体育题材六号门的画面与操作反馈，再取 0102 四张卡。后续批次依次为 02–08、09–13 加 15–16、17–23、24–30 日。[设计总表](../days/january-four-gates.md) · [技术验收与已知限制](../../tasks/reports/january-four-gates.md)
+
+11 月 16 日阿雷西博塔防占三号门；既有章节与旧投射、试炼分别由一、二号门接待。五号门命中活敌人的分身会爆裂，原生第三人称镜头已增加接地高度平滑。下次试玩先看[本轮验收与证据](../../tasks/reports/1116-defense.md)，由玩家确认货舱楼梯舒适度、纸带抉择和手动发信的体验。
+
 10 月 21 日两关现以鼠标右键闪避，Alt 备用。两场战斗已在出发页、门前、史书及纪念品加入同源的「事件始末」，介绍国家与阵营、人物、当日经过和后续。用户决定先玩这两关，再决定其他日期的推广。
 
 10 月 21 日五、六号门已从短遭遇扩为完整任务。继续时先看[双船与关原报告](../../tasks/reports/1021-campaign.md)、[任务卡](../../tasks/cards/1021-campaign.md)和逐日总表的 1021。实机复测用 qa-battle-fleet-play.py、qa-battle-rpg-campaign.py 和 qa-battle-lock-live.py。请记录玩家首次航行用时、是否自行找到铺位捷径，以及能否从动作读出守将追击，再决定怎样调节节奏。
@@ -10,6 +96,19 @@
 三消棋盘显示目标完成数、得分、本日期正式或练习最佳分与已入册通关次数。最佳分每次有效交换即时写入本机存档。
 
 > 每次收工更新。下次开工先读这里，再读最近的 `tasks/reports/`。
+
+## 2026-11-23 · 塔防 / 分身交火射击 / 战斗 RPG 三模式全方位体验与趣味性升级
+
+- **共享视听与打击感底座（零侵入 `src/slime/` 与 `src/game/game.ts`）**：
+  - [combat-audio.ts](../../src/level/combat-audio.ts)：基于 WebAudio 的零依赖程序化合成音效引擎（含并发节流与持久静音开关），覆盖塔防建塔/升级/反应/Boss 号角、射击开炮/Hitmarker/爆桶/铜钟、RPG 挥砍/闪光预警/完美闪避/破韧处决/战鼓全套音效；
+  - [combat-juice.ts](../../src/level/combat-juice.ts)：对象池化 3D 伤害飘字与元素反应徽章、Trauma 镜头微震与打击顿帧（尊重 `prefers-reduced-motion`），以及零 Z-fighting 的 3D 地面攻击预警贴花池（扇形横扫/长条直刺/扩散震波红毯）。
+- **3 号门 · 史莱姆塔防（`1116-defense`，`src/templates/defense.ts`、`src/themes/defense.ts`、`src/level/defense.ts`、`defense.css`）**：
+  - 兼容原版全部 11 项旧单测（`enhanced` 可选开关，实战默认开启）；新增 3 类战术地形格（⚡信号增幅格/❄液冷散热槽/✧聚露泉眼，绘入单张棋盘纹理零闪烁）、Lv.1→Lv.3 塔升级觉醒与 3D 进化外观、修理与 60% 拆解返露、全 6 元素反应闭环（蒸发/感电/扩散/超载/侵蚀/破甲）、主角「史莱姆指挥官」3×3 共鸣支援炮、1×/2× 倍速、整备期提前迎敌奖露、掉落凝露结晶磁吸拾取、右侧 3D 刷怪预警光柱、第 4 波谐振盾体与第 8 波关底 Boss「失谐母体」及顶部 Boss 血条/护盾条与结算 MVP 战报。
+- **5 号门 · 分身交火射击（`1021-skirmish`，`src/level/skirmish-fx.ts`、`battle-enemies.ts`、`battle-preview.ts`、`battle-preview.css`）**：
+  - 升级动态四向十字准星（后坐力扩缩 + 5 格青色分身弹药槽 + 命中/暴击 Hitmarker + 空弹回收提醒）、6 元素分身差异射击（水洼减速/火溅射/雷水洼闪电链/风凌空截弹反伤/暗黑雾易伤/岩破盾）、头部与外露帆结弱点暴击（×1.45）、双船 11 处可射击战术道具（火药桶连环爆/船舷铜钟震晕/凝露补给桶回血回能）、3D 航海航点光柱与距离指针、船首像守卫二阶段「五连扇射 + 可击爆追踪炽焰弹」与顶部 Boss 血条、战绩评分卡。
+- **6 号门 · 关原战斗 RPG（`1021-rpg`，`src/templates/rpg-build.ts`、`src/themes/battle-field.ts`、`src/level/battle-enemies.ts`、`battle-preview.ts`）**：
+  - 新增敌人可视化金色韧性条（Poise）与破韧失衡 `F · ⚔ 处决重击`、3D 地面红毯预警与 0.25s 武器闪光提醒音、动态 Style Rank 连击评级（D→SS，含回能与全伤加成）、雾口与山道两次三选一「6 大关原战意印记」构筑体系、随身「凝露葫芦」补给（`H` 键）、可敲响破护旗庇护的 2 座战地大鼓、风系可卷起烈焰扩散的 3 座火盆、西路补给箱与东路高坡先手旗台、阵旗守将二阶段「松尾山变阵」与地面旗阵震波及顶部 Boss 双条。
+- **验证与证据**：`npm run check`、`npm test`（**463/463 PASS**，含新增 `tests/defense-enhanced.test.ts` 与 `tests/rpg-build.test.ts`）、`npm run build`、`npm run catalog:check` 全通过；无头 Chrome 0 报错验证并留存 7 张证据图至 `qa/evidence/upgrade-*.jpg`。下一步交由用户实机试玩确认画面与手感。
 
 ## 2026-11-23 · 可扩展「玩法教程」手册（开始界面 & ESC 暂停菜单）
 

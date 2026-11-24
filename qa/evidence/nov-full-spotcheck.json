@@ -1,0 +1,58 @@
+[
+  {
+    "id": "1102-defense",
+    "header": "正式挑战　·　2015 / 11 / 02",
+    "vertices": 7224,
+    "shot": "nov-full-1102-defense.jpg",
+    "errors": []
+  },
+  {
+    "id": "1110-defense",
+    "header": "正式挑战　·　2020 / 11 / 10",
+    "vertices": 7764,
+    "shot": "nov-full-1110-defense.jpg",
+    "errors": []
+  },
+  {
+    "id": "1103-match",
+    "header": "每日三消　/　2016 · 11 月 3 日",
+    "vertices": 8244,
+    "shot": "nov-full-1103-match.jpg",
+    "errors": []
+  },
+  {
+    "id": "1126-match",
+    "header": "每日三消　/　2013 · 11 月 26 日",
+    "vertices": 8328,
+    "shot": "nov-full-1126-match.jpg",
+    "errors": []
+  },
+  {
+    "id": "1101-skirmish",
+    "header": "2022　·　11 月 1 日",
+    "vertices": 8988,
+    "shot": "nov-full-1101-skirmish.jpg",
+    "errors": []
+  },
+  {
+    "id": "1130-skirmish",
+    "header": "2016　·　11 月 30 日",
+    "vertices": 7056,
+    "shot": "nov-full-1130-skirmish.jpg",
+    "errors": []
+  },
+  {
+    "id": "1116-rpg",
+    "header": "11 月 16 日　·　6 号门 · 战斗 RPG",
+    "vertices": 6876,
+    "shot": "nov-full-1116-rpg.jpg",
+    "errors": []
+  },
+  {
+    "id": "1127-rpg",
+    "header": "11 月 27 日　·　6 号门 · 战斗 RPG",
+    "vertices": 6924,
+    "shot": "nov-full-1127-rpg.jpg",
+    "errors": []
+  }
+]

@@ -36,12 +36,17 @@ function imprintMarks(order:number|undefined) {
 function pilotList(kind:ModeKind,completed:string[]){
   return `<div class="pilot-list">${pilotChoices(kind).map(m=>`<div><span><strong>${dayLabel(m.day)}</strong> · ${esc(m.title)}</span>${depart(m.id,completed)}</div>`).join('')}</div>`;
 }
+function extraChallenges(g:ModeGate,completed:string[]){
+  if(!g.additional?.length)return '';
+  return `<div class="pilot-list">${g.additional.map(m=>`<div><span>额外挑战 · <strong>${esc(m.title)}</strong></span>${depart(m.id,completed)}</div>`).join('')}</div>`;
+}
 function modeListing(g:ModeGate,completed:string[]){
   const m=g.challenge;
   return `<article class="mode-entry" style="--mode-color:${modePalette[g.kind][0]}">
     <div><small>${modeNames[g.kind]}</small><h4>${m?esc(m.title):'选择试玩日期'}</h4></div>
     ${m?`<p>${esc(m.fact)}</p>${historyDetails(m)}<p>${esc(m.goal)}</p><div class="meta">${completed.includes(m.saveId)?'<span class="chip sea">已通关</span>':''}${depart(m.id,completed)}</div>`:
       `<details><summary>查看开放日期</summary>${pilotList(g.kind,completed)}</details>`}
+    ${extraChallenges(g,completed)}
   </article>`;
 }
 export class GameUI {
@@ -248,11 +253,16 @@ export class GameUI {
     this.panel(`<div class="overlay"><div class="book grain">${tabs}${left}${right}</div></div>`);
   }
   singleDeparture() {
+    const primary = this.root.querySelector<HTMLButtonElement>('.door-actions [data-act="go"]');
+    if (primary) return primary;
     const departures = this.root.querySelectorAll<HTMLButtonElement>('.door [data-act="go"]');
     return departures.length === 1 ? departures[0] : null;
   }
   gate(g:Gate, slot:number, completed:string[]){
     if(g.type==='story'&&g.stories.length===1&&!g.archive.length){this.door(g.stories[0],slot,completed.includes(g.stories[0].id));return;}
+    if(g.type==='story'&&!g.stories.length&&g.archive.length===1){
+      const only=g.archive[0];this.gate({type:'mode',kind:only.kind,day:only.day,challenge:only},slot,completed);return;
+    }
     const palette=gatePalette(g);
     const m=g.type==='mode'?g.challenge:undefined;
     let body:string;
@@ -260,7 +270,7 @@ export class GameUI {
     if(g.type==='story'){
       body=`<h2>${g.archive.length?'选择故事或往期挑战':'选择故事年份'}</h2><div class="pilot-list">${g.stories.map(c=>`<div><span><strong>${c.year}</strong> · ${esc(c.quest)}</span>${depart(c.id,completed)}</div>`).join('')}${g.archive.map(m=>`<div><span><strong>${m.year}</strong> · ${esc(m.title)}</span>${depart(m.id,completed)}</div>`).join('')}</div>`;
     }else if(m){
-      body=`<div class="kicker">${m.year} 年 ${dayLabel(m.day)}</div><h2>${esc(m.title)}</h2><p>${esc(m.fact)}</p>${historyDetails(m)}<div class="quest">${esc(m.goal)}</div><p>${esc(m.choice)}</p><span class="chip">✦ ${esc(m.souvenir)}</span>`;
+      body=`<div class="kicker">${m.year} 年 ${dayLabel(m.day)}</div><h2>${esc(m.title)}</h2><p>${esc(m.fact)}</p>${historyDetails(m)}<div class="quest">${esc(m.goal)}</div><p>${esc(m.choice)}</p><span class="chip">✦ ${esc(m.souvenir)}</span>${extraChallenges(g,completed)}`;
       primary = depart(m.id,completed);
     }else{
       const choices = pilotChoices(g.kind);

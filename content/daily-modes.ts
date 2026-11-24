@@ -1,12 +1,27 @@
+import {januaryPilots} from './january-pilots';
+import {februaryPilots} from './february-pilots';
+import {marchPilots} from './march-pilots';
+import {aprilPilots} from './april-pilots';
+import {mayPilots} from './may-pilots';
+import {junePilots} from './june-pilots';
+import {julyPilots} from './july-pilots';
+import {octoberPilots} from './october-pilots';
+import {augustPilots} from './august-pilots';
+import {septemberPilots} from './september-pilots';
+import {novemberPilots} from './november-pilots';
+import {decemberPilots} from './december-pilots';
 /** 历史事实附各自来源；人物委托、设备操作和场景是游戏演绎。 */
-export const modeKinds = ['match','skirmish','rpg'] as const;
+export const modeKinds = ['defense','match','skirmish','rpg'] as const;
 export type ModeKind = typeof modeKinds[number] | 'shot' | 'trial';
-export const modeNames:Record<ModeKind,string> = {match:'史莱姆三消',shot:'分身射击',trial:'NPC 试炼',skirmish:'分身交火',rpg:'战斗试炼'};
+export const modeNames:Record<ModeKind,string> = {defense:'史莱姆塔防',match:'史莱姆三消',shot:'分身射击',trial:'NPC 试炼',skirmish:'分身交火',rpg:'战斗 RPG'};
 
 export interface BattleHistory {
  title:string; chapters:[string,string][]; fiction:string; sources:[string,string][];
 }
-interface ModeStory {
+export interface ModeStory {
+ additional?:boolean;
+ region?: '中国' | '海外';
+ january?:string;
  history?:BattleHistory;
  storyId:string; year:number; fact:string; source:string; souvenir:string;
  title:string; goal:string; choice:string; layout:string; memory:string;
@@ -14,15 +29,25 @@ interface ModeStory {
 export interface DailyMode extends ModeStory {
  id:string; day:string; kind:ModeKind; playPath:string; saveId:string; chapterId:string|null;
 }
-function challenge(day:string,kind:ModeKind,story:ModeStory,existingChapter?:string):DailyMode {
- const id=day+'-'+kind;
+function challenge(day:string,kind:ModeKind,story:ModeStory,existingChapter?:string,namedEntry=false):DailyMode {
+ const slot=day+'-'+kind;
+ const id=namedEntry?slot+'-'+story.storyId:slot;
  return {...story,day,kind,id,playPath:'level.html?id='+id,chapterId:existingChapter??null,
-   saveId:existingChapter?id:id+'-'+story.storyId};
+   saveId:existingChapter?id:slot+'-'+story.storyId};
 }
 
 export const dailyModes = [
+ challenge('1116','defense',{
+   storyId:'arecibo-transmission',year:1974,title:'守住发往星团的信',
+   fact:'1974 年 11 月 16 日，波多黎各的阿雷西博天文台向球状星团 M13 发出一条由 1,679 个二进制位组成的信息。',
+   source:'https://www.sciencedirect.com/science/article/pii/0019103575901165',
+   goal:'守住五条检修线，排好全部码流后亲手发信。',
+   choice:'从六种元素塔选出四种，在产露与补防之间取舍。两张校准纸带可恢复一整行并让它齐射。',
+   layout:'阿雷西博天线下的五路八列发信站、悬空接收平台和像素控制台',
+   souvenir:'发信值班纸带',memory:'你守到了最后一位。1,679 个零和一排成一幅图，载着人类和地球的模样从阿雷西博飞向 M13。'
+ }),
  challenge('1021','skirmish',{
-   storyId:'trafalgar',year:1805,title:'风帆之间',fact:'1805 年 10 月 21 日，特拉法加海战爆发。',
+   region:'海外',storyId:'trafalgar',year:1805,title:'风帆之间',fact:'1805 年 10 月 21 日，特拉法加海战爆发。',
    source:'https://www.rmg.co.uk/stories/maritime-history/battle-trafalgar-background',souvenir:'海战画页',
    history:{
      title:'特拉法加海战',
@@ -38,7 +63,7 @@ export const dailyModes = [
    layout:'双船上层跳板与下层舷门、记录室、领航员铺位和返航海图桌',memory:'你把图匣带回海图桌，纳尔逊和科林伍德各领一列的航迹在纸上接合。'
  }),
  challenge('1021','rpg',{
-   storyId:'sekigahara',year:1600,title:'关原雾阵',fact:'1600 年 10 月 21 日，关原之战发生。',
+   additional:true,region:'海外',storyId:'sekigahara',year:1600,title:'关原雾阵',fact:'1600 年 10 月 21 日，关原之战发生。',
    source:'https://www.japan.travel/en/spot/2341/',souvenir:'关原阵旗拓印',
    history:{
      title:'关原之战',
@@ -90,7 +115,7 @@ export const dailyModes = [
    layout:'多桥印坊水院',memory:'三处取得的印汇在纸角，这张画签有了你的落款。'
  },'0101-1864'),
  challenge('0815','match',{
-   storyId:'panama-canal',year:1914,fact:'1914 年 8 月 15 日，巴拿马运河正式开通，安康号轮船从大西洋一侧驶向太平洋。',
+   region:'海外',storyId:'panama-canal',year:1914,fact:'1914 年 8 月 15 日，巴拿马运河正式开通，安康号轮船从大西洋一侧驶向太平洋。',
    source:'https://pancanal.com/en/history-in-pictures-107-years-of-the-panama-canal/',souvenir:'安康号通航票',title:'让安康号过闸',
    goal:'逐段清除闸口水标，让安康号通过船闸',choice:'在有限步数内选择先疏通哪个闸口',
    layout:'逐段展开的船闸棋盘',memory:'最后一道闸门打开，安康号沿你疏通的水道驶了出去。'
@@ -106,7 +131,8 @@ export const dailyModes = [
    source:'https://www.19371213.com.cn/about/history/',souvenir:'庭院中的一束白花',title:'沿灯献花',
    goal:'跟随讲解员，在会合处献花',choice:'走缓坡护灯，或登高点亮远灯',
    layout:'庭院双径会合',memory:'两条路在庭院会合，你在灯前留下一束白花。'
- },'0815-1985')
+ },'0815-1985'),
+ ...[...januaryPilots,...februaryPilots,...marchPilots,...aprilPilots,...mayPilots,...junePilots,...julyPilots,...augustPilots,...septemberPilots,...octoberPilots,...novemberPilots,...decemberPilots].map(({day,kind,...story})=>challenge(day,kind,{...story,january:story.storyId},undefined,day==='1021'&&kind==='rpg')),
 ];
 export const modesFor=(day:string)=>dailyModes.filter(spec=>spec.day===day);
 export const modeById=(id:string)=>dailyModes.find(spec=>spec.id===id);

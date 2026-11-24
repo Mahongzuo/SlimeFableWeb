@@ -20,6 +20,7 @@ async def run(ids, vertical, jobs, evidence=False):
         browser = await pw.chromium.launch(channel='chrome',args=['--enable-unsafe-swiftshader','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows'])
         async def worker():
             pg = await browser.new_page(viewport={'width':1100,'height':780} if vertical or evidence else {'width':360,'height':240})
+            await pg.add_init_script('Element.prototype.requestPointerLock=()=>Promise.resolve()')
             if not (vertical or evidence):
                 pg.set_default_timeout(45000)
                 # Keep the native solver, controllers, routes and DOM. Skip GPU rasterization during the full sweep.
@@ -106,12 +107,14 @@ def save_report(results, destination):
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('ids',nargs='*')
+    parser.add_argument('--base',default=BASE)
     parser.add_argument('--vertical',action='store_true')
     parser.add_argument('--jobs',type=int,default=1)
     parser.add_argument('--months',nargs='+',type=int)
     parser.add_argument('--evidence',action='store_true')
     parser.add_argument('--report',type=Path,help='Write the successful cases to a JSON report')
     args=parser.parse_args()
+    BASE=args.base.rstrip('/')+'/'
     chapters=args.ids or [c['id'] for d in json.loads((ROOT/'docs/level-catalog.json').read_text(encoding='utf-8'))['days'].values() for c in d['chapters'] if c['template']=='ability']
     if args.months: chapters=[c for c in chapters if int(c[:2]) in args.months]
     results=asyncio.run(run(chapters,args.vertical,args.jobs,args.evidence))

@@ -1,4 +1,5 @@
 import {rng} from './random';
+import {isPressMatch,januaryMatches,pressContact} from './january-match';
 
 // Coloured pieces occupy four bands of six. The rainbow has no match colour.
 export const HOLE=-1, COIN=-2, RAINBOW=24;
@@ -20,6 +21,8 @@ export interface Result {groups:number[][];frames:number[][];cascades:Cascade[];
 const at=(x:number,y:number)=>y*8+x;
 export const budgets:Record<string,number>={'1123':15,'0101':14,'0815':12};
 function open(day:string,stage:number,x:number,y:number){
+ const tableau=januaryMatches[day]?.tableaux[stage];
+ if(tableau)return tableau.mask[y][x]==='.';
  if(day==='1123'){
    if(x===3)return y===3||stage===2&&y===4;
    if(x===4)return y===4||stage===2&&y===3;
@@ -32,6 +35,8 @@ function open(day:string,stage:number,x:number,y:number){
  return true;
 }
 function goals(day:string,stage:number):number[]{
+ const tableau=januaryMatches[day]?.tableaux[stage];
+ if(tableau)return [...tableau.targets];
  if(day==='0101')return [at([2,5,3][stage],7)];
  if(day==='0815')return [[at(2,3)],[at(2,4),at(5,3)],[at(3,2),at(5,5)]][stage];
  return [[at(2,3),at(5,4)],[at(5,4)],[at(3,3),at(4,3)]][stage];
@@ -110,7 +115,13 @@ function fill(b:Board, reflow=false){
  }else if(b.day==='1123'&&b.stage===2){
    const t=random.int(0,5);for(const x of [2,3,5])locks.set(at(x,3),t);
    locks.set(at(4,3),(t+1)%6);locks.set(at(4,4),t);
- }else for(const i of goalsNow)vertical(i%8,i>>3);
+ }else for(const i of goalsNow){
+   const layout=januaryMatches[b.day];
+   if(isPressMatch(layout)&&layout!.tableaux[b.stage].targets[1]===i){
+     const tone=random.int(0,5);
+     locks.set(i-1,tone);locks.set(i+1,tone);locks.set(i,(tone+1)%6);locks.set(i+8,tone);
+   }else vertical(i%8,i>>3);
+ }
  for(let attempt=0;attempt<64;attempt++){
    b.cells=Array.from({length:64},(_,i)=>open(b.day,Math.min(2,b.stage),i%8,i>>3)?(locks.get(i)??-3):HOLE);
    if(coinPos>=0)b.cells[coinPos]=COIN;
@@ -141,8 +152,9 @@ function fill(b:Board, reflow=false){
  throw Error('无法生成棋盘 '+b.day+'/'+b.stage);
 }
 export function createBoard(day:string,seed:string):Board{
- if(!budgets[day])throw Error('未知棋盘日期 '+day);
- const b:Board={day,seed,stage:0,cells:[],targets:goals(day,0),moves:budgets[day],turn:0,shuffles:0,score:0};
+ const moves=januaryMatches[day]?.moves??budgets[day];
+ if(!moves)throw Error('未知棋盘日期 '+day);
+ const b:Board={day,seed,stage:0,cells:[],targets:goals(day,0),moves,turn:0,shuffles:0,score:0};
  fill(b);return b;
 }
 function canSwap(b:Board,a:number,c:number){
@@ -281,7 +293,11 @@ export function swap(b:Board,a:number,c:number,recordFrames=false):Result|null{
  while(chain.length||combo){
    const wave=resolveWave(b.cells,chain,gesture,combo,random);
    if(recordFrames)result.frames.push([...b.cells]);
-   if(b.day!=='0101')b.targets=b.targets.filter(g=>!wave.hit.has(g));
+   const press=januaryMatches[b.day];
+   if(!b.bonus&&isPressMatch(press)){
+     const ink=press!.tableaux[b.stage].targets[0];
+     b.targets=b.targets.filter(i=>!pressContact(i,i===ink,chain,wave.sweepRows,wave.sweepCols));
+   }else if(b.day!=='0101')b.targets=b.targets.filter(g=>!wave.hit.has(g));
    result.groups.push([...wave.hit]);b.score+=wave.hit.size*10*result.groups.length;
    const removed=wave.hit;
    for(const piece of wave.created){
@@ -312,7 +328,7 @@ export function swap(b:Board,a:number,c:number,recordFrames=false):Result|null{
    if(b.stage<3){
      b.targets=goals(b.day,b.stage);fill(b);
    }
- }else if(b.day==='0815'&&b.targets.length<goalsBefore){b.shuffles++;fill(b,true);}
+ }else if((b.day==='0815'||januaryMatches[b.day])&&b.targets.length<goalsBefore){b.shuffles++;fill(b,true);}
  else if(b.moves>0&&!legalMoves(b).length){b.shuffles++;fill(b,true);result.reshuffled=true;}
  return result;
 }

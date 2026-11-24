@@ -26,11 +26,15 @@ function start(){
  began=performance.now();
  if(!practice)new Save().add('visited',spec.saveId);
 }
-function recordWin(){
+function recordWin(defense?:{perfect:boolean;untaped:boolean}){
  if(finished||began===null)return;
  finished=true;
  const save=new Save(),record=save.data.life.records;
  const key=spec.saveId+(practice?'-practice':'-daily');
+ if(spec.kind==='defense'&&defense){
+  if(defense.perfect)record[key+'-perfect']=1;
+  if(defense.untaped)record[key+'-untaped']=1;
+ }
  record[key+'-wins']=(record[key+'-wins']??0)+1;
  const ms=Math.max(1,Math.round(performance.now()-began));
  record[key+timeSuffix]=Math.min(record[key+timeSuffix]??Infinity,ms);
@@ -46,6 +50,11 @@ function finish(){
  const date=spec.day.slice(0,2)+' / '+spec.day.slice(2);
  result.innerHTML='<article><div class="mode-stamp"><span>'+spec.year+'</span><b>'+date+'</b></div><p class="mode-caption">'+(practice?'随机练习完成':'已收入史书')+'　·　'+modeNames[spec.kind]+'</p><h1>'+spec.souvenir+'</h1><p>'+spec.memory+'</p><div class="mode-fact">'+spec.fact+' <a href="'+spec.source+'" target="_blank" rel="noopener">史料 ↗</a></div><footer><button data-mode-home>回到凝露港</button><button data-mode-practice>随机练习</button></footer></article>';
  result.querySelector('.mode-fact')!.insertAdjacentHTML('afterend',historyDetails(spec));
+ if(spec.id==='1116-defense'){
+   const marks=document.createElement('p');marks.className='mode-caption';
+   marks.textContent='累计挑战　'+(record[key+'-perfect']?'✓':'○')+' 零漏怪　'+(record[key+'-untaped']?'✓':'○')+' 未用校准纸带';
+   result.querySelector('footer')!.before(marks);
+ }
  if(fullCampaign){
    const best=document.createElement('p'),seconds=Math.floor(record[key+timeSuffix]/1000);
    best.className='mode-caption';

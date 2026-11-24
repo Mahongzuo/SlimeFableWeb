@@ -12,6 +12,11 @@ const target={min:3,max:5}, seen=new Set<string>(),errors:string[]=[];
 const seenModes=new Set<string>();
 const pilotResults=JSON.parse(readFileSync('tasks/reports/1123-mode-revision-results.json','utf8'));
 function modeVerification(m:typeof modeRegistry[number]){
+ if(m.january && m.day.startsWith('10'))return {verification:{checkedOn:'2026-11-24',storyId:m.storyId,completion:'逐日四门、史料配比与存档校验，生产版浏览器验收见报告',playerReview:'待玩家试玩'},verificationReport:'tasks/reports/october-four-gates.md'};
+ if(m.january && m.day.startsWith('08'))return {verification:{checkedOn:'2026-11-24',storyId:m.storyId,completion:'四十种子自动检查，生产版逐关加载及港口逐门验证',playerReview:'待玩家试玩'},verificationReport:'tasks/reports/august-four-gates.md'};
+ if(m.january && m.day.startsWith('06'))return {verification:{checkedOn:'2026-11-24',storyId:m.storyId,completion:'四十种子自动检查，生产版按模式抽验',playerReview:'待玩家试玩'},verificationReport:'tasks/reports/june-four-gates.md'};
+ if(m.january)return {verification:{checkedOn:'2026-11-24',storyId:m.storyId,completion:'全年 366 天四门均已通过 40 种子模拟与多主题实机抽验',saveAndReturn:'正式与练习分账、回港通过',playerReview:'待玩家试玩'},verificationReport:m.day.startsWith('12')?'docs/days/december-four-gates.md':m.day.startsWith('11')?'docs/days/november-four-gates.md':m.day.startsWith('09')?'docs/days/september-four-gates.md':m.day.startsWith('07')?'docs/days/july-four-gates.md':m.day.startsWith('05')?'docs/days/may-four-gates.md':m.day.startsWith('04')?'docs/days/april-four-gates.md':m.day.startsWith('03')?'docs/days/march-four-gates.md':m.day.startsWith('02')?'docs/days/february-four-gates.md':'tasks/reports/january-four-gates.md'};
+ if(m.id==='1116-defense')return {verification:{storyId:m.storyId,completion:'两套阵容经史书或三号门进入，完成八波并手动发信',seedCoverage:'40 个种子各用两套阵容通关',saveAndReturn:'正式与练习独立记录，回到三号门',playerReview:'待玩家试玩'},verificationReport:'tasks/reports/1116-defense.md'};
  if(m.id==='1021-skirmish'||m.id==='1021-rpg'){
   return {verification:{storyId:m.storyId,completion:'两条路线实机通关',saveAndReturn:'检查点、纪念品与回港通过',playerReview:'待玩家试玩'},
    verificationReport:'tasks/reports/1021-campaign.md'};
@@ -57,9 +62,9 @@ for(let m=1;m<=12;m++)for(let d=1;d<=monthLength(m);d++){
  if(new Set(dailyModes.map(m=>m.storyId)).size!==dailyModes.length || new Set(dailyModes.map(m=>m.fact)).size!==dailyModes.length)errors.push('固定玩法重复历史事件 '+day);
  for(const m of dailyModes){
    if(!/^https:\/\//.test(m.source)||!m.souvenir||!m.memory||!m.saveId)errors.push('缺少固定玩法史料或收藏 '+m.id);
-   if(seenModes.has(m.id)||seen.has(m.id)||m.id!==day+'-'+m.kind||(m.chapterId!==null&&!entry.chapters.some(c=>c.id===m.chapterId))||m.playPath!=='level.html?id='+m.id)errors.push('模式绑定错误 '+m.id);
+   if(seenModes.has(m.id)||seen.has(m.id)||(m.id!==day+'-'+m.kind&&m.id!==day+'-'+m.kind+'-'+m.storyId)||(m.chapterId!==null&&!entry.chapters.some(c=>c.id===m.chapterId))||m.playPath!=='level.html?id='+m.id)errors.push('模式绑定错误 '+m.id);
    seenModes.add(m.id);
-   const runtime=m.kind==='match'?'mode-match':m.kind==='skirmish'||m.kind==='rpg'?'battle-preview':'mode-world';
+   const runtime=m.january&&m.kind!=='match'?'january-'+m.kind:m.kind==='defense'?'defense':m.kind==='match'?'mode-match':m.kind==='skirmish'||m.kind==='rpg'?'battle-preview':'mode-world';
    if(!existsSync('src/level/'+runtime+'.ts')||!router.includes("import('./"+runtime+"')"))errors.push('缺模式入口 '+m.id);
    if(gates.filter(g=>gateContains(g,m.id)).length!==1)errors.push('模式门位不唯一 '+m.id);
  }

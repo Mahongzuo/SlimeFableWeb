@@ -1,0 +1,30 @@
+{
+  "daily": {
+    "vertices": 7248,
+    "collision": {
+      "triangles": 12,
+      "meshCount": 1
+    },
+    "resource": "/assets/january-defense-9cd8hLjp.js",
+    "spreadAfterDeployment": 0.8803174603174603,
+    "workerSpread": 0.8406285714285713,
+    "additionalDrawCalls": 97,
+    "record": "0101-defense-rose-parade-daily",
+    "unobstructedPlates": 6,
+    "visibleSceneMeshesAtFinish": 29
+  },
+  "practice": {
+    "vertices": 7260,
+    "collision": {
+      "triangles": 12,
+      "meshCount": 1
+    },
+    "resource": "/assets/january-defense-9cd8hLjp.js",
+    "spreadAfterDeployment": 0.8803174603174603,
+    "workerSpread": 0.8406285714285713,
+    "additionalDrawCalls": 98,
+    "record": "0101-defense-rose-parade-practice",
+    "unobstructedPlates": 6,
+    "visibleSceneMeshesAtFinish": 29
+  }
+}

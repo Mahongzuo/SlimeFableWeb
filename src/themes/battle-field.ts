@@ -5,8 +5,15 @@ import type {WorldDefinition} from '../slime/world';
 import {Kit} from './folio-landmarks';
 import {rng} from '../templates/random';
 
-export const fieldPoints:{spawn:Vec;first:Vec;fork:Vec;left:Vec;right:Vec;bossGate:Vec;boss:Vec}={
-  spawn:[0,0,8],first:[0,0,2],fork:[0,0,-4],left:[-5,0,-8],right:[5,1.8,-8],bossGate:[0,0,-14],boss:[0,0,-19]
+export const fieldPoints:{
+  spawn:Vec;first:Vec;fork:Vec;left:Vec;right:Vec;bossGate:Vec;boss:Vec;
+  drums:Vec[];braziers:Vec[];westSupply:Vec;eastPerch:Vec;
+}={
+  spawn:[0,0,8],first:[0,0,2],fork:[0,0,-4],left:[-5,0,-8],right:[5,1.8,-8],bossGate:[0,0,-14],boss:[0,0,-19],
+  drums:[[-3.1,0,5.4],[4.7,0,-12.3]],
+  braziers:[[2.9,0,3.2],[-6.8,0,-6.6],[-3.6,0,-16.8]],
+  westSupply:[-7.3,0,-8.6],
+  eastPerch:[6.4,1.8,-6.2],
 };
 const extent={x0:-10,x1:10,z0:-25,z1:11},step=.5;
 const width=(extent.x1-extent.x0)/step+1,height=(extent.z1-extent.z0)/step+1;
@@ -48,7 +55,7 @@ for(let i=0;i<footprint.length;i++){
 export function fieldWorld():WorldDefinition{
   return {boxes:walls.map(b=>({...b,min:[...b.min],max:[...b.max]})),triangles:rockFaces,surfaces:[{min:[extent.x0,extent.z0],max:[extent.x1,extent.z1],height:0,grid:{width,height,values}}]};
 }
-const wood='#68564a',straw='#c9ad77',dark='#514c46',madder='#aa4e41',indigo='#375d69';
+const wood='#68564a',straw='#c9ad77',madder='#aa4e41',indigo='#375d69';
 function paintGround(){
   const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=1792;
   const g=canvas.getContext('2d')!,random=rng('field-trodden-path');
@@ -145,15 +152,58 @@ export function buildCampaignField(stage:Stage){
   for(const x of [-9.8,9.8])for(const z of [-24,-14,-4,5])fence(x,z,z===5?5.6:8.2,false);
   fence(-9.7,10.9,19.4,true);fence(-9.6,-24.8,19.2,true);
   fence(-8,-10.9,2.5,true);fence(6.5,-10.8,2.1,true);
-  // A camp drum, its rack, cord bindings and traceable signal ropes.
+  // Two interactive camp war drums (with golden shock rings when struck).
+  const drumRings:T.Mesh[]=[];
+  const drumWaves=[0,0];
+  const redBrown='#9d5545';
   const drum=(x:number,z:number)=>{
-    const y=fieldHeight(x,z);for(const dx of [-.36,.36])kit.beam(root,wood,[x+dx,y,z+.29],[x+dx*.56,y+1.13,z-.12],.066);
+    const y=fieldHeight(x,z);
+    for(const dx of [-.36,.36])kit.beam(root,wood,[x+dx,y,z+.29],[x+dx*.56,y+1.13,z-.12],.066);
     kit.put('round',root,'toon',redBrown,x,y+.87,z,.41,.53,.41,Math.PI/2);
     for(const dz of [-.283,.283])kit.put('round',root,'toon','#d8c3a2',x,y+.87,z+dz,.405,.033,.405,Math.PI/2);
     for(let k=0;k<12;k++){const a=k*Math.PI/6,b=a+.14;
       kit.beam(root,straw,[x+.416*Math.cos(a),y+.87+.416*Math.sin(a),z-.245],[x+.416*Math.cos(b),y+.87+.416*Math.sin(b),z+.245],.009);}
+    const wave=new T.Mesh(
+      new T.TorusGeometry(1,.06,8,32),
+      new T.MeshBasicMaterial({color:'#ffe082',transparent:true,opacity:0,depthWrite:false}),
+    );
+    wave.rotation.x=Math.PI/2;wave.position.set(x,y+.22,z);wave.layers.set(1);wave.visible=false;
+    root.add(wave);drumRings.push(wave);
   };
-  const redBrown='#9d5545';drum(-3.1,5.4);drum(4.7,-12.3);
+  for(const [dx,,dz] of fieldPoints.drums)drum(dx,dz);
+
+  // Three interactive bronze braziers (wind skills swirl fire; water creates mist)
+  const brazierFlames:T.Mesh[]=[];
+  for(const [bx,,bz] of fieldPoints.braziers){
+    const by=fieldHeight(bx,bz);
+    for(let leg=0;leg<3;leg++){
+      const a=leg*Math.PI*2/3;
+      kit.beam(root,'#3e3a38',[bx+Math.cos(a)*.30,by,bz+Math.sin(a)*.30],[bx+Math.cos(a)*.18,by+.68,bz+Math.sin(a)*.18],.036);
+    }
+    kit.cyl(root,'#423b37',bx,by+.72,bz,.34,.18);
+    const flame=new T.Mesh(
+      new T.OctahedronGeometry(.22,0),
+      new T.MeshBasicMaterial({color:'#ff9742'}),
+    );
+    flame.position.set(bx,by+.96,bz);flame.layers.set(1);
+    root.add(flame);brazierFlames.push(flame);
+  }
+
+  // West low-road supply crate (grants +1 Dew Gourd potion) & East ridge banner perch
+  const [sx,,sz]=fieldPoints.westSupply;
+  const sy=fieldHeight(sx,sz);
+  const supplyGroup=new T.Group();supplyGroup.position.set(sx,sy,sz);
+  const crate=new T.Mesh(new T.BoxGeometry(.76,.56,.62),stage.toon('#8e6443'));crate.position.y=.28;crate.castShadow=true;
+  const gourdGlow=new T.Mesh(new T.OctahedronGeometry(.16,0),new T.MeshBasicMaterial({color:'#8ef8bc'}));
+  gourdGlow.position.y=.84;gourdGlow.layers.set(1);
+  supplyGroup.add(crate,gourdGlow);root.add(supplyGroup);
+
+  const [ex,,ez]=fieldPoints.eastPerch;
+  const ey=fieldHeight(ex,ez);
+  const perchGlow=new T.Mesh(new T.TorusGeometry(.55,.045,8,28),new T.MeshBasicMaterial({color:'#ffe085',transparent:true,opacity:.75,depthWrite:false}));
+  perchGlow.rotation.x=Math.PI/2;perchGlow.position.set(ex,ey+.06,ez);perchGlow.layers.set(1);
+  root.add(perchGlow);
+
   for(let i=0;i<320;i++){
     const x=random.range(-10.1,10.1),z=random.range(-24.8,10.8);
     const lane=(z<-3&&z>-14)?Math.abs(Math.abs(x)-4.7)<2.4:Math.abs(x)<3.9;
@@ -178,14 +228,46 @@ export function buildCampaignField(stage:Stage){
   }
   const command=banner(.85,0,-23.4,5.35,2);
   kit.flush();let turn=0,fall=0,last=0;
+  function pulseDrum(idx:number){
+    if(idx>=0&&idx<drumWaves.length)drumWaves[idx]=.001;
+  }
+  function setSupplyTaken(taken:boolean){
+    gourdGlow.visible=!taken;
+  }
+  function setPerchTaken(taken:boolean){
+    perchGlow.visible=!taken;
+  }
   function update(time:number,phaseTwo:boolean,won:boolean){
     const dt=Math.min(.12,Math.max(0,time-last));last=time;
-    turn=T.MathUtils.lerp(turn,won?1:0,1-Math.exp(-dt*2.6));
+    const targetTurn=won?1:phaseTwo?.38:0;
+    turn=T.MathUtils.lerp(turn,targetTurn,1-Math.exp(-dt*2.6));
     fall=T.MathUtils.lerp(fall,won?1:0,1-Math.exp(-dt*2.0));
-    if(stage.scene.fog?.isFog){stage.scene.fog.near=7+(phaseTwo?1:0)+fall*12;stage.scene.fog.far=36+(phaseTwo?4:0)+fall*29;}
+    if(stage.scene.fog?.isFog){stage.scene.fog.near=7+(phaseTwo?2:0)+fall*12;stage.scene.fog.far=36+(phaseTwo?6:0)+fall*29;}
     command.rotation.z=fall*1.31;
+    for(let i=0;i<brazierFlames.length;i++){
+      const f=brazierFlames[i];
+      f.rotation.y=time*3.2+i;
+      const s=.88+.20*Math.sin(time*9+i*2.1);
+      f.scale.set(s,s*1.35,s);
+    }
+    if(gourdGlow.visible){gourdGlow.rotation.y=time*2.5;gourdGlow.position.y=.84+.06*Math.sin(time*4);}
+    if(perchGlow.visible){perchGlow.rotation.z=time*1.6;}
+    for(let i=0;i<drumRings.length;i++){
+      if(drumWaves[i]<=0)continue;
+      drumWaves[i]+=dt*1.65;
+      const u=drumWaves[i];
+      if(u>=1){drumWaves[i]=0;drumRings[i].visible=false;}
+      else{
+        drumRings[i].visible=true;
+        drumRings[i].scale.setScalar(.8+u*8.8);
+        (drumRings[i].material as T.MeshBasicMaterial).opacity=(1-u)*.85;
+      }
+    }
     for(const {post,cloth,rest,offset,turn:turning} of banners){
-      if(turning){post.rotation.z=.10-turn*.66;post.rotation.y=.42-turn*1.14;}
+      if(turning){
+        const tremble=phaseTwo&&!won?.08*Math.sin(time*6+offset):0;
+        post.rotation.z=.10-turn*.66+tremble;post.rotation.y=.42-turn*1.14;
+      }
       const p=cloth.geometry.attributes.position;
       for(let i=0;i<p.count;i++){
         const u=(i%7)/6,v=Math.floor(i/7)/12;
@@ -195,5 +277,5 @@ export function buildCampaignField(stage:Stage){
     }
   }
   update(0,false,false);
-  return {root,update};
+  return {root,update,pulseDrum,setSupplyTaken,setPerchTaken};
 }

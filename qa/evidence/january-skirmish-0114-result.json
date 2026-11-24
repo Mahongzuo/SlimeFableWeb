@@ -1,0 +1,20 @@
+{
+  "day": "0114",
+  "base": "http://127.0.0.1:5242",
+  "module": "/assets/january-skirmish-DW9XrkNd.js",
+  "introFrameDrawCalls": 63,
+  "nativeShots": [
+    1,
+    2,
+    1,
+    2
+  ],
+  "heightBeforeSpread": 0.3850471302866936,
+  "heightDuringSpread": 0.09559708321467042,
+  "saveId": "0114-skirmish-ten-yards",
+  "returnPath": "http://127.0.0.1:5242/?date=0114&from=0114-skirmish",
+  "bakedFloorProbes": 36,
+  "bothRoutes": true,
+  "reentry": true,
+  "workerErrors": []
+}

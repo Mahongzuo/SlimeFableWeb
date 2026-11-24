@@ -45,13 +45,13 @@ with sync_playwright() as pw:
         print('PASS', width, key, 'unique departure', flush=True)
     page.goto(args.base+'/?date=1112')
     page.locator('[data-act=start]:enabled').click()
-    page.evaluate("()=>__slime.teleport([...__game.portals[2].slot.position])")
+    page.evaluate("()=>__slime.teleport([...__game.portals[1].slot.position])")
     page.locator('.door .pilot-list').wait_for()
     choices = page.locator('.door [data-act=go]')
-    assert choices.count() == 3
+    assert choices.count() == 4
     page.keyboard.press('f')
     page.wait_for_timeout(350)
-    assert choices.count() == 3
+    assert choices.count() == 4
     chosen = choices.nth(1).get_attribute('data-id')
     choices.nth(1).focus()
     page.keyboard.press('Enter')

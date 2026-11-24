@@ -1,3 +1,4 @@
+import {GroundCameraHeight} from './camera-follow';
 import {SlimeRenderer} from './render';
 import {TrailDecals} from './wet-film';
 import {FaceDirector,Mood} from './face';
@@ -9,7 +10,7 @@ import {SlimeUmbrellaView,UMBRELLA,UmbrellaLogic} from './umbrella';
 import {SlashVfxSystem} from './slash-vfx';
 import {SkillRuntime,type CombatHudSnapshot,type ReactionResult,type SkillDef,type SkillSlot} from './skills';
 import {SkillVfxSystem} from './skill-vfx';
-import {BattleCollider,BodyShape,Box,CannonLaunchSpec,firstBattleContact,FrameInput,MeshFrame,Vec,Quality,Command,cannonPositionAt,clamp,distance,idlePose,mix,smooth,solveCannonLaunch} from './types';
+import {BattleCollider,BodyShape,Box,CannonImpact,CannonLaunchSpec,firstBattleContact,FrameInput,MeshFrame,Vec,Quality,Command,cannonPositionAt,clamp,distance,idlePose,mix,smooth,solveCannonLaunch} from './types';
 
 export interface SlimeRenderPass {color:any;depth:any;time:number}
 /** Supply the same Three.js namespace used by your scene; no second renderer is created. */
@@ -20,7 +21,8 @@ export interface SlimeOptions {
   onToast?:(text:string)=>void;onLand?:(speed:number,swimming:boolean)=>void;onReady?:()=>void;onCling?:(on:boolean)=>void;
   onFire?:()=>void;
   /** Encounter targets supply foot positions. The level draws their models and HUD. */
-  battleTargets?:Vec[]; defaultAim?:boolean; onDodgePress?:()=>void;
+  battleTargets?:Vec[]; burstOnEnemy?:boolean; defaultAim?:boolean; onDodgePress?:()=>void;
+  onBattleCloneBurst?:(point:Vec,element:number)=>void;
   onBattleSceneryHit?:(point:Vec,element:number)=>void;
   onBattleHit?:(target:CombatTarget,damage:number,element:number,reaction:ReactionResult|null,point:Vec)=>void;
   /** Fired during active hit window of every combo attack so farm plots & interactive world objects can react. */
@@ -57,7 +59,12 @@ export class SlimeCharacter {
  renderer:SlimeRenderer;decals:TrailDecals;combat:Combat;worker=new Worker(new URL('./sim.worker.ts',import.meta.url),{type:'module'});busy=false;elapsed=0;simDt=0;lastRequest=0;commands:Command[]=[];recycle:Pick<MeshFrame,'positions'|'normals'|'slots'>|undefined;latest:MeshFrame|null=null;ready=false;running=true;debugFreeze=false;
  aiming=false;aimReady=false;aimRecoil=0;launchCooldown=0;
  frameTimes:number[]=[];workerTimes:number[]=[];meshTimes:number[]=[];resets=0;workerErrors:string[]=[];dropped=0;received=0;
- private processedImpacts=new Set<number>();
+ private pendingImpacts:CannonImpact[]=[];
+ private sentLaunches=0;
+ private get occupiedShots(){
+  const live=this.latest?.generation===this.generation?this.latest.shots.length:0;
+  return live+this.sentLaunches+this.commands.filter(c=>c.type==='launch').length;
+ }
  private jumpRequest=false;private jumpBuffer=0;private coyoteTimer=0;private jumpHeld=false;private jumpStretch=0;private airBounce=0;
  /** Level-authored dodges feed displacement through the usual capsule, floor and camera. */
  dodgeMotion:Vec|null=null;
@@ -67,6 +74,7 @@ export class SlimeCharacter {
  private launchTarget:Vec=[3,0,13];private pendingCannon:CannonLaunchSpec|null=null;private rightAimHeld=false;
  private impact=0;private dragging=false;private toastTimer=0;private camPos:any;private target:any;private saved:any;private lastUi=0;private lastPerf=performance.now();
  private targetMeshes:any[]=[];private targetLabels:HTMLElement[]=[];private lightning:any;private lightningPositions=new Float32Array(6*32*2*3);
+ private cameraHeight=new GroundCameraHeight();
  private shake=0;private aimBlend=0;private launchBlocked=false;private listeners:{target:EventTarget;type:string;fn:EventListener}[]=[];
  private baseBoxCount=0;private pendingDynamicBoxes:Box[]|null=null;
  private baseSurfaceCount=0;private pendingDynamicSurfaces:{surfaces:GroundSurface[];bounds?:{min:Vec;max:Vec}}|null=null;
@@ -206,7 +214,7 @@ export class SlimeCharacter {
  }
  cycleBodyShape(){this.setBodyShape(this.bodyShape==='dome'?'ball':'dome');}
 
- teleport(p:Vec){this.frameAnchor=null;this.processedImpacts.clear();this.cling=null;this.umbrella.cancel(true);this.umbrellaView.reset();this.position=[...p];this.velocity=[0,0,0];this.generation++;this.decals.reset();}
+ teleport(p:Vec){this.cameraHeight.reset();this.currentArm=this.arm;this.frameAnchor=null;this.pendingImpacts.length=0;this.sentLaunches=0;this.commands=[];this.cling=null;this.umbrella.cancel(true);this.umbrellaView.reset();this.position=[...p];this.velocity=[0,0,0];this.generation++;this.decals.reset();}
 
  /** Move an existing platform in the worker without regenerating the body or its clones. */
  syncBox(index:number){const box=this.world.boxes[index];if(box&&!this.worldPending)this.worker.postMessage({boxUpdate:{index,min:box.min,max:box.max}});}
@@ -291,7 +299,7 @@ export class SlimeCharacter {
 
  play(){
   if(!this.ready){this.toast('身体正在生成，请稍候');return}
-  if(this.mode==='observe'){this.saved={position:this.ctx.camera.position.clone(),target:this.ctx.controls.target.clone(),fov:this.ctx.camera.fov,near:this.ctx.camera.near};this.yaw=0;this.pitch=.23;this.currentArm=this.arm;this.camPos.set(this.position[0],this.position[1]+1.1,this.position[2]+this.arm)}
+  if(this.mode==='observe'){this.cameraHeight.reset();this.saved={position:this.ctx.camera.position.clone(),target:this.ctx.controls.target.clone(),fov:this.ctx.camera.fov,near:this.ctx.camera.near};this.yaw=0;this.pitch=.23;this.currentArm=this.arm;this.camPos.set(this.position[0],this.position[1]+1.1,this.position[2]+this.arm)}
   this.mode='play';this.ctx.controls.enabled=false;this.ctx.camera.fov=60;this.ctx.camera.near=.04;this.ctx.camera.updateProjectionMatrix();
   this.ui.classList.remove('viewing');this.ui.classList.add('playing');this.$('#observe').classList.remove('hidden');this.$('.combo').classList.remove('hidden');
   const promise=this.ctx.renderer.domElement.requestPointerLock?.();promise?.catch?.(()=>this.toast(this.options.onDodgePress?'可按住鼠标中键转动镜头':'可按住鼠标右键转动镜头'));
@@ -322,9 +330,9 @@ export class SlimeCharacter {
   return true;
  }
  reset(){
-  this.face.reset();this.frameAnchor=null;this.processedImpacts.clear();this.cling=null;this.umbrella.cancel(true);this.umbrellaView.reset();this.slashVfx.reset();this.skillVfx.reset();this.skills.reset();this.debugFreeze=false;
+  this.cameraHeight.reset();this.currentArm=this.arm;this.face.reset();this.frameAnchor=null;this.pendingImpacts.length=0;this.sentLaunches=0;this.commands=[];this.cling=null;this.umbrella.cancel(true);this.umbrellaView.reset();this.slashVfx.reset();this.skillVfx.reset();this.skills.reset();this.debugFreeze=false;
   this.position=[...this.spawn];this.velocity=[0,0,0];this.forward=[0,0,-1];this.grounded=true;this.jumps=0;this.spread=0;this.impact=0;this.jumpStretch=0;this.airBounce=0;this.coyoteTimer=0;this.jumpBuffer=0;this.jumpHeld=false;
-  this.aiming=false;this.aimReady=false;this.rightAimHeld=false;this.keys.clear();this.commands=[];this.combat.reset();this.decals.reset();this.generation++;this.resets++;this.latest=null;this.yaw=0;this.pitch=.23;
+  this.aiming=false;this.aimReady=false;this.rightAimHeld=false;this.keys.clear();this.combat.reset();this.decals.reset();this.generation++;this.resets++;this.latest=null;this.yaw=0;this.pitch=.23;
   if(this.mode==='play')this.camPos.set(this.position[0],1.1,this.position[2]+this.arm);
   this.toast('已回到码头 · 分身与木靶已重置');
  }
@@ -334,27 +342,31 @@ export class SlimeCharacter {
   this.busy=false;this.received++;if(frame.error){this.fail(frame.error);return}
   this.recycle={positions:frame.positions,normals:frame.normals,slots:frame.slots};
   if(frame.generation!==this.generation){this.dropped++;return}
-  if(frame.shots.length<this.lastShotCount)this.face.pulse('Happy',.8,50);
-  if(this.options.battleTargets){
-   for(const id of this.processedImpacts)if(!frame.shots.some(shot=>shot.id===id))this.processedImpacts.delete(id);
-   for(const shot of frame.shots){
-    const impact=shot.impact;
-    if(!impact||this.processedImpacts.has(shot.id)||this.mode!=='play')continue;
-    this.processedImpacts.add(shot.id);
+  this.sentLaunches=0;
+  if(frame.shots.length<this.lastShotCount&&!frame.impacts?.some(i=>i.targetId!==null))this.face.pulse('Happy',.8,50);
+  this.lastShotCount=frame.shots.length;this.latest=frame;this.frameAnchor=this.sentAnchor;
+  this.renderer.receive(frame);
+  if(frame.impacts?.length){
+   this.pendingImpacts.push(...frame.impacts);
+   if(this.mode==='play')this.resolveImpacts();
+  }
+  this.decals.feed(frame,this.element,this.grounded&&!this.swimming);
+  this.workerTimes.push(frame.simMs);this.meshTimes.push(frame.meshMs);if(this.workerTimes.length>600){this.workerTimes.shift();this.meshTimes.shift()}
+  if(!this.ready){this.ready=true;this.options.onReady?.();this.$('#status').textContent='自由观景 · 点击开始游玩';this.toast('史莱姆已就绪 · 可以开始游玩')}
+ }
+ private resolveImpacts(){
+  for(const impact of this.pendingImpacts.splice(0)){
     if(impact.targetId===null){
      this.slashVfx.spawnBurst(impact.point,impact.element,10,1.4);
      this.decals.stamp(impact.point,impact.element,this.elapsed,.5);
      this.options.onBattleSceneryHit?.(impact.point,impact.element);continue;
     }
+    if(this.options.burstOnEnemy)this.options.onBattleCloneBurst?.(impact.point,impact.element);
     const target=this.combat.targets.find(t=>t.id===impact.targetId&&t.health>0);
     if(target)this.combat.applyHitToTarget(target,24,impact.element,this.elapsed,
       (t,damage,element,reaction)=>this.hit(t,damage,element,reaction,impact.point));
-   }
+    else this.slashVfx.spawnBurst(impact.point,impact.element,14,2.2);
   }
-  this.lastShotCount=frame.shots.length;this.latest=frame;this.frameAnchor=this.sentAnchor;
-  this.renderer.receive(frame);this.decals.feed(frame,this.element,this.grounded&&!this.swimming);
-  this.workerTimes.push(frame.simMs);this.meshTimes.push(frame.meshMs);if(this.workerTimes.length>600){this.workerTimes.shift();this.meshTimes.shift()}
-  if(!this.ready){this.ready=true;this.options.onReady?.();this.$('#status').textContent='自由观景 · 点击开始游玩';this.toast('史莱姆已就绪 · 可以开始游玩')}
  }
  private createTraining(){
   const labelHost=this.options.ui===false?document.body:this.ui;
@@ -417,7 +429,7 @@ export class SlimeCharacter {
     prev=next;
    }
   }
-  const activeShots=(this.latest?.shots.length??0)+this.commands.filter(c=>c.type==='launch').length;
+  const activeShots=this.occupiedShots;
   // Match UE CanFireLaunch: separation block prevents fire; mid-flight obstacle only dims crosshair.
   this.launchBlocked=sepBlocked||!solved;
   this.aimReady=!this.launchBlocked&&!pathBlocked&&this.launchCooldown<=0&&activeShots<5;
@@ -427,11 +439,11 @@ export class SlimeCharacter {
 
  fire(){
   if(this.launchCooldown>0)return;
-  if((this.latest?.shots.length??0)+this.commands.filter(c=>c.type==='launch').length>=5){this.toast('分身已达 5 团，按住 X 收回来');this.launchCooldown=.35;return}
+  if(this.occupiedShots>=5){this.toast('分身已达 5 团，按住 X 收回来');this.launchCooldown=.35;return}
   this.aim();
   if(!this.pendingCannon||this.launchBlocked)return;
   this.face.pulse('Spit',.38,55);
-  this.commands.push({type:'launch',target:[...this.launchTarget],cannon:{...this.pendingCannon,element:this.element}});
+  this.commands.push({type:'launch',target:[...this.launchTarget],cannon:{...this.pendingCannon,element:this.element,burstOnEnemy:this.options.burstOnEnemy}});
   this.launchCooldown=CANNON.fireInterval;
   this.aimRecoil=1;
   this.shake=Math.max(this.shake,.014);
@@ -569,13 +581,31 @@ export class SlimeCharacter {
   const eased=smooth(this.aimBlend);
   const right=new this.T.Vector3(Math.cos(this.yaw),0,-Math.sin(this.yaw));
   const baseHeight=mix(.24,.36,clamp((this.arm-1.2)/4,0,1));
-  const pivot=new this.T.Vector3(this.position[0],this.position[1]+baseHeight+LAUNCH_CAM.height*eased,this.position[2])
-   .addScaledVector(right,LAUNCH_CAM.shoulder*eased);
+  const [x,foot,z]=this.position;
+  // Descending a tread can briefly leave the capsule airborne until it finds the next tread.
+  const floor=this.grounded?foot:this.world.support(x,z,foot);
+  const stepReach=.34+.08*Math.hypot(this.velocity[0],this.velocity[2]);
+  const onSteps=!this.cling&&!this.swimming&&this.jumps===0&&floor!==null
+   &&this.velocity[1]<=0&&foot-floor<=stepReach;
+  const filteredFoot=this.cameraHeight.update(foot,dt,onSteps);
+  const eye=baseHeight+LAUNCH_CAM.height*eased;
+  const pivot=new this.T.Vector3(x,filteredFoot+eye,z).addScaledVector(right,LAUNCH_CAM.shoulder*eased);
+  if(filteredFoot<foot&&onSteps){
+   // On a steep staircase the filtered eye can lag into the tread. Keep the
+   // boom's starting sphere clear, or a ground sample near t=0 collapses it.
+   const tread=this.world.support(pivot.x,pivot.z,foot);
+   if(tread!==null)pivot.y=Math.max(pivot.y,Math.min(foot+eye,tread+.19));
+  }
+  if(Math.abs(pivot.y-foot-eye)>.01){
+   const physical:Vec=[pivot.x,foot+eye,pivot.z];
+   const obstruction=this.world.cast(physical,pivot.toArray(),.12,true);
+   if(obstruction)pivot.y=mix(physical[1],pivot.y,Math.max(0,obstruction.t-.03));
+  }
   const offset=new this.T.Vector3(Math.sin(this.yaw)*Math.cos(this.pitch),Math.sin(this.pitch)+.05*(1-eased),Math.cos(this.yaw)*Math.cos(this.pitch));
   const desired=pivot.clone().addScaledVector(offset,this.arm);
   const collision=this.world.cast(pivot.toArray(),desired.toArray(),.12,true);
-  const wanted=collision?Math.max(.35,this.arm*collision.t-.10):this.arm;
-  this.currentArm=wanted<this.currentArm?wanted:mix(this.currentArm,wanted,1-Math.exp(-dt*14));
+  const wanted=collision?Math.max(.01,this.arm*collision.t-.10):this.arm;
+  this.currentArm=wanted<this.currentArm?wanted:mix(this.currentArm,wanted,1-Math.exp(-dt*5.5));
   this.camPos.copy(pivot).addScaledVector(offset,this.currentArm);
   this.ctx.camera.position.copy(this.camPos);
   if(this.shake>0){
@@ -635,6 +665,7 @@ export class SlimeCharacter {
   this.ui.classList.toggle('aiming',this.aiming);
   let pose=idlePose();
   if(this.mode==='play'){
+   if(this.pendingImpacts.length)this.resolveImpacts();
    pose=this.movement(dt,time);
    this.camera(dt);
    if(this.aiming){this.aim()}else{this.aimReady=false;this.pendingCannon=null}
@@ -669,6 +700,7 @@ export class SlimeCharacter {
     battleTargets:this.options.battleTargets?this.battleColliders():undefined,
     generation:this.generation,shapeBlend:this.shapeBlend,jumpStretch:this.jumpStretch,airBounce:this.airBounce,umbrella:this.umbrella.open,
    };
+   this.sentLaunches=input.commands.filter(c=>c.type==='launch').length;
    const recycle=this.recycle;this.recycle=undefined;this.sentAnchor=[...input.anchor];
    this.worker.postMessage({input,recycle,world:this.worldPending?this.options.world:undefined},recycle?[recycle.positions.buffer,recycle.normals.buffer,recycle.slots.buffer]:[]);
    if(this.worldPending){

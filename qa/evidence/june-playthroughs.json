@@ -1,0 +1,79 @@
+{
+  "contentAsset": "june-pilots-BW-V-GLM.js",
+  "0601-defense": {
+    "daily": {
+      "vertices": 7260,
+      "collision": {
+        "triangles": 12,
+        "meshCount": 1
+      },
+      "resource": "/assets/january-defense-Bm8kLOrv.js",
+      "spreadAfterDeployment": 0.8803174603174603,
+      "workerSpread": 0.8655460317460314,
+      "additionalDrawCalls": 71,
+      "record": "0601-defense-cn-gorges-2003-daily",
+      "unobstructedPlates": 6,
+      "visibleSceneMeshesAtFinish": 23
+    },
+    "practice": {
+      "vertices": 7248,
+      "collision": {
+        "triangles": 12,
+        "meshCount": 1
+      },
+      "resource": "/assets/january-defense-Bm8kLOrv.js",
+      "spreadAfterDeployment": 0.8803174603174603,
+      "workerSpread": 0.8904634920634922,
+      "additionalDrawCalls": 71,
+      "record": "0601-defense-cn-gorges-2003-practice",
+      "unobstructedPlates": 6,
+      "visibleSceneMeshesAtFinish": 23
+    }
+  },
+  "0601-match": {
+    "正式": {
+      "stage": 3,
+      "swaps": 5,
+      "shapes": 11,
+      "vertices": 7500,
+      "save": "0601-match-cn-deer-2023"
+    },
+    "练习": {
+      "stage": 3,
+      "swaps": 5,
+      "shapes": 9,
+      "vertices": 6876,
+      "save": "0601-match-cn-deer-2023"
+    }
+  },
+  "0604-skirmish": {
+    "day": "0604",
+    "base": "http://127.0.0.1:5256",
+    "module": "/assets/january-skirmish-DOLL0uj3.js",
+    "introFrameDrawCalls": 71,
+    "nativeShots": [
+      1,
+      1,
+      1,
+      2
+    ],
+    "heightBeforeSpread": 0.3924586772918701,
+    "heightDuringSpread": 0.34997382014989853,
+    "saveId": "0604-skirmish-cn-lunarascent-2024",
+    "returnPath": "http://127.0.0.1:5256/?date=0604&from=0604-skirmish",
+    "bakedFloorProbes": 30,
+    "bothRoutes": true,
+    "reentry": true,
+    "workerErrors": []
+  },
+  "0630-rpg": {
+    "meshVertices": 6708,
+    "spread": 0.5197619047592439,
+    "additionalCalls": 52,
+    "asset": "/assets/january-rpg-DghEYiTg.js",
+    "id": "0630-rpg",
+    "practice": false,
+    "finished": true,
+    "returnedAndReopened": true
+  }
+}

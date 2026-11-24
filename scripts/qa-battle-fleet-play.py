@@ -52,7 +52,7 @@ with sync_playwright() as pw:
          };
          window.shipFight=async index=>{
           const enemy=__level.enemies[index],start=performance.now(),startHp=enemy.target.health;
-          let dodges=0,lastDodge=-3,fires=0,previous=-3,recoverAt=-1,observedRecall=false,maxShots=0,shotBefore=0;
+          let dodges=0,lastDodge=-3,fires=0,previous=-3,recoverAt=-1,observedRecall=false,maxShots=0,recallIds=new Set();
           const canvas=a.ctx.renderer.domElement;
           try{
            while(enemy.living){
@@ -68,11 +68,11 @@ with sync_playwright() as pw:
              shipKeys(dir,true);shipKeys('AltLeft',true);shipKeys('AltLeft',false);shipKeys(dir,false);
              lastDodge=t;dodges++;
             }
-            const used=a.latest?.shots?.length??0;maxShots=Math.max(maxShots,used);
+            const shots=a.latest?.shots??[],used=shots.length;maxShots=Math.max(maxShots,used);
             if(recoverAt>=0){
-             if(used<shotBefore)observedRecall=true;
+             if(shots.some(s=>recallIds.has(s.id)&&(s.phase==='returning'||s.phase==='merging')))observedRecall=true;
              if(used===0||t-recoverAt>1.7){shipKeys('KeyX',false);recoverAt=-1}
-            }else if(used>=4&&t-previous>.30){recoverAt=t;shotBefore=used;shipKeys('KeyX',true)}
+            }else if(used>=4&&t-previous>.30){recoverAt=t;recallIds=new Set(shots.map(s=>s.id));shipKeys('KeyX',true)}
             else if(t-previous>.29&&used<4){
              canvas.dispatchEvent(new PointerEvent('pointerdown',{button:0,bubbles:true}));fires++;previous=t;
             }
@@ -91,7 +91,7 @@ with sync_playwright() as pw:
     def fight(i):
         result=page.evaluate('i=>shipFight(i)',i)
         print('PASS shots',result,flush=True)
-        # Recover living or spent clones once the threatened section is clear.
+        # Recall any missed shots still on the deck after the cleared encounter.
         page.keyboard.down('x')
         page.wait_for_function('window.__slime?.latest?.shots.length===0',timeout=12000)
         page.keyboard.up('x')

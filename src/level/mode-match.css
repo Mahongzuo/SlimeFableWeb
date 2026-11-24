@@ -106,3 +106,9 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#273d42}bod
 
 .ml-cell.time-drop::after{content:'⌛ +2';position:absolute;bottom:0;right:0;padding:1px 3px;border-radius:4px;background:#ffdc87;color:#443013;font:bold 11px system-ui;pointer-events:none}
 .ml-score [data-ranking]{background:transparent;color:inherit;border:0;text-decoration:underline;cursor:pointer;font:inherit}
+#match-lab[data-theme=titan]{--frame:#815542;--dark:#482f32;--accent:#ffce89}
+#match-lab[data-theme=press]{--frame:#466660;--dark:#253f3b;--accent:#f3cc91}
+.ml-january-print{position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none}
+.ml-january-print:not([hidden]){animation:ml-reveal-print .6s ease-out both}
+@keyframes ml-reveal-print{from{opacity:0;transform:perspective(42rem) rotateX(35deg)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.ml-january-print:not([hidden]){animation:none}}

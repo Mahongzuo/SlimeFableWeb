@@ -1,0 +1,30 @@
+{
+  "daily": {
+    "vertices": 7248,
+    "collision": {
+      "triangles": 12,
+      "meshCount": 1
+    },
+    "resource": "/assets/january-defense-9cd8hLjp.js",
+    "spreadAfterDeployment": 0.8803174603174603,
+    "workerSpread": 0.8407777777777777,
+    "additionalDrawCalls": 67,
+    "record": "0114-defense-spring-travel-daily",
+    "unobstructedPlates": 6,
+    "visibleSceneMeshesAtFinish": 21
+  },
+  "practice": {
+    "vertices": 7248,
+    "collision": {
+      "triangles": 12,
+      "meshCount": 1
+    },
+    "resource": "/assets/january-defense-9cd8hLjp.js",
+    "spreadAfterDeployment": 0.8803174603174603,
+    "workerSpread": 0.8653968253968253,
+    "additionalDrawCalls": 67,
+    "record": "0114-defense-spring-travel-practice",
+    "unobstructedPlates": 6,
+    "visibleSceneMeshesAtFinish": 21
+  }
+}

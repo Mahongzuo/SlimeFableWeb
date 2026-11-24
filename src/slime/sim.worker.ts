@@ -50,6 +50,8 @@ self.onmessage=(event:MessageEvent<WorkerMsg>)=>{
   while(accumulator>=1/60&&steps<4){solver.step(1/60,input);accumulator-=1/60;steps++}
   const simMs=performance.now()-start;
   const frame=surface.build(solver,input.quality,recycle);
+  // The event stream and geometry are delivered together, including when the last shot just disappeared.
+  frame.impacts=solver.takeImpacts();
   frame.simMs=simMs;
   frame.generation=input.generation;
   (self as any).postMessage(frame,[frame.positions.buffer,frame.normals.buffer,frame.slots.buffer]);

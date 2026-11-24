@@ -1,0 +1,20 @@
+{
+  "day": "0131",
+  "base": "http://127.0.0.1:5242",
+  "module": "/assets/january-skirmish-DW9XrkNd.js",
+  "introFrameDrawCalls": 113,
+  "nativeShots": [
+    1,
+    1,
+    1,
+    2
+  ],
+  "heightBeforeSpread": 0.3924552369862795,
+  "heightDuringSpread": 0.0851790807209909,
+  "saveId": "0131-skirmish-pompidou",
+  "returnPath": "http://127.0.0.1:5242/?date=0131&from=0131-skirmish",
+  "bakedFloorProbes": 30,
+  "bothRoutes": true,
+  "reentry": true,
+  "workerErrors": []
+}

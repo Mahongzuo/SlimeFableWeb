@@ -1,8 +1,8 @@
 {
-  "testedBase": "http://127.0.0.1:5231",
+  "testedBase": "http://127.0.0.1:5241",
   "assets": [
-    "/assets/level-HZN09x4U.js",
-    "/assets/battle-preview-BnTrvpHg.js"
+    "/assets/level-BUAknCBD.js",
+    "/assets/battle-preview-Dhg8uAA3.js"
   ],
   "route": "lower",
   "journal": true,
@@ -10,9 +10,9 @@
     "name": "记录室 · 已取得图匣",
     "hp": 86,
     "pos": [
-      18.887729132159127,
+      18.891389870983893,
       0,
-      1.6025829028598984
+      1.6061254220578411
     ],
     "journal": true
   },
@@ -29,21 +29,21 @@
   "combat": [
     {
       "enemy": "sailor",
-      "fires": 7,
+      "fires": 5,
       "dodges": 0,
-      "maxShots": 3,
+      "maxShots": 1,
       "observedRecall": false
     },
     {
       "enemy": "rigger",
       "fires": 8,
       "dodges": 0,
-      "maxShots": 4,
-      "observedRecall": true
+      "maxShots": 1,
+      "observedRecall": false
     },
     {
       "enemy": "guardian",
-      "fires": 28,
+      "fires": 35,
       "dodges": 7,
       "maxShots": 4,
       "observedRecall": true
@@ -55,8 +55,8 @@
       0,
       2.299999999999999
     ],
-    "wins": 1,
-    "best": 76494,
+    "wins": 2,
+    "best": 41582,
     "completed": true,
     "keepsake": true
   }

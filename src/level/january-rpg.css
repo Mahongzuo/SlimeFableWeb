@@ -1,0 +1,13 @@
+html,body{height:100%;margin:0;overflow:hidden;background:#203a44}body>canvas{position:fixed;inset:0;touch-action:none}
+#january-rpg{--bg:#142d40;--accent:#f4c66c;position:fixed;inset:0;pointer-events:none;color:#fff4df;font:15px/1.5 "Segoe UI","Microsoft YaHei",sans-serif}
+#january-rpg[data-arena=stage]{--bg:#402537;--accent:#f1bf76}#january-rpg[data-arena=field]{--bg:#263b32;--accent:#f5d07f}
+#january-rpg [hidden]{display:none!important}#january-rpg header,#january-rpg aside,#january-rpg section,#january-rpg .jr-status{background:var(--bg);border:1px solid #fff4;border-radius:6px;box-shadow:0 4px 20px #12263542}
+#january-rpg header{position:absolute;top:14px;left:14px;display:flex;align-items:center;gap:22px;padding:9px 14px;border-left:4px solid var(--accent)}
+#january-rpg small{color:var(--accent);font-size:11px;letter-spacing:.12em}#january-rpg h1{font-size:19px;margin:1px 0}
+#january-rpg button{pointer-events:auto;cursor:pointer;touch-action:manipulation;font:inherit;border:1px solid #d4c29c;background:#f3e5cb;color:#253544;padding:6px 13px;border-radius:4px}#january-rpg button:disabled{opacity:.6}
+#january-rpg header button{font-size:12px;background:transparent;color:#fff3da}
+#january-rpg section{position:absolute;left:5%;bottom:8%;width:min(440px,82vw);padding:18px 21px;pointer-events:auto}#january-rpg h2{margin:0;color:var(--accent);font:600 24px Georgia,"Microsoft YaHei",serif}
+#january-rpg section p{margin:9px 0 16px}#january-rpg aside{position:absolute;bottom:68px;left:14px;padding:8px 15px;max-width:min(90vw,440px)}
+#january-rpg aside p{margin:2px 0}#january-rpg aside strong{color:var(--accent)}#january-rpg footer{position:absolute;left:14px;bottom:16px;display:flex;gap:5px}
+#january-rpg .jr-status{position:absolute;right:14px;top:14px;display:grid;gap:1px;min-width:160px;padding:8px 14px}.jr-status span{font-size:12px}.jr-status progress{width:100%;height:5px;accent-color:#edbc76}
+@media(max-width:650px){#january-rpg header{top:7px;left:7px;padding:5px 8px;gap:10px}#january-rpg h1{font-size:15px}#january-rpg .jr-status{top:72px;right:7px;font-size:12px;min-width:100px}#january-rpg aside{left:7px;right:7px;bottom:57px;font-size:13px}#january-rpg footer{bottom:9px;left:7px}#january-rpg footer button{font-size:13px;padding:7px 9px}}
