@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {collectedMemories, modeById, modeKinds} from '../content/daily-modes';
 import {days} from '../content/registry';
+import {octoberChronicles} from '../content/chronicle-october';
 import {defaultEntry, gatesFor, gateContains, journeyFor} from '../src/game/mode-gates';
 import {januaryMatches} from '../src/templates/january-match';
 
@@ -11,7 +12,8 @@ test('十月每一天的四扇实体门对应三件中国史事和一件海外�
   const boardSequences = new Set<string>();
   for (let n = 1; n <= 31; n++) {
     const day = '10' + String(n).padStart(2, '0');
-    assert.equal(days[day].chapters.filter(chapter => chapter.status === 'web').length, 1);
+    const expectedWeb = 1 + (octoberChronicles.some(c => c.id.startsWith(day + '-')) ? 1 : 0);
+    assert.equal(days[day].chapters.filter(chapter => chapter.status === 'web').length, expectedWeb);
     const ids = gatesFor(days[day]).slice(2).map(defaultEntry);
     assert.deepEqual(ids, modeKinds.map(kind => day==='1021' && kind==='rpg' ? '1021-rpg-cn-jinchuan-2025' : day + '-' + kind));
     const stories = ids.map(id => modeById(id!)!);

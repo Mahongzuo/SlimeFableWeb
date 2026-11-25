@@ -10,6 +10,9 @@ import {buildAtlas} from '../src/themes/atlas';
 import {workshopArt} from '../src/themes/ability';
 import {buildModeWorld} from '../src/themes/mode-world';
 import {buildModeLandmark} from '../src/themes/mode-landmarks';
+import {chronicleLevels} from '../content/chronicle';
+import {generateChronicle} from '../src/templates/chronicle';
+import {buildChronicleScene} from '../src/themes/chronicle';
 import type {Stage} from '../src/level/stage';
 
 type Vec=[number,number,number];
@@ -69,4 +72,20 @@ test('January 1 history workshops have clean deck sides and distinct gate joints
   const at:Vec=[g.position.x+.91,h-.025,-gate.distance+.11];
   checkFace(s,[at[0],at[1],at[2]+.45],at,'gate front');
   checkFace(s,[at[0]+.29,at[1]-.009,at[2]+.40],at,'gate side');
+});
+
+test('chronicle procedural themes keep single-faced ground seams and plinth tops from overhead and oblique angles',()=>{
+  for(const spec of chronicleLevels){
+    const s=stage(), layout=generateChronicle(spec);
+    buildChronicleScene(s,spec,layout);
+    const fin=layout.finish.pos;
+    // Check finish plinth top (y = 0.36) from overhead & grazing oblique
+    checkFace(s,[fin[0]+.4,fin[1]+4,fin[2]+.3],[fin[0]+.4,fin[1],fin[2]+.3],spec.id+' plinth overhead');
+    checkFace(s,[fin[0]+1.8,fin[1]+1.1,fin[2]+2.4],[fin[0]+.4,fin[1],fin[2]+.3],spec.id+' plinth oblique');
+    // Check spawn ground surface from overhead & grazing oblique
+    const sp=layout.spawn;
+    const spGround=spec.mode==='glide'?5.4:0;
+    checkFace(s,[sp[0]+.6,spGround+4,sp[2]-.4],[sp[0]+.6,spGround,sp[2]-.4],spec.id+' spawn overhead');
+    checkFace(s,[sp[0]+1.9,spGround+1.1,sp[2]+1.5],[sp[0]+.6,spGround,sp[2]-.4],spec.id+' spawn oblique');
+  }
 });

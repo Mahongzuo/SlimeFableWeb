@@ -19,5 +19,6 @@ else if (spec?.template === 'almanac') import('./almanac');
 else if (spec?.template === 'solstice') import('./solstice');
 else if (spec?.template === 'folio') import('./folio');
 else if (spec?.template === 'ability') import('./ability');
+else if (spec?.template === 'chronicle') import('./chronicle');
 else if (spec?.template === 'atlas') import('./atlas');
 else import('./explore');

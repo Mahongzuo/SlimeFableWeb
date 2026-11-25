@@ -104,5 +104,30 @@ export interface AtlasSpec {
 export type AbilityMode='relay'|'circuit'|'combo'|'climb'|'tide'|'duet';
 export type AbilityKind=AtlasKind|'memorial';
 export interface AbilitySpec {id:string;template:'ability';kind:AbilityKind;mode:AbilityMode;element:number;title:string;fact:string;source:string;souvenir:string}
-export type AnyLevel = AbilitySpec | LevelSpec | RunnerSpec | LanderSpec | FlybySpec | LandmarkSpec | AlmanacSpec | SolsticeSpec | FolioSpec | AtlasSpec;
+export type ChronicleMode = 'parkour' | 'gather' | 'relay' | 'glide';
+export type ChronicleTheme = 'jiangnan' | 'academy' | 'terraces' | 'palace-wall' | 'frontier' | 'modern-port' | 'aerospace' | 'overseas-classic';
+export type ChronicleLandmark = 'scroll-press' | 'armillary' | 'tea-pavilion' | 'arch-bridge' | 'bell-chime' | 'locomotive' | 'rocket-pad' | 'radio-dish' | 'kiln-pagoda' | 'ship-berth' | 'cinema-stage' | 'nature-monument';
+export interface ChronicleSpec {
+  id: string;
+  template: 'chronicle';
+  region: 'cn' | 'intl';
+  slot: 1 | 2;
+  tone: 'bright' | 'solemn';
+  mode: ChronicleMode;
+  theme: ChronicleTheme;
+  landmark: ChronicleLandmark;
+  element: number;
+  title: string;
+  fact: string;
+  source: string;
+  intro: string;
+  storyNotes: [string, string, string];
+  outro: string;
+  relicName: string;
+  finaleLabel: string;
+  souvenir: string;
+  palette: [string, string];
+  medals: {gold: number; silver: number};
+}
+export type AnyLevel = AbilitySpec | ChronicleSpec | LevelSpec | RunnerSpec | LanderSpec | FlybySpec | LandmarkSpec | AlmanacSpec | SolsticeSpec | FolioSpec | AtlasSpec;
 export const defineRunner = (spec: RunnerSpec) => spec;

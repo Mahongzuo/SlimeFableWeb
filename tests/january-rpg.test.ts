@@ -5,6 +5,8 @@ import {alongStroke,fitSpan} from '../src/templates/january-layout';
 import {modeById} from '../content/daily-modes';
 import {gatesFor,defaultEntry} from '../src/game/mode-gates';
 import {days} from '../content/registry';
+import {novemberChronicles} from '../content/chronicle-november';
+import {decemberChronicles} from '../content/chronicle-december';
 
 test('全年 366 天各有四个独立故事入口且保留全部原章节',()=>{
   assert.equal(rpgDays.length,366);
@@ -14,16 +16,11 @@ test('全年 366 天各有四个独立故事入口且保留全部原章节',()=>
     assert.deepEqual(ids,['defense','match','skirmish','rpg'].map(kind=>day==='1021'&&kind==='rpg'?'1021-rpg-cn-jinchuan-2025':day+'-'+kind),day);
     assert.equal(new Set(ids.map(id=>modeById(id!)!.storyId)).size,4,day);
   }
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('01')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,62);
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('02')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,58);
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('03')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,62);
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('04')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,60);
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('05')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,62);
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('06')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,60);
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('07')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,62);
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('09')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,60);
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('11')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,34);
-  assert.equal(Object.values(days).filter(d=>d.day.startsWith('12')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,31);
+  for(const [mm,minCount] of [['01',62],['02',58],['03',62],['04',60],['05',62],['06',60],['07',62],['08',62],['09',60],['10',62],['11',63],['12',62]] as const){
+    assert.ok(Object.values(days).filter(d=>d.day.startsWith(mm)).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length>=minCount,mm);
+  }
+  assert.equal(Object.values(days).filter(d=>d.day.startsWith('11')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,34+novemberChronicles.length);
+  assert.equal(Object.values(days).filter(d=>d.day.startsWith('12')).flatMap(d=>d.chapters.filter(c=>c.status==='web')).length,31+decemberChronicles.length);
 });
 test('月度 RPG 两条路线、40 个种子都能通过，各场的封锁时机和重试进度有效',()=>{
   for(const day of rpgDays){

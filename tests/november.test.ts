@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import {days} from '../content/registry';
 import {levels} from '../content/levels/registry';
 import {novemberLevels} from '../content/november';
+import {novemberChronicles} from '../content/chronicle-november';
 import {course, timedWindow, aligned, logicResult} from '../src/templates/almanac';
 
 test('all 30 November dates open registered Web chapters',()=>{
  let total=0;
  for(let n=1;n<=30;n++){const day='11'+String(n).padStart(2,'0');assert.ok(days[day].chapters.length);
   for(const chapter of days[day].chapters){assert.equal(chapter.status,'web');assert.equal(levels[chapter.id]?.template,chapter.template);total++;}}
- assert.equal(total,34);assert.equal(novemberLevels.length,28);
+ assert.equal(total,34+novemberChronicles.length);assert.equal(novemberLevels.length,28);
 });
 test('every November tabletop target is accessible and distinct over 40 seeds',()=>{
  for(const spec of novemberLevels)for(let n=0;n<40;n++){

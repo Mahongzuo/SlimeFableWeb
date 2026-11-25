@@ -5,6 +5,7 @@ import {legacySources} from '../content/legacy-sources';
 import {days} from '../content/registry';
 import {levels} from '../content/levels/registry';
 import {abilityLevels,elementNames,mechanics} from '../content/ability';
+import {chronicleLevels,chronicleModeLabels} from '../content/chronicle';
 import {monthLength} from '../src/game/calendar';
 
 const path='docs/level-catalog.json',checking=process.argv.includes('--check');
@@ -24,8 +25,10 @@ function modeVerification(m:typeof modeRegistry[number]){
  return {verification:pilotResults[m.saveId]??null,verificationReport:pilotResults[m.saveId]?'tasks/reports/1123-mode-revision.md':null};
 }
 const annual:Record<string,unknown>={};
-const locations:Record<string,string>={atlas:'content/atlas-records.ts',ability:'content/ability-records.ts',almanac:'content/november.ts',folio:'content/october.ts',solstice:'content/december.ts'};
+const chronicleMonths:Record<string,string>={'01':'january','02':'february','03':'march','04':'april','05':'may','06':'june','07':'july','08':'august','09':'september','10':'october','11':'november','12':'december'};
+const locations:Record<string,string>={atlas:'content/atlas-records.ts',ability:'content/ability-records.ts',almanac:'content/november.ts',folio:'content/october.ts',solstice:'content/december.ts',chronicle:'content/chronicle.ts'};
 const skills=new Map(abilityLevels.map(s=>[s.id,s]));
+const chronicles=new Map(chronicleLevels.map(s=>[s.id,s]));
 const router=readFileSync('src/level/main.ts','utf8');
 for(let m=1;m<=12;m++)for(let d=1;d<=monthLength(m);d++){
  const day=[m,d].map(v=>String(v).padStart(2,'0')).join('');
@@ -33,13 +36,13 @@ for(let m=1;m<=12;m++)for(let d=1;d<=monthLength(m);d++){
  if(entry.chapters.length===0)errors.push('日期没有章节 '+day);
  if(m<=9 && entry.chapters.filter(c=>c.status==='web').length<2)errors.push('缺可玩章节 '+day);
  const chapters=entry.chapters.map(c=>{
-   const {id,status,year,template}=c,s=levels[id],a=skills.get(id);
+   const {id,status,year,template}=c,s=levels[id],a=skills.get(id),ch=chronicles.get(id);
    if(seen.has(id)||id!==day+'-'+year||c.day!==day)errors.push('重复或日期不符 '+id);
    if((status==='web')!==!!s||s&&s.template!==template)errors.push('注册表与入口不符 '+id);
    seen.add(id);
    const runtime=template==='explore-quest'?'explore':template;
    if(s&&(!existsSync('src/level/'+runtime+'.ts')||!router.includes("import('./"+runtime+"')")))errors.push('缺少关卡入口 '+id);
-   const implementation=s?(locations[template]??'content/levels/'+id+'.ts'):'content/days/'+day+'.ts';
+   const implementation=s?(template==='chronicle'?'content/chronicle-'+chronicleMonths[day.slice(0,2)]+'.ts':locations[template]??'content/levels/'+id+'.ts'):'content/days/'+day+'.ts';
    if(!existsSync(implementation))errors.push('实现文件不存在 '+id+' '+implementation);
    let source=s&&'source' in s?s.source:legacySources[id]??null;
    const design='docs/days/'+day+'.md';
@@ -50,11 +53,11 @@ for(let m=1;m<=12;m++)for(let d=1;d<=monthLength(m);d++){
    }
    if(!source||!/^https?:\/\//.test(source))errors.push('缺历史来源 '+id);
    const record=source??implementation;
-   const required=a?[...mechanics[a.mode].required]:null;
+   const required=a?[...mechanics[a.mode].required]:ch?[...chronicleModeLabels[ch.mode].required]:null;
    return {id,year,event:c.event,source:record,sourceStatus:source?'已附史料':'原项目记录，外部史料待补',
-    title:s?.title??c.quest,status,template,mechanic:a?.mode??null,playerGoal:c.steps.join(' → '),
-    requiredAbilities:required,optionalAbilities:a?(a.mode==='climb'?['弹跳']:[]):null,abilityReview:a?'机关校验':'待核实',
-    ...(a&&a.mode!=='duet'?{elements:a.mode==='tide'?['风','水']:a.mode==='circuit'?[elementNames[(a.element+1)%6],elementNames[a.element]]:[elementNames[a.element]]}:{}),
+    title:s?.title??c.quest,status,template,mechanic:a?.mode??ch?.mode??null,playerGoal:c.steps.join(' → '),
+    requiredAbilities:required,optionalAbilities:a?(a.mode==='climb'?['弹跳']:[]):ch?[]:null,abilityReview:a||ch?'机关校验':'待核实',
+    ...(a&&a.mode!=='duet'?{elements:a.mode==='tide'?['风','水']:a.mode==='circuit'?[elementNames[(a.element+1)%6],elementNames[a.element]]:[elementNames[a.element]]}:ch&&ch.mode==='relay'?{elements:[elementNames[ch.element],elementNames[(ch.element+1)%6]]}:{}),
     souvenir:c.souvenir,implementation,playPath:s?'level.html?id='+id:null};
  });
  const dailyModes=modesFor(day);

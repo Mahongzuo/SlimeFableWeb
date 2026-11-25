@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {collectedMemories,dailyModes,modeKinds,modesFor,progressId} from '../content/daily-modes';
 import {days} from '../content/registry';
+import {levels} from '../content/levels/registry';
 import {defaultEntry,gatesFor,gateContains,journeyFor,pilotChoices} from '../src/game/mode-gates';
 
-test('644 个可玩章节仍可直达且拥有唯一的左侧回港门',()=>{
+test('全部可玩章节仍可直达且拥有唯一的左侧回港门',()=>{
   let count=0;
   for(const day of Object.values(days)){
     const gates=gatesFor(day);
@@ -22,7 +23,7 @@ test('644 个可玩章节仍可直达且拥有唯一的左侧回港门',()=>{
       }
     }
   }
-  assert.equal(count,644);
+  assert.equal(count,Object.keys(levels).length);
 });
 test('11月12日第二扇门可选四个后续年份',()=>{
   const gates=gatesFor(days['1112']);

@@ -12,6 +12,7 @@ import {decemberLevels} from '../december';
 import {octoberLevels} from '../october';
 import {abilityLevels} from '../ability';
 import {atlasLevels} from '../atlas';
+import {chronicleLevels} from '../chronicle';
 /** Chapters with a playable web level. Hand-maintained until `scripts/new-level` generates it. */
 export const levels: Record<string, AnyLevel> = {[level0815_1920.id]: level0815_1920, [level1001_1949.id]: level1001_1949, [level1112_1866.id]: level1112_1866, [level1112_1954.id]: level1112_1954, [level1112_1936.id]: level1112_1936, [level1112_2014.id]: level1112_2014, [level1112_1980.id]: level1112_1980, [level1116_1974.id]: level1116_1974};
 for (const level of novemberLevels) levels[level.id]=level;
@@ -19,3 +20,4 @@ for (const level of decemberLevels) levels[level.id] = level;
 for (const level of octoberLevels) levels[level.id] ??= level;
 for (const level of abilityLevels) levels[level.id] = level;
 for (const level of atlasLevels) levels[level.id] = level;
+for (const level of chronicleLevels) levels[level.id] = level;

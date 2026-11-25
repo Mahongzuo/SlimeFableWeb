@@ -1,5 +1,51 @@
 # 会话检查点
 
+## 2026-11-24 · 第二阶段 Q1（1–3 月）1/2 号门「岁月拾光」130 关焕新收官！（1–3 月 91/91 天清除 125 关凑数条目，累计 183/366 天达成 1 号门中国 · 2 号门海外）
+
+- **1–3 月全量焕新（移除 125 个凑数关 + 新增 130 个 `chronicle` 关，保留全部既有非凑数原关）**：
+  - [chronicle-january.ts](../../content/chronicle-january.ts)（**39 关**：26 中 + 13 外，移除 1 月 37 个凑数关，`17.34 KB gzip`）；
+  - [chronicle-february.ts](../../content/chronicle-february.ts)（**49 关**：28 中 + 21 外，含闰日 `0229-2008` 首都机场 T3，移除 2 月 47 个凑数关，`23.33 KB gzip`）；
+  - [chronicle-march.ts](../../content/chronicle-march.ts)（**42 关**：26 中 + 16 外，移除 3 月 41 个凑数关，`20.64 KB gzip`）；
+  - [registry.ts](../../content/registry.ts) 支持将既有中国史原关（`0104-1951` 史铁生、`0116-1885` 周作人、`0308-1958` 陈锦城、`0310-1924` 金庸、`0319-1939` 东方白、`0320-1881` 章士钊）无损提位至 1 号门，保留全部原链接与存档键；
+  - 130 关史料与直达目录归档至 [q1-chronicle-gates.md](../days/q1-chronicle-gates.md)。
+- **全量指标与验收**：
+  - 全项目达 **366 天、740 个 Web 历史章节、747 条历史记录、1,471 项固定模式挑战**，岁月拾光累计 **221 关**；
+  - `npm run check`、`npm run catalog`、`npm run catalog:check`、`npm run build`（所有月度分包 13–23 KB gzip ≤ 60 KB）、`lint-content.mjs`（`lint: 通过`）全通过；
+  - [chronicle.test.ts](../../tests/chronicle.test.ts)（221 关 × 40 种子 = 8,840 局仿真）与 [depth-surfaces.test.ts](../../tests/depth-surfaces.test.ts)（221 关顶视+斜视双角度单面共面检测）及全套 `npm test` 全部通过；
+  - 无头 Chrome 抽验 6 个代表新关（`0107-2003`、`0116-1605`、`0201-1944`、`0213-1633`、`0301-138`、`0313-1084`）均 `fluid: True`、`done: True`、`errors: []`，多角度证据归档至 `qa/evidence/chronicle-*.jpg`。
+- **下一步**：继续推进 **第二阶段 Q2（4–6 月，清理 131 个凑数关：4 月 43 + 5 月 48 + 6 月 40）**，随后收官 **Q3（7–9 月，清理 135 个凑数关，完整保留 `0815-1920` 等手工关）**。
+
+## 2026-11-24 · 10–12 月 1/2 号门「岁月拾光（chronicle）」全量 91 关收官！（全年 366 天双历史门全覆盖，Q4 92/92 天 1 号门中国 · 2 号门海外）
+
+- **全量 91 关补齐（85 关中国史插入 1 号门 + 6 关海外史补入 2 号门）**：
+  - [chronicle-october.ts](../../content/chronicle-october.ts)（**31 关**：30 中 + 1 外，`13.46 KB gzip`）；
+  - [chronicle-november.ts](../../content/chronicle-november.ts)（**29 关**：28 中 + 1 外，保留 `1112` 原 1 中 4 外不动，`1116-1974` 阿雷西博与 `1123-1963` 神秘博士自动顺移 2 号门原链接/存档零改动，`13.09 KB gzip`）；
+  - [chronicle-december.ts](../../content/chronicle-december.ts)（**31 关**：27 中 + 4 外，`14.75 KB gzip`）；
+  - 核心模板、8 主题、12 座可动地标与运行时 `chronicle` 分包仅 **`15.78 KB gzip`**，完整 91 关史料表归档至 [q4-chronicle-gates.md](../days/q4-chronicle-gates.md)。
+- **全量指标与验收**：
+  - 全项目达 **366 天、735 个 Web 历史章节、742 条历史记录、1,471 项固定模式挑战**！
+  - `npm run check`、`npm run catalog`、`npm run catalog:check`、`npm run build`、`lint-content.mjs`（`lint: 通过`）全通过；
+  - [chronicle.test.ts](../../tests/chronicle.test.ts)（91 关 × 40 种子 = 3,640 局全模式仿真 + 92/92 天门位中外与零重复校验）与 [depth-surfaces.test.ts](../../tests/depth-surfaces.test.ts)（全部 91 关顶视+斜视双角度共面检测）及全套 1,575 项单测全绿；
+  - 无头 Chrome 累计实机抽检 12 个代表关（含 `1001/1010/1015/1022/1105/1116/1123/1129/1204/1205/1213/1231`）与 `1015` 凝露港均 `fluid: True`、`done: True`、`errors: []`，证据归档于 `qa/evidence/chronicle-*.jpg`。
+- **下一步（按用户选定的选项 2 继续推进）**：1–9 月中已统计出 **391 个公开数据集凑数关**（1 号门 198 关 + 2 号门 193 关，来自纽约爱乐/MoMA 入藏/F1 圈数/NASA 日月食）。待用户确认节奏后按月（1 月 → 9 月）逐步升级替换为「1 号门中国历史 · 2 号门海外经典历史」（保留 `0815-1920` 等手工关与优质原关）。
+
+## 2026-11-24 · 10–12 月 1/2 号门「岁月拾光（chronicle）」Phase 1 底座与 4 个代表样板关完成（1 号门中国 · 2 号门海外）
+
+- **架构与底座**：
+  - 新增纯数据轻量程序化模板 [chronicle.ts](../../src/templates/chronicle.ts)（支持 `parkour` 轻跑酷、`gather` 庭院搜集、`relay` 分身连线、`glide` 乘风滑翔巡礼 4 种模式，严格非重叠地面分片防闪烁，内建 `validateChronicle` 40 种子校验）；
+  - 新增 8 套程序化场景主题 [chronicle.ts](../../src/themes/chronicle.ts) 与 12 座参数化可动地标 [chronicle-landmarks.ts](../../src/themes/chronicle-landmarks.ts)（`InstancedMesh` 批处理 + Canvas 时代匾额，完整运行时含全部 8 主题 12 地标仅 **`15.76 KB gzip`**）；
+  - 新增统一运行时 [chronicle.ts](../../src/level/chronicle.ts) + [chronicle.css](../../src/level/chronicle.css)，沿用凝露港原版 `SlimeCharacter` 流体表面与元素 HUD，途中按进度浮现 3 条「史事微笺」让玩家边玩边了解历史。
+- **Phase 1 首批 4 个代表样板关**（[q4-chronicle-gates.md](../days/q4-chronicle-gates.md)）：
+  - `1001-1890`（2 号门 · 海外 · `relay` · 优胜美地国家公园设立，原 `design` 升级为 `web`，保留 `1001-1949` 1 号门）；
+  - `1015-2003`（1 号门 · 中国 · `parkour` · 神舟五号首次载人飞行，既有 `1015-1997` 自动顺移 2 号门）；
+  - `1129-2022`（1 号门 · 中国 · `gather` · 中国传统制茶技艺列入非遗，既有 `1129-1972` 自动顺移 2 号门）；
+  - `1213-1642`（2 号门 · 海外 · `glide` 严肃静谧无计时 · 塔斯曼首望新西兰南岛海岸，保留 `1213-1937` 1 号门）。
+- **全量验证与多机位证据**：
+  - `npm run check`、`npm run catalog`、`npm run catalog:check`（366 天、648 个 Web 章节、655 条历史记录、1,471 项固定模式）、`npm run build`、`lint-content.mjs`（`lint: 通过`）全部通过；
+  - `npm test` **1,575 / 1,575 PASS**（含新增 [chronicle.test.ts](../../tests/chronicle.test.ts) 40 种子全模式仿真与 [depth-surfaces.test.ts](../../tests/depth-surfaces.test.ts) 顶视/斜视双角度单面共面回归）；
+  - 独立无头 Chrome（[qa-chronicle.py](../../scripts/qa-chronicle.py)）对 4 关 + `1015` 凝露港完成消幕后常规/贴地斜看/终场三机位截图并全部 0 报错通过（`qa/evidence/chronicle-*.jpg`）。
+- **下一步**：待用户试玩 4 个样板关并确认画面、手感与节奏；确认后按 Phase 2（10 月 29 关）→ Phase 3（11 月 28 关）→ Phase 4（12 月 30 关）铺满全部剩余 87 关，达成 10–12 月 92/92 天「1 号门中国 · 2 号门海外」。
+
 ## 2026-11-24 · 全年 366 天四扇门大满贯收官！（十一月 120 关 + 十二月 124 关全部补齐，中国：海外 = 3：1）
 
 - **十一月全月补齐（30 天 / 120 关）**：新增 [november-four-gates.md](../days/november-four-gates.md)、[november-pilots.ts](../../content/november-pilots.ts)（`42.16 KB gzip`）及 [november-defense.ts](../../src/templates/november-defense.ts)、[november-match.ts](../../src/templates/november-match.ts)、[november-skirmish.ts](../../src/templates/november-skirmish.ts)、[november-rpg.ts](../../src/templates/november-rpg.ts)（新增 118 关，完整保留 `1116` 三号门阿雷西博塔防与 `1123` 四号门神秘博士三消及二号门往期投射/试炼原存档键；全月 90 中国 + 30 海外 = 3 : 1，保留原 34 个十一月 Web 章节）。

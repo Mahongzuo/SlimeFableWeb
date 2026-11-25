@@ -8,8 +8,10 @@ import {advanceClimb,generateLandmark,pointOnLeg,validateLandmark} from '../src/
 import {makeBoards,energize,solved,undoContact} from '../src/level/pixel-board';
 
 test('1116 portal opens the registered chapter and carries the archived 1679 bits',()=>{
-  assert.equal(days['1116'].chapters[0].status,'web');
-  assert.equal(levels[days['1116'].chapters[0].id],spec);
+  const arecibo=days['1116'].chapters.find(c=>c.id===spec.id);
+  assert.ok(arecibo);
+  assert.equal(arecibo.status,'web');
+  assert.equal(levels[arecibo.id],spec);
   assert.equal(spec.board.rows.length,73);
   assert.ok(spec.board.rows.every(row=>/^[01]{23}$/.test(row)));
   assert.equal(createHash('sha256').update(spec.board.rows.join('')).digest('hex'),'24babf56f872fc2c38c940b4a438811be454f04a041fe56b3c239662f261dd66');
