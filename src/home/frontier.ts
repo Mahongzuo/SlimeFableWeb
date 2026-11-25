@@ -1,3 +1,4 @@
+import {climateMaterial} from './climate-material';
 import type {ExpandedTile, ExpansionThemeId} from '../life/state';
 import {
   computeDynamicFrontier,
@@ -174,6 +175,7 @@ export class FrontierRenderer {
     geo.computeVertexNormals();
 
     const mat = this.ctx.mats.toon(0xffffff, {noCache: true});
+    climateMaterial(mat,'terrain');
     mat.vertexColors = true;
     mat.needsUpdate = true;
     const mesh = new T.Mesh(geo, mat);

@@ -1,3 +1,4 @@
+import {climateMaterial} from './climate-material';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 interface CachedAsset {
@@ -22,6 +23,13 @@ function pump(T: any) {
     sharedLoader ??= new GLTFLoader();
     sharedLoader.loadAsync(`${BASE_PATH}${id}.glb`).then(gltf => {
       const root = gltf.scene;
+      if (!id.startsWith('fauna-')) {
+        const plant=/^(nature-|pack-ginkgo|waterside-reeds|waterside-lily)/.test(id);
+        root.traverse((node:any)=>{
+          if (!node.isMesh) return;
+          for (const material of [].concat(node.material)) climateMaterial(material,plant?'leaves':'structure');
+        });
+      }
       root.updateMatrixWorld(true);
       const box = new T.Box3().setFromObject(root);
       const sizeVec = new T.Vector3();

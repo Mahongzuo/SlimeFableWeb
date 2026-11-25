@@ -1,7 +1,8 @@
+import type {WeatherMode} from '../home/climate';
 import {DayId} from './calendar';
 import type {QualitySetting} from './graphics';
 import {ensureHome, freshLife, type LifeData} from '../life/state';
-export interface SaveData {v: 1; selectedDay: DayId | null; shards: string[]; souvenirs: string[]; visited: string[]; quality: QualitySetting; seenHints: string[]; completed: string[]; life: LifeData}
+export interface SaveData {homeWeather?: WeatherMode; v: 1; selectedDay: DayId | null; shards: string[]; souvenirs: string[]; visited: string[]; quality: QualitySetting; seenHints: string[]; completed: string[]; life: LifeData}
 const KEY = 'slimefable.web.save.v1';
 const fresh = (): SaveData => ({v: 1, selectedDay: null, shards: [], souvenirs: [], visited: [], quality: 'auto', seenHints: [], completed: [], life: freshLife()});
 /** localStorage can be missing, full or blocked; the game must run either way. */

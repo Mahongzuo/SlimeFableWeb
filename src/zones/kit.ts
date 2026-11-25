@@ -1,3 +1,4 @@
+import {climateMaterial} from '../home/climate-material';
 import {SERIF, paperCard, tagTexture} from '../home/paper';
 import type {ZoneContext} from './types';
 /**
@@ -31,7 +32,7 @@ export function windy(z: ZoneContext, mat: any, amount = .12) {
       transformed.x += sw * bend * bend * ${amount.toFixed(3)} * (.4 + uWind);
       transformed.z += cos(uTime * 1.3 + ph) * bend * bend * ${(amount * .5).toFixed(3)} * (.4 + uWind);`);
   };
-  mat.customProgramCacheKey = () => 'windy' + amount; mat.needsUpdate = true; return mat;
+  mat.customProgramCacheKey = () => 'windy' + amount; mat.needsUpdate = true; return climateMaterial(mat,'leaves');
 }
 /** Instanced trees: solid trunks, canopies built from 4 overlapping puffs (walk-through), crowns high enough for the camera. */
 export function trees(z: ZoneContext, spots: [number, number, number][], colors = [0x5f9a58, 0x74ad5f, 0x4e8a55]) {

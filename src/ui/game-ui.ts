@@ -1,3 +1,4 @@
+import {weatherNames,weatherMode,type WeatherMode} from '../home/climate';
 import {historyDetails} from './battle-history';
 import './ui.css';
 import {PRESET_NAMES, type QualitySetting} from '../game/graphics';
@@ -13,6 +14,7 @@ import {getGuideSections} from './guide-catalog';
 export interface UIHandlers {
   start(): void; resume(): void; pause(): void; openBook(): void; openGuide?(): void; closePanel(): void; showDay(id: DayId): void; showToday(): void;
   respawn(): void; quality(q: QualitySetting): void; toTitle(): void; go(id: string): void;
+  weather(mode: WeatherMode): void; getWeather(): WeatherMode;
   toggleBuild?: () => void; toggleShape?: () => void;
 }
 export interface TitleInfo {ready: boolean; todayId: DayId; year: number; weekday: string; shown: DayMeta; isToday: boolean; quality: QualitySetting; preset?: string}
@@ -51,6 +53,19 @@ function modeListing(g:ModeGate,completed:string[]){
 }
 export class GameUI {
   readonly root: HTMLElement; private toastTimer = 0; private bookState = {tab: 'archive', month: 8, selected: '0815' as DayId};
+  private skyStatus = '';
+  setSkyStatus(date:string, season:string, weather:string) {
+    const status=`北京时间 ${date.slice(5)} · ${season}季 · ${weather}`;
+    if(status===this.skyStatus)return;
+    this.skyStatus=status;
+    this.root.querySelectorAll('[data-sky-status]').forEach(el=>el.textContent=status);
+  }
+  private weatherSelect(){
+    const mode=this.h.getWeather();
+    const choices=Object.entries(weatherNames).map(([key,name])=>
+      `<option value="${key}" ${key===mode?'selected':''}>${name}</option>`).join('');
+    return `<label class="home-weather">天气 <select data-weather>${choices}</select></label>`;
+  }
   private guideSectionId = 'movement';
   private info: BookInfo | null = null; private hudEl: HTMLElement; private promptEl: HTMLElement; private keysEl: HTMLElement; private keysTimer = 0;
   constructor(private h: UIHandlers) {
@@ -92,7 +107,7 @@ export class GameUI {
       else if (act === 'pause') this.h.pause(); else if (act === 'close') this.h.closePanel(); else if (act === 'respawn') this.h.respawn(); else if (act === 'title') this.h.toTitle();
       else if (act === 'show') this.h.showDay(this.bookState.selected); else if (act === 'today') { this.h.showToday(); } else if (act === 'go' && t.dataset.id) this.h.go(t.dataset.id);
     });
-    root.addEventListener('change', e => { const t = e.target as HTMLSelectElement; if (t.dataset.quality !== undefined) this.h.quality(t.value as QualitySetting); });
+    root.addEventListener('change', e => { const t = e.target as HTMLSelectElement; if(t.dataset.weather!==undefined)this.h.weather(weatherMode(t.value)); else if (t.dataset.quality !== undefined) this.h.quality(t.value as QualitySetting); });
   }
   private $(s: string) { return this.root.querySelector(s) as HTMLElement; }
   title(info: TitleInfo | null) {
@@ -107,7 +122,7 @@ export class GameUI {
       <h1>${slimeMark}史莱姆寓言</h1><p class="tagline">一小团果冻，穿过每一个“今天”。</p>
       <div class="today-card card grain"><h3>今天的档案</h3><p>${line}</p><div class="years">${chapters.map(c => `<span class="year-chip"><i style="background:${c.palette[0]}"></i>${c.year}</span>`).join('')}</div></div>
       <div class="title-actions"><button class="btn primary" data-act="start" ${info.ready ? '' : 'disabled'}>${info.ready ? '进入家园' : '史莱姆正在醒来…'}<span class="key">Enter</span></button><button class="btn" data-act="guide">📖 玩法教程</button><button class="btn" data-act="book">打开史书<span class="key">J</span></button></div>
-      <div class="title-foot"><label>画质 <select data-quality>${(['auto', 'low', 'medium', 'high', 'ultra'] as QualitySetting[]).map(q => `<option value="${q}" ${info.quality === q ? 'selected' : ''}>${PRESET_NAMES[q]}</option>`).join('')}</select></label><span>键鼠游玩 · 建议使用 Chrome / Edge</span></div>
+      <div class="title-foot"><label>画质 <select data-quality>${(['auto', 'low', 'medium', 'high', 'ultra'] as QualitySetting[]).map(q => `<option value="${q}" ${info.quality === q ? 'selected' : ''}>${PRESET_NAMES[q]}</option>`).join('')}</select></label>${this.weatherSelect()}<span data-sky-status>${this.skyStatus}</span></div>
     </div></section>`;
   }
   showHud(on: boolean) { this.hudEl.classList.toggle('hidden', !on); if (on) { this.keysEl.classList.remove('dim'); clearTimeout(this.keysTimer); this.keysTimer = window.setTimeout(() => this.keysEl.classList.add('dim'), 12000); } else this.prompt(null); }
@@ -140,10 +155,11 @@ export class GameUI {
     if (html) this.showHud(false);
   }
   pause(quality: QualitySetting, preset = '') {
-    this.panel(`<div class="overlay"><div class="pause card grain"><h2>暂停一下</h2><p>港口一直都在。</p><div class="stack">
+    this.panel(`<div class="overlay"><div class="pause card grain"><h2>暂停一下</h2><p data-sky-status>${this.skyStatus}</p><div class="stack">
       <button class="btn primary" data-act="resume">继续游玩</button><button class="btn" data-act="guide">📖 玩法教程</button><button class="btn" data-act="book">打开史书<span class="key">J</span></button>
       <button class="btn" data-act="respawn">回到广场</button>
       <div class="row" style="margin:4px 0">画质 <select data-quality style="pointer-events:auto;font:700 13px var(--sans);border:1.5px solid var(--ink);border-radius:999px;padding:6px 12px;background:var(--paper)">${(['auto', 'low', 'medium', 'high', 'ultra'] as QualitySetting[]).map(q => `<option value="${q}" ${quality === q ? 'selected' : ''}>${PRESET_NAMES[q]}</option>`).join('')}</select>${preset ? `<small style="margin-left:8px;color:var(--ink-3)">当前 ${preset}</small>` : ''}</div>
+      ${this.weatherSelect()}
       <button class="btn ghost small" data-act="title">返回标题</button></div></div></div>`);
   }
   /** Extensible, data-driven tutorial modal rendered directly from `getGuideSections()`. */

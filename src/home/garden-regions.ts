@@ -90,6 +90,12 @@ export function buildGardenRegions(ctx:any,roots:any[],occupied:{x:number;z:numb
   }
   // The silhouette belongs to the sky. Keep it beyond purchased plots as the world grows.
   ctx.scene.add(mount);
-  ctx.onUpdate(()=>mount.position.set(ctx.camera.position.x,0,ctx.camera.position.z));
+  const ridgeDay=[0x93aaa0,0xa9bbb5].map(color=>new T.Color(color));
+  const ridgeNight=[0x394c58,0x415767].map(color=>new T.Color(color));
+  ctx.onUpdate(()=>{
+    mount.position.set(ctx.camera.position.x,0,ctx.camera.position.z);
+    const light=Math.min(1,Math.max(0,(ctx.weather.sun-.14)/.45));
+    mount.children.forEach((ridge:any,i:number)=>ridge.material.color.copy(ridgeNight[i]).lerp(ridgeDay[i],light));
+  });
   return {boxes,footprints};
 }

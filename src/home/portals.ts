@@ -1,3 +1,4 @@
+import {climateMaterial} from './climate-material';
 import {gateTitle,gateSummary,gatePalette,type Gate} from '../game/mode-gates';
 import {Vec} from '../slime/types';
 import {PortalSlot, pillarOffset} from './layout';
@@ -43,6 +44,7 @@ export class TimePortal {
     profile.quadraticCurveTo(1.15,-.17,1.70,.04);profile.lineTo(1.70,.16);
     profile.quadraticCurveTo(1.12,.03,0,.43);profile.quadraticCurveTo(-1.12,.03,-1.70,.16);profile.closePath();
     const roof = new T.Mesh(new T.ExtrudeGeometry(profile,{depth:.95,bevelEnabled:false}),toon(0x506a64));
+    climateMaterial(roof.material,'structure');
     roof.position.set(0,4.06,-.475); g.add(roof);
     const beam = new T.Mesh(new T.BoxGeometry(2.68,.20,.50),timber);
     beam.position.set(0,4.00,0);g.add(beam);

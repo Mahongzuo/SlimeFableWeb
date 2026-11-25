@@ -8,9 +8,11 @@ from playwright.sync_api import sync_playwright
 p = argparse.ArgumentParser()
 p.add_argument("port", type=int)
 p.add_argument("edition", choices=["before", "pilot"])
+p.add_argument("--out", type=Path, help="Optional evidence directory for a regression run")
 args = p.parse_args()
 base = f"http://127.0.0.1:{args.port}"
-out = Path(__file__).resolve().parents[1] / "qa" / "evidence"
+out = args.out or Path(__file__).resolve().parents[1] / "qa" / "evidence"
+out.mkdir(parents=True, exist_ok=True)
 report = {"edition": args.edition, "weather": {}, "errors": []}
 with sync_playwright() as pw:
     browser = pw.chromium.launch(channel="chrome", headless=True, args=["--enable-unsafe-swiftshader"])
@@ -24,15 +26,15 @@ with sync_playwright() as pw:
     page.goto(base + "/?date=1015")
     page.wait_for_function("window.__slime?.ready && window.__game?.state==='title'", timeout=90000)
     if args.edition=="pilot":
-        report["cycle"]=page.evaluate("""()=>[12,64,98,312].map(t=>{
-          const {director,ctx}=__app;director.update(t);
-          return {time:t,rain:ctx.weather.rain,bow:ctx.weather.rainbow,sun:ctx.weather.sun};})""")
+        report["cycle"]=page.evaluate("""()=>{const d=__app.director;return ['clear','rain','rainbow','clear'].map((mode,i)=>{
+          d.mode=mode;d.update(50*(i+1),Date.parse(i===3?'2026-11-25T23:00:00+08:00':'2026-11-25T12:00:00+08:00'));
+          return {rain:d.weather.rain,bow:d.weather.rainbow,sun:d.weather.sun};});}""")
         clear,storm,after,night=report["cycle"]
-        assert clear["rain"]==0 and storm["rain"]==1 and after["bow"]>.8 and night["sun"]<.2
+        assert clear["rain"]<.01 and storm["rain"]>.99 and after["bow"]>.8 and night["sun"]<.2
     page.evaluate("__game.start(); __slime.pause(); __game.state='review'; __game.ui.showHud(false); __game.life.show(false)")
     page.evaluate("""() => {const a=__app; a.controls.enabled=false;
       const original=a.director.update.bind(a.director);
-      a.director.update=()=>{original(12); const w=a.ctx.weather;
+      a.director.update=()=>{original(12,Date.parse('2026-11-25T12:00:00+08:00')); const w=a.ctx.weather;
         if(window.shot==='rainbow'){w.rain=.25;w.rainbow=1;w.sun=1.02;w.shaft=.9}
         else {w.rain=window.shot==='rain'?1:0;w.rainbow=0}
         for(const k of ['Rain','Sun','Shaft'])a.ctx.U['u'+k].value=w[k.toLowerCase()];

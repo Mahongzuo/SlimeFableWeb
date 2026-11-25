@@ -1,3 +1,4 @@
+import {climateMaterial} from '../home/climate-material';
 import {gardenRoads} from '../home/garden-regions';
 import {riverDistance} from '../home/waterway';
 import {inland, lakeEdge, pathDistance, PATHS, WORLD, ZONES, zoneAt, LAKE} from './map';
@@ -7,7 +8,7 @@ const DIRT = 0xc9ab7c, SAND = 0xe3d3a6, MUD = 0x8c7a5c, SKIRT = 0x7d6b55;
 /** Ground meshes for every home zone (1 m grid) plus the island skirt round the new outline. */
 export function buildInlandGround(ctx: any) {
   const T = ctx.THREE, group = new T.Group(); group.name = 'inland-ground';
-  const mat = ctx.mats.toon(0xffffff, {noCache: true}); mat.vertexColors = true; mat.needsUpdate = true;
+  const mat = ctx.mats.toon(0xffffff, {noCache: true}); climateMaterial(mat,'terrain'); mat.vertexColors = true; mat.needsUpdate = true;
   const c = new T.Color(), tint = new T.Color();
   for (const z of ZONES) {
 

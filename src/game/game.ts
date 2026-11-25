@@ -1,3 +1,4 @@
+import {seasonNames,weatherNames,weatherMode} from '../home/climate';
 import {SlimeCharacter} from '../slime/character';
 import type {SwingAreaEvent} from '../slime/combat';
 import type {GroundSurface} from '../slime/world';
@@ -43,7 +44,11 @@ export class Game {
 
   constructor(private app: any) {
     const ctx = app.ctx; this.T = ctx.THREE;
+    const climate=app.director;
+    climate.mode=weatherMode(this.save.data.homeWeather);
     this.ui = new GameUI({
+      weather: mode => {climate.mode=mode; this.save.data.homeWeather=mode;this.save.write();},
+      getWeather: () => climate.mode,
       start: () => this.start(), resume: () => this.resume(), pause: () => this.pauseGame(), openBook: () => this.openBook(), openGuide: () => this.openGuide(), closePanel: () => this.closePanel(true),
       showDay: id => this.showDay(id), showToday: () => this.showDay(null), respawn: () => this.respawn(), quality: q => { this.graphics.set(q); this.save.data.quality = q; this.save.write(); },
       toTitle: () => this.toTitle(), go: id => this.go(id),
@@ -360,6 +365,8 @@ export class Game {
     this.farmRegistry.update(dt, this.player);
     this.graphics.update(dt, this.state === 'play');
     this.followSun();
+    const climate=this.app.director;
+    this.ui.setSkyStatus(climate.sky.date,seasonNames[climate.sky.season],weatherNames[climate.target as keyof typeof weatherNames]);
     if (this.state !== 'play') {
       this.ui.setCrosshair(false, true, false);
       return;

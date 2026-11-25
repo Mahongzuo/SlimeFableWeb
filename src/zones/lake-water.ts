@@ -10,11 +10,12 @@ export function valleyWater(ctx:any,geometry:any,x:number,y:number,z:number){
   const mat=water.material;
   mat.uniforms.uBody={value:new T.Vector2(1e4,1e4)};
   ctx.onUpdate(()=>{const p=(window as any).__slime?.position;if(p)mat.uniforms.uBody.value.set(p[0],p[2]);});
-  mat.uniforms.uTime=ctx.U.uTime;mat.uniforms.uRain=ctx.U.uRain;
+  mat.uniforms.uWind=ctx.U.uWind;mat.uniforms.uTime=ctx.U.uTime;mat.uniforms.uRain=ctx.U.uRain;
   mat.vertexShader='varying vec3 vWaterPoint;\n'+mat.vertexShader.replace('vUv = textureMatrix','vWaterPoint=(modelMatrix*vec4(position,1.)).xyz; vUv = textureMatrix');
-  mat.fragmentShader='varying vec3 vWaterPoint;uniform vec2 uBody;uniform float uTime,uRain;\n'+mat.fragmentShader.replace('vec4 base = texture2DProj( tDiffuse, vUv );',`
+  mat.fragmentShader='varying vec3 vWaterPoint;uniform vec2 uBody;uniform float uTime,uRain,uWind;\n'+mat.fragmentShader.replace('vec4 base = texture2DProj( tDiffuse, vUv );',`
     vec2 p=vWaterPoint.xz;
     float wave=sin(p.x*2.+p.y*3.2+uTime*1.8)+sin(p.y*5.1-uTime);
+    wave*=.77+.63*uWind;
     float bodyDist=distance(p,uBody);wave+=sin(bodyDist*18.-uTime*5.)*max(0.,1.-bodyDist/1.5);
     vec2 uv=vUv.xy/vUv.w+vec2(wave*.0017,cos(p.x*4.+uTime)*.001);
     vec4 base=texture2D(tDiffuse,uv);`).replace('blendOverlay( base.rgb, color )',`

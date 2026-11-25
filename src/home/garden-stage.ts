@@ -1,3 +1,5 @@
+import {HomeClimate} from './climate';
+import {surfaceClimate} from './climate-material';
 import * as T from 'three';
 import {Stage} from '../level/stage';
 import {inland, LAKE, lakeEdge} from '../world/map';
@@ -14,39 +16,43 @@ export function createGardenStage(){
   scene.fog=new T.FogExp2(0xdde6d6,.008);
   const sky=scene.children.find((o:any)=>o.material?.uniforms?.uTop);
   const skyMat=sky.material;
-  skyMat.uniforms.cloudTime={value:0};skyMat.uniforms.cloudRain={value:0};skyMat.uniforms.daylight={value:1};
-  skyMat.fragmentShader=`uniform vec3 uTop,uHorizon;uniform float cloudTime,cloudRain,daylight;varying vec3 vP;
+  const director = new HomeClimate();
+  const weather = director.weather;
+  const atmosphere = {
+    drift:{value:0}, cloudAmount:{value:0}, daylight:{value:1}, twilight:{value:0},
+    sunDir:{value:new T.Vector3()}, storminess:{value:0},
+  };
+  Object.assign(skyMat.uniforms,atmosphere);
+  skyMat.fragmentShader=`uniform vec3 uTop,uHorizon,sunDir;
+    uniform float drift,cloudAmount,daylight,twilight,storminess;
+    varying vec3 vP;
     float hash(vec2 p){return fract(sin(dot(p,vec2(71.2,173.1)))*42758.32);}
     float noise(vec2 p){vec2 a=floor(p),f=fract(p);f=f*f*(3.-2.*f);
       return mix(mix(hash(a),hash(a+vec2(1,0)),f.x),mix(hash(a+vec2(0,1)),hash(a+1.),f.x),f.y);}
-    void main(){vec3 d=normalize(vP);float h=max(.0,d.y);
-      vec2 p=d.xz/(h+.16)*2.5+vec2(cloudTime*.013,0);
-      float n=noise(p)*.56+noise(p*2.1)*.28+noise(p*4.1)*.16;
-      vec3 sky=mix(uHorizon,uTop,smoothstep(.0,.68,h));
-      float light=pow(max(0.,dot(d,normalize(vec3(-.48,.44,.72)))),14.);
-      sky+=vec3(.19,.14,.07)*light;float cloud=smoothstep(.44-.10*cloudRain,.76,n)*smoothstep(.015,.26,h);
-      sky=mix(sky,mix(vec3(.90,.91,.83),vec3(.50,.59,.59),cloudRain),cloud*.82);
-      vec3 toSun=normalize(vec3(-.48,.44,.72));
-      float shafts=noise(vec2(atan(d.x,d.z)*28.,cloudTime*.009))*
-        pow(max(0.,dot(d,toSun)),7.)*smoothstep(.02,.24,h)*(1.-cloudRain);
-      sky+=vec3(.13,.10,.055)*shafts;
-      sky=mix(mix(vec3(.085,.13,.19),vec3(.028,.057,.115),h),sky,daylight);
+    float layer(vec2 p){return .56*noise(p)+.28*noise(p*2.03)+.16*noise(p*4.1);}
+    void main(){
+      vec3 d=normalize(vP);float h=max(0.,d.y),sunDot=dot(d,sunDir),moonDot=dot(d,-sunDir);
+      vec3 horizon=mix(uHorizon,vec3(.94,.52,.29),twilight*(.3+.7*max(0.,sunDot)));
+      vec3 sky=mix(horizon,uTop,smoothstep(.0,.68,h));
+      vec3 night=mix(vec3(.087,.122,.17),vec3(.013,.029,.071),smoothstep(.0,.6,h));
+      vec2 stars=vec2(atan(d.z,d.x),asin(clamp(d.y,-1.,1.)))*120.;
+      float star=step(.986,hash(floor(stars)))*(1.-smoothstep(.04,.23,length(fract(stars)-.5)));
+      night+=vec3(.76,.84,1.)*(star*smoothstep(.08,.38,h)+smoothstep(.9993,.99975,moonDot));
+      sky=mix(night,sky,daylight);
+      sky+=daylight*vec3(1.,.71,.38)*(pow(max(sunDot,0.),24.)*.34+smoothstep(.9991,.99965,sunDot));
+      vec2 p=d.xz/(h+.16)*2.35;
+      float low=layer(p+vec2(drift,.22*drift)), high=layer(p*.66-vec2(.4*drift,.16*drift));
+      float density=smoothstep(.69-.47*cloudAmount,.94-.45*cloudAmount,low*.75+high*.25);
+      float cover=density*smoothstep(.012,.20,h);
+      vec3 cloud=mix(vec3(.83,.86,.85),vec3(.26,.33,.38),storminess);
+      cloud*=.85+.24*high;cloud+=vec3(.22,.13,.045)*twilight*max(sunDot,0.);
+      sky=mix(sky,mix(vec3(.08,.10,.15),cloud,daylight),cover);
+      float shafts=noise(vec2(atan(d.x,d.z)*28.,drift))*pow(max(sunDot,0.),9.)*(1.-cover);
+      sky+=vec3(.13,.10,.055)*shafts*daylight*(1.-storminess);
       gl_FragColor=vec4(sky,1.);
     }`;
   const controls={enabled:false,target:new T.Vector3(),update(){camera.lookAt(this.target);camera.updateMatrixWorld();}};
   const U={uTime:{value:0},uSun:{value:1},uWind:{value:.5},uRain:{value:0},uShaft:{value:.5}};
-  const weather={time:0,rain:0,rainbow:0,sun:1,wind:.5,shaft:.5};
-  // A complete front passes over the valley in just over two minutes.
-  const clamp=(v:number)=>Math.min(1,Math.max(0,v));
-  const director={update(t:number){
-    const phase=t%146;
-    weather.rain=clamp((phase-34)/13)*clamp((91-phase)/15);
-    weather.rainbow=clamp((phase-83)/8)*clamp((124-phase)/14);
-    const day=t%370, dusk=clamp((day-264)/30)*clamp((367-day)/30);
-    weather.sun=(1-.47*weather.rain)*(1-.86*dusk);weather.shaft=(.45+.45*weather.rainbow)*(1-dusk);
-    weather.rainbow*=1-dusk;
-    weather.wind=.45+.18*Math.sin(t*.22)+.25*weather.rain;
-  }};
   const hooks:((t:number,dt:number)=>void)[]=[];
   const ctx={THREE:T,renderer,scene,camera,controls,sun,P:palette,U,weather,puddles:[{x:6.1,z:15.4,rx:1.25,rz:.55,rot:.3},{x:12.6,z:19.2,rx:1.45,rz:.57,rot:-.5},{x:3.2,z:18.8,rx:.7,rz:.34,rot:.1}],renderSlime:null as any,
     groundY:(x:number,z:number)=>lakeEdge(x,z)<1?Math.max(inland(x,z),LAKE.level):Math.abs(x-riverCenter(z))<4&&z<30?Math.max(inland(x,z),riverLevel):inland(x,z),
@@ -68,6 +74,25 @@ export function createGardenStage(){
     vertexShader:`uniform float uTime;void main(){vec3 p=position;float head=position.y+(mod(float(gl_VertexID),2.)>.5?.42:0.);p.y-=floor((head-uTime*9.)/21.)*21.+uTime*9.;p.y-=8.;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
     fragmentShader:'uniform float uRain;void main(){gl_FragColor=vec4(.73,.85,.85,.36*uRain);}'});
   const rain=new T.LineSegments(geo,rainMat);rain.layers.set(1);rain.frustumCulled=false;scene.add(rain);
+  const flakePos=new Float32Array(720*3);
+  for(let i=0;i<flakePos.length;i+=3){
+    flakePos[i]=random()*30-15;flakePos[i+1]=random()*18;flakePos[i+2]=random()*30-15;
+  }
+  const flakes=new T.BufferGeometry();
+  flakes.setAttribute('position',new T.BufferAttribute(flakePos,3));
+  const flakeMat=new T.ShaderMaterial({
+    transparent:true,depthWrite:false,uniforms:{uTime:U.uTime,uWind:U.uWind,amount:{value:0}},
+    vertexShader:`uniform float uTime,uWind;void main(){
+      vec3 p=position;p.y=mod(p.y-uTime*(1.0+.32*sin(position.x)),18.)-6.;
+      p.x=mod(p.x+15.+uTime*uWind+sin(uTime*.8+p.z)*.52,30.)-15.;
+      vec4 eye=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*eye;
+      gl_PointSize=clamp(19./max(1.,-eye.z),1.5,5.5);}`,
+    fragmentShader:`uniform float amount;void main(){
+      float a=1.-smoothstep(.05,.5,length(gl_PointCoord-.5));
+      gl_FragColor=vec4(.93,.97,1.,a*amount*.93);}`
+  });
+  const snow=new T.Points(flakes,flakeMat);
+  snow.layers.set(1);snow.frustumCulled=false;scene.add(snow);
   const spectrum=[0xdd8885,0xe7ab7e,0xe6cd8a,0xaace92,0x8bbfca,0x9f9ac7];
   const bow=new T.Group();bow.position.set(2,-5,-65);
   for(let i=0;i<spectrum.length;i++){
@@ -77,16 +102,33 @@ export function createGardenStage(){
   scene.add(bow);
   const tint=new T.Color(),fogColor=new T.Color(0xe3e9d8),storm=new T.Color(0xa6bcba);
   const nightFog=new T.Color(0x697e86),hemisphere=scene.children.find((light:any)=>light.isHemisphereLight);
+  const skyTops=[0x92c2ce,0x64aaca,0x849fb9,0x94adbd].map(c=>new T.Color(c));
+  const skyRims=[0xe5efda,0xe4eddb,0xf2debd,0xe3e8e8].map(c=>new T.Color(c));
+  const sunDay=new T.Color(0xfff1d5),sunset=new T.Color(0xffb584),moon=new T.Color(0xb3ceea);
+  const sunOffset=sun.userData.offset=new T.Vector3();
   let time=0;
   function step(dt:number){
-    time+=dt;weather.time=time;director.update(time);
+    time+=dt;director.update(time);
+    const {season,daylight,twilight,east,up,north}=director.sky;
     U.uTime.value=time;U.uRain.value=weather.rain;U.uWind.value=weather.wind;U.uSun.value=weather.sun;U.uShaft.value=weather.shaft;
-    sun.intensity=2.05*weather.sun;scene.fog.color.copy(tint.copy(fogColor).lerp(storm,weather.rain));
-    const daylight=clamp((weather.sun-.14)/.44);
-    scene.fog.color.lerp(nightFog,1-daylight);hemisphere.intensity=.43+.92*daylight;
-    skyMat.uniforms.daylight.value=daylight;scene.fog.density=.007+.0035*weather.rain;
+    surfaceClimate.season.value=season;surfaceClimate.snow.value=weather.cover;surfaceClimate.wet.value=weather.wet;
+    atmosphere.sunDir.value.set(east,up,-north);
+    // Moonlight takes over after sunset; keep the shadow camera within its depth range.
+    sunOffset.copy(atmosphere.sunDir.value).multiplyScalar(up<0?-1:1);
+    sunOffset.y=Math.max(.19,sunOffset.y);sunOffset.normalize().multiplyScalar(31);
+    sun.color.copy(moon).lerp(tint.copy(sunDay).lerp(sunset,twilight),daylight);
+    sun.intensity=(.31+1.85*daylight)*(1-.64*weather.cloud);
+    const overcast=Math.max(weather.rain,weather.cloud*.64,weather.snow*.74);
+    scene.fog.color.copy(fogColor).lerp(skyRims[season],.6).lerp(storm,overcast).lerp(nightFog,1-daylight);
+    hemisphere.intensity=.62+.75*daylight;
+    scene.fog.density=.0065+.020*weather.fog+.002*weather.rain;
+    atmosphere.daylight.value=daylight;atmosphere.twilight.value=twilight;
+    atmosphere.drift.value+=dt*(.006+.019*weather.wind);
+    atmosphere.cloudAmount.value=weather.cloud;atmosphere.storminess.value=overcast;
+    skyMat.uniforms.uTop.value.copy(skyTops[season]);skyMat.uniforms.uHorizon.value.copy(skyRims[season]);
     for(const fn of hooks)fn(time,dt);
-    sky.position.copy(camera.position);skyMat.uniforms.cloudTime.value=time;skyMat.uniforms.cloudRain.value=weather.rain;
+    sky.position.copy(camera.position);
+    snow.position.copy(camera.position);snow.visible=weather.snow>.012;flakeMat.uniforms.amount.value=weather.snow;
     rain.position.copy(camera.position);rain.visible=weather.rain>.012;
     bow.visible=weather.rainbow>.01;for(const band of bow.children)(band as any).material.opacity=.24*weather.rainbow;
     stage.render(dt,{render:(pass:any)=>ctx.renderSlime?.(pass)});

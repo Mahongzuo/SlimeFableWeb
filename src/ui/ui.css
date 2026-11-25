@@ -424,3 +424,8 @@ body:has(#game-ui .overlay) #life-ui .coins {visibility:hidden}
   #build-ui .b-preset{flex:0 0 170px}#build-ui .b-thumb{height:44px}
   #build-ui .build-dock.folded{right:auto}
 }
+
+.title-foot{flex-wrap:wrap;row-gap:6px}
+.home-weather select{pointer-events:auto;font:700 12px var(--sans);color:var(--ink);background:var(--paper);border:1.5px solid var(--ink);border-radius:999px;padding:5px 10px}
+.pause .home-weather{display:flex;align-items:center;gap:8px;margin:3px 0 8px}
+.pause.card{max-height:92dvh;overflow-y:auto}

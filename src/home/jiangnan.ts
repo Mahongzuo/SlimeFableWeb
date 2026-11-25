@@ -1,3 +1,4 @@
+import {climateMaterial} from './climate-material';
 import {spawnPackModel} from './model-pack';
 import {valleyWater} from '../zones/lake-water';
 import {inland} from '../world/map';
@@ -41,6 +42,7 @@ export function groundTile(ctx:any, finish:GroundFinish, x:number,z:number, heig
     map:finishMap(T,finish), roughness:finish==='stone'?.56:.93,
     polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-4
   }));
+  climateMaterial(materials.get(finish),'terrain');
   const group=new T.Group();
   const geometry=new T.PlaneGeometry(2,2,6,6).rotateX(-Math.PI/2);
   const pos=geometry.attributes.position;
@@ -151,6 +153,6 @@ export function buildQuay(ctx:any) {
   puddles.material.fragmentShader='uniform float wetness;\n'+puddles.material.fragmentShader.replace('#include <tonemapping_fragment>','gl_FragColor.a=.14+.53*wetness;\n#include <tonemapping_fragment>');
   puddles.material.polygonOffset=true;puddles.material.polygonOffsetFactor=-2;puddles.material.polygonOffsetUnits=-2;
   root.add(puddles);
-  ctx.onUpdate(()=>{wet.value=ctx.weather.rain;});
+  ctx.onUpdate(()=>{wet.value=ctx.weather.wet??ctx.weather.rain;});
   ctx.scene.add(root);
 }
