@@ -1,43 +1,34 @@
+import {Reflector} from 'three/examples/jsm/objects/Reflector.js';
 import {LAKE} from '../world/map';
-/**
- * The lake uses the harbour's own sea shader (posterised reflection strips, rain rings, sun glitter, shore foam),
- * re-pointed at its own planar reflection one plane higher. The shader's harbour-only inputs (quay distance,
- * floats, slipway) are swapped for the lake ellipse. Reflection renders only when the camera is near the lake.
- */
-export function lakeWater(ctx: any) {
-  const T = ctx.THREE, sea = ctx.scene.getObjectByName('water-surface');
-  if (!sea?.material?.fragmentShader || !ctx.waterReflection) return null;
-  const [cx, cz] = LAKE.center, shore = .93; // where the lake bed meets the water level (map.ts inland())
-  const refl = new ctx.waterReflection.constructor(LAKE.level, .4); (globalThis as any).__lakeRefl = refl;
-  const base = sea.material, keep = base.uniforms.uWaterRefl.value; base.uniforms.uWaterRefl.value = null; // avoid cloning a render target texture
-  const mat = base.clone(); base.uniforms.uWaterRefl.value = keep;
-  for (const k of ['uTime', 'uCloud', 'uSun', 'uRain', 'uSunDir']) if (ctx.U[k]) mat.uniforms[k] = ctx.U[k];
-  mat.uniforms.uWaterRefl = {value: refl.texture}; mat.uniforms.uWaterReflMatrix = {value: refl.textureMatrix};
-  mat.uniforms.uLake = {value: new T.Vector4(cx, cz, LAKE.rx, LAKE.rz)};
-  // a fresher, greener palette than the open sea
-  const tint: Record<string, number> = {cSeaGlass: 0xbfe6d2, cShallow: 0x8ccfb8, cTeal: 0x4fa79a, cDeepTeal: 0x2f7f7c, cDeepBlue: 0x2a5f6e};
-  for (const [k, c] of Object.entries(tint)) if (mat.uniforms[k]) mat.uniforms[k] = {value: new T.Color(c)};
-  let fs: string = mat.fragmentShader; const swap = (from: RegExp | string, to: string) => { const next = fs.replace(from as any, to); if (next === fs) throw new Error('lake water: shader changed, missing ' + from); fs = next; };
-  swap('void main(){', `uniform vec4 uLake;
-float lakeE(vec2 p){ return length((p - uLake.xy) / uLake.zw); }
-void main(){
-  if (lakeE(vWP.xz) > 1.06) discard;`);
-  swap(/float dS = shoreDist\(wp\.xz\);/, `float dS = (${shore.toFixed(2)} - lakeE(wp.xz)) * min(uLake.z, uLake.w);`);
-  swap(/float dF = floatDist\(wp\.xz\);/, 'float dF = 99.0;');
-  swap(/float slip = slipDepth\(wp\.xz, wp\.y\);/, 'float slip = 99.0;');
-  swap(/vec4\(wp\.x \+ off\.x, [-0-9.e]+, wp\.z \+ off\.y, 1\.0\)/, `vec4(wp.x + off.x, ${LAKE.level.toFixed(3)}, wp.z + off.y, 1.0)`);
-  mat.fragmentShader = fs;
-  let vs: string = mat.vertexShader; const vs2 = vs.replace('worldPosition.y += waveHeight(worldPosition.xz, uTime);', 'worldPosition.y += waveHeight(worldPosition.xz, uTime) * 0.35;'); mat.vertexShader = vs2;
-  const geo = new T.PlaneGeometry(LAKE.rx * 2.2, LAKE.rz * 2.2, 88, 64).rotateX(-Math.PI / 2);
-  const mesh = new T.Mesh(geo, mat); mesh.name = 'lake-water-surface'; mesh.position.set(cx, LAKE.level, cz);
-  mesh.layers.mask = sea.layers.mask; mesh.renderOrder = sea.renderOrder; mesh.receiveShadow = true;
-  const size = new T.Vector2(), centre = new T.Vector3(cx, LAKE.level, cz), frustum = new T.Frustum(), m4 = new T.Matrix4();
-  const box = new T.Box3(new T.Vector3(cx - LAKE.rx * 1.1, LAKE.level - .5, cz - LAKE.rz * 1.1), new T.Vector3(cx + LAKE.rx * 1.1, LAKE.level + .5, cz + LAKE.rz * 1.1));
-  return {mesh, update() {
-    const cam = ctx.camera; mesh.visible = cam.position.distanceTo(centre) < 110; if (!mesh.visible) return;
-    // skip the reflection pass entirely when the lake is off screen
-    frustum.setFromProjectionMatrix(m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); if (!frustum.intersectsBox(box)) return;
-    const g = globalThis as any; if ((g.__reflTick ?? 0) % (g.__reflEvery ?? 1)) return; refl.scale = g.__lakeReflScale ?? .4;
-    ctx.renderer.getDrawingBufferSize(size); refl.setSize(size.x, size.y); refl.render(ctx.renderer, ctx.scene, cam);
-  }};
+let reflecting=false;
+
+/** One mirrored view and a world-space ripple pattern shared by the canal and lake. */
+export function valleyWater(ctx:any,geometry:any,x:number,y:number,z:number){
+  const T=ctx.THREE, water=new Reflector(geometry,{color:0x84b9aa,textureWidth:640,textureHeight:384,clipBias:.003});
+  water.camera.layers.enable(1);water.camera.layers.enable(4);
+  water.rotation.x=-Math.PI/2;water.position.set(x,y,z);water.layers.set(1);water.name='garden-water';
+  const mat=water.material;
+  mat.uniforms.uBody={value:new T.Vector2(1e4,1e4)};
+  ctx.onUpdate(()=>{const p=(window as any).__slime?.position;if(p)mat.uniforms.uBody.value.set(p[0],p[2]);});
+  mat.uniforms.uTime=ctx.U.uTime;mat.uniforms.uRain=ctx.U.uRain;
+  mat.vertexShader='varying vec3 vWaterPoint;\n'+mat.vertexShader.replace('vUv = textureMatrix','vWaterPoint=(modelMatrix*vec4(position,1.)).xyz; vUv = textureMatrix');
+  mat.fragmentShader='varying vec3 vWaterPoint;uniform vec2 uBody;uniform float uTime,uRain;\n'+mat.fragmentShader.replace('vec4 base = texture2DProj( tDiffuse, vUv );',`
+    vec2 p=vWaterPoint.xz;
+    float wave=sin(p.x*2.+p.y*3.2+uTime*1.8)+sin(p.y*5.1-uTime);
+    float bodyDist=distance(p,uBody);wave+=sin(bodyDist*18.-uTime*5.)*max(0.,1.-bodyDist/1.5);
+    vec2 uv=vUv.xy/vUv.w+vec2(wave*.0017,cos(p.x*4.+uTime)*.001);
+    vec4 base=texture2D(tDiffuse,uv);`).replace('blendOverlay( base.rgb, color )',`
+    mix(vec3(.07,.235,.205),base.rgb,.32)+vec3(.08,.11,.08)*smoothstep(1.78,1.99,wave)
+    +uRain*.07*(1.-smoothstep(.014,.05,abs(length(fract(p*1.4)-.5)-fract(uTime*.85+sin(dot(floor(p*1.4),vec2(5.3,1.9))))*.48)))`);
+  const render=water.onBeforeRender.bind(water);
+  water.onBeforeRender=(...args:any[])=>{
+    if(reflecting || ctx.scene.overrideMaterial)return;
+    reflecting=true;try{render(...args);}finally{reflecting=false;}
+  };
+  return water;
+}
+export function lakeWater(ctx:any){
+  const mesh=valleyWater(ctx,new ctx.THREE.CircleGeometry(1,96),LAKE.center[0],LAKE.level,LAKE.center[1]);
+  mesh.scale.set(LAKE.rx*1.04,LAKE.rz*1.04,1);
+  return {mesh,update(){mesh.visible=ctx.camera.position.distanceTo(mesh.position)<125;}};
 }

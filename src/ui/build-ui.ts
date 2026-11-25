@@ -1,3 +1,4 @@
+import type {BuildTool} from '../home/builder';
 import {BUILD_CATALOG, HOME_PRESETS, type BuildCategory} from '../home/build-catalog';
 import {ensureHome, type ExpansionThemeId, type LifeData} from '../life/state';
 import {isBuildItemUnlocked, isPresetUnlocked, nextLevelXp} from '../life/unlocks';
@@ -12,6 +13,9 @@ import {
 } from '../world/expansion';
 
 export interface BuildUIHandlers {
+  setTool(tool: BuildTool): void;
+  restore(redo: boolean): void;
+  transform(scale: boolean): void;
   selectItem(id: string): void;
   toggleDemolish(): void;
   applyPreset(id: string): void;
@@ -29,18 +33,23 @@ export interface BuildUIState {
   expandMode: boolean;
   selectedSlotId: string | null;
   selectedTheme: ExpansionThemeId;
+  tool?: BuildTool;
+  presetId?: string;
+  canUndo?: boolean;
+  canRedo?: boolean;
   frontierFocus?: [number, number];
 }
 
-type DockTab = BuildCategory | 'preset' | 'expand';
+type DockTab = BuildCategory | 'preset' | 'expand' | 'ground';
 
 const CATS: [DockTab, string][] = [
-  ['farm', '🌱 农田'],
-  ['house', '🏡 建筑'],
-  ['plant', '🌿 庭院植物'],
-  ['facility', '⛲ 设施'],
-  ['preset', '✨ 景组'],
-  ['expand', '🗺️ 扩建领土'],
+  ['ground', '地面'],
+  ['farm', '农田'],
+  ['house', '建筑'],
+  ['plant', '植物'],
+  ['facility', '设施'],
+  ['preset', '景组'],
+  ['expand', '扩建'],
 ];
 
 const SHOP_CATS: [CropCategory | 'all', string][] = [
@@ -59,7 +68,8 @@ export class BuildUI {
   readonly root: HTMLElement;
   private dock: HTMLElement;
   private shopEl: HTMLElement;
-  private tab: DockTab = 'farm';
+  private tab: DockTab = 'house';
+  private collapsed=false;
   private open = false;
   private shopOpen = false;
   private shopCat: CropCategory | 'all' = 'all';
@@ -83,11 +93,17 @@ export class BuildUI {
     this.dock.addEventListener('click', e => {
       const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-act],[data-cat],[data-item],[data-preset],[data-slot],[data-theme]');
       if (!btn) return;
+      if(btn.dataset.act==='collapse'){this.collapsed=!this.collapsed;this.render();return;}
+      if(btn.dataset.act==='undo' || btn.dataset.act==='redo'){this.h.restore(btn.dataset.act==='redo');return;}
+      if(btn.dataset.act==='rotate' || btn.dataset.act==='scale'){this.h.transform(btn.dataset.act==='scale');return;}
+      if(['stone','earth','border','move'].includes(btn.dataset.act??'')){this.h.setTool(btn.dataset.act as BuildTool);return;}
       if (btn.dataset.cat) {
         const nextTab = btn.dataset.cat as DockTab;
         this.tab = nextTab;
         if (nextTab === 'expand') this.h.setExpandMode(true);
-        else if (this.state.expandMode) this.h.setExpandMode(false);
+        else if(nextTab==='ground')this.h.setTool('stone');
+        else if(nextTab==='preset')this.h.setTool('place');
+        else {const first=BUILD_CATALOG.find(i=>i.category===nextTab);if(first)this.h.selectItem(first.id);}
         this.render();
         return;
       }
@@ -105,6 +121,10 @@ export class BuildUI {
   get isShopOpen() { return this.shopOpen; }
 
   show(on: boolean, life?: LifeData, nextState?: Partial<BuildUIState>) {
+    if(on && !this.open){
+      this.collapsed=false;
+      this.tab=BUILD_CATALOG.find(i=>i.id===nextState?.selectedId)?.category??'house';
+    }
     this.open = on;
     if (life) this.lastLife = life;
     if (nextState) {
@@ -125,7 +145,12 @@ export class BuildUI {
     ).join('');
 
     let bodyHtml = '';
-    if (this.tab === 'expand') {
+    this.dock.classList.toggle('folded',this.collapsed);
+    if(this.collapsed){this.dock.innerHTML='<button class="btn" data-act="collapse">展开素材库</button><button class="btn small" data-act="exit">完成</button>';return;}
+    if(this.tab==='ground'){
+      bodyHtml='<div class="b-finishes">'+[['stone','青石径'],['earth','夯土路'],['border','低矮种植带']].map(([id,name])=>
+        `<button class="b-finish ${this.state.tool===id?'sel':''}" data-act="${id}"><i class="swatch-${id}"></i>${name}</button>`).join('')+'</div>';
+    }else if (this.tab === 'expand') {
       const focus = this.state.frontierFocus ?? [-30, 142];
       const frontier = computeDynamicFrontier(home.expansions, focus, 8);
       const sandboxOn = !!home.sandboxFreeExpand;
@@ -170,7 +195,7 @@ export class BuildUI {
         return `<button class="b-preset ${unlocked ? '' : 'locked'}" data-preset="${p.id}">
           <strong>${p.name}</strong>
           <small>${p.subtitle}</small>
-          <span class="b-price">${unlocked ? `🐚 ${p.discountPrice} 一键铺设` : `🔒 Lv.${p.unlockLevel} 解锁`}</span>
+          <span class="b-price">${unlocked ? `🐚 ${p.discountPrice} 预览景组` : `🔒 Lv.${p.unlockLevel} 解锁`}</span>
         </button>`;
       }).join('')}</div>`;
     } else {
@@ -193,27 +218,39 @@ export class BuildUI {
       }).join('')}</div>`;
     }
 
+    const activePreset=HOME_PRESETS.find(p=>p.id===this.state.presetId);
     const footText = this.tab === 'expand'
       ? 'WASD 平移镜头 · 右键旋转 · 滚轮缩放 · 点击绿色虚线边疆地块并选好主题即可无缝扩建家园！'
+      : activePreset ? activePreset.name+' · 点击地面确认整组摆放'
+      : this.state.tool==='move' ? '点选自建物件，再点地面确认新位置'
+      : this.tab==='ground' ? '点地面铺设 2 米地块 · 可从岸路末端续接'
       : 'WASD 平移镜头 · 右键旋转 · 滚轮远近 · <b>Q / E</b> 旋转物件 · <b>R</b> 切换缩放 · 左键摆放（农田放好即可种 32 种作物）';
 
     this.dock.innerHTML = `
       <div class="b-head">
         <div class="b-title">
-          <strong>家园建造</strong>
+          <strong>建造素材库</strong><button class="b-fold" data-act="collapse" aria-label="收起素材库">收起</button>
           <span class="chip sea">Lv.${home.level}${nextXp ? ` · ${home.xp}/${nextXp} 繁荣` : ' · MAX'}</span>
           <span class="chip">🐚 ${life.coins}</span>
           <span class="chip mute">已建 ${home.placed.length} · 扩建 ${home.expansions.length}</span>
         </div>
         <div class="b-tabs">${tabs}</div>
         <div class="b-actions">
+          <button class="btn small ${this.state.tool==='move'?'primary':''}" data-act="move">移动</button>
+          <button class="btn small" data-act="rotate">旋转</button><button class="btn small" data-act="scale">缩放</button>
+          <button class="btn small" data-act="undo" ${this.state.canUndo?'':'disabled'}>撤销</button><button class="btn small" data-act="redo" ${this.state.canRedo?'':'disabled'}>重做</button>
           <button class="btn small ${this.state.demolish ? 'primary' : ''}" data-act="demolish">${this.state.demolish ? '拆除中（点击回收）' : '拆除'}</button>
           <button class="btn small" data-act="exit">完成 <span class="key">V</span></button>
         </div>
       </div>
       ${bodyHtml}
-      <div class="b-foot">${footText}</div>
+      <div class="b-foot">${footText}</div><output class="b-status"></output>
     `;
+  }
+
+  setStatus(reason:string){
+    const el=this.dock.querySelector('output');
+    if(el && el.textContent!==reason)el.textContent=reason;
   }
 
   /** Upgraded categorized Seed Shop supporting all 32 UE crops. */

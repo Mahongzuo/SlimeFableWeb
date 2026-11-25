@@ -1,14 +1,16 @@
+import {gardenRoads} from '../home/garden-regions';
+import {riverDistance} from '../home/waterway';
 import {inland, lakeEdge, pathDistance, PATHS, WORLD, ZONES, zoneAt, LAKE} from './map';
 /** Grass tint per zone, then dirt paths and the lake's sand ring are painted into vertex colours. */
-const GRASS: Record<string, number> = {park: 0x9fc77c, lake: 0x93c07a, farm: 0xa9c46f, forest: 0x6f9e62};
+const GRASS: Record<string, number> = {harbor:0xa6b38a, park:0xadbb8a, lake:0x93aa89, farm:0xa9ad78, forest:0x839a77};
 const DIRT = 0xc9ab7c, SAND = 0xe3d3a6, MUD = 0x8c7a5c, SKIRT = 0x7d6b55;
-/** Ground meshes for every non-harbour zone (1 m grid) plus the island skirt round the new outline. */
+/** Ground meshes for every home zone (1 m grid) plus the island skirt round the new outline. */
 export function buildInlandGround(ctx: any) {
   const T = ctx.THREE, group = new T.Group(); group.name = 'inland-ground';
   const mat = ctx.mats.toon(0xffffff, {noCache: true}); mat.vertexColors = true; mat.needsUpdate = true;
   const c = new T.Color(), tint = new T.Color();
   for (const z of ZONES) {
-    if (z.id === 'harbor') continue;
+
     const w = z.max[0] - z.min[0], h = z.max[1] - z.min[1], geo = new T.PlaneGeometry(w, h, w, h); geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position, colors = new Float32Array(pos.count * 3);
     for (let i = 0; i < pos.count; i++) {
@@ -21,15 +23,21 @@ export function buildInlandGround(ctx: any) {
       c.offsetHSL(fine * .012, 0, fine * .03);
       const p = pathDistance(x, zz); if (p < 2.2) c.lerp(tint.setHex(DIRT), Math.min(1, (2.2 - p) / .8)); else if (p < 3.2) c.multiplyScalar(1 - (3.2 - p) * .06); // worn verge
       const e = lakeEdge(x, zz); if (e < 1.25) c.lerp(tint.setHex(y < LAKE.level - .2 ? MUD : SAND), Math.min(1, (1.25 - e) / .12));
+      if(z.id==='harbor'){
+        const edge=riverDistance(x,zz);
+        if(edge<4.7)c.lerp(tint.setHex(0xb7b49b),Math.min(1,(4.7-edge)/1.3));
+        const road=gardenRoads.typeAt(x,zz);
+        if(road)c.setHex(road==='stonepath'?0xb7beb0:0xb9a580);
+      }
       colors.set([c.r, c.g, c.b], i * 3);
     }
     geo.setAttribute('color', new T.BufferAttribute(colors, 3)); geo.computeVertexNormals();
     const mesh = new T.Mesh(geo, mat); mesh.name = `ground-${z.id}`; mesh.receiveShadow = true; group.add(mesh);
   }
-  // island skirt: the harbour block is a diorama slab, so the new land ends in the same kind of cliff
+  // Continuous outer cliff along the four exposed borders of the home map.
   const skirt = ctx.mats.toon(SKIRT), edges: [number, number, number, number][] = [
     [WORLD.min[0], WORLD.max[1], WORLD.max[0], WORLD.max[1]], [WORLD.min[0], WORLD.min[1], WORLD.min[0], WORLD.max[1]],
-    [30, 30, WORLD.max[0], 30], [WORLD.max[0], 30, WORLD.max[0], WORLD.max[1]], [WORLD.min[0], WORLD.min[1], -30, WORLD.min[1]],
+    [WORLD.max[0], WORLD.min[1], WORLD.max[0], WORLD.max[1]], [WORLD.min[0], WORLD.min[1], WORLD.max[0], WORLD.min[1]],
   ];
   for (const [x0, z0, x1, z1] of edges) {
     const len = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(len), verts: number[] = [], idx: number[] = [];

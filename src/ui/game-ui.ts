@@ -106,7 +106,7 @@ export class GameUI {
       <div class="kicker">Slime Fable · 历史上的今天</div>
       <h1>${slimeMark}史莱姆寓言</h1><p class="tagline">一小团果冻，穿过每一个“今天”。</p>
       <div class="today-card card grain"><h3>今天的档案</h3><p>${line}</p><div class="years">${chapters.map(c => `<span class="year-chip"><i style="background:${c.palette[0]}"></i>${c.year}</span>`).join('')}</div></div>
-      <div class="title-actions"><button class="btn primary" data-act="start" ${info.ready ? '' : 'disabled'}>${info.ready ? '进入港口' : '史莱姆正在醒来…'}<span class="key">Enter</span></button><button class="btn" data-act="guide">📖 玩法教程</button><button class="btn" data-act="book">打开史书<span class="key">J</span></button></div>
+      <div class="title-actions"><button class="btn primary" data-act="start" ${info.ready ? '' : 'disabled'}>${info.ready ? '进入家园' : '史莱姆正在醒来…'}<span class="key">Enter</span></button><button class="btn" data-act="guide">📖 玩法教程</button><button class="btn" data-act="book">打开史书<span class="key">J</span></button></div>
       <div class="title-foot"><label>画质 <select data-quality>${(['auto', 'low', 'medium', 'high', 'ultra'] as QualitySetting[]).map(q => `<option value="${q}" ${info.quality === q ? 'selected' : ''}>${PRESET_NAMES[q]}</option>`).join('')}</select></label><span>键鼠游玩 · 建议使用 Chrome / Edge</span></div>
     </div></section>`;
   }

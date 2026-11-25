@@ -13,7 +13,6 @@ import {HomeBuilder} from '../home/builder';
 import {ensureHome, type ExpandedTile} from '../life/state';
 import {Graphics, PRESET_NAMES} from './graphics';
 import type {Interactable, PlayerHandle} from '../zones/types';
-import {HarborWater} from '../home/harbor-water';
 import {homeSpawn, plazaCenter, portalSlots, shardSpots, spawnYaw} from '../home/layout';
 import {TimePortal} from '../home/portals';
 import {Lectern, Shards} from '../home/props';
@@ -27,7 +26,7 @@ import {DayId, dayLabel, realToday} from './calendar';
 import {days} from '../../content/registry';
 
 type State = 'loading' | 'title' | 'play' | 'pause' | 'book' | 'guide' | 'door' | 'build' | 'shop';
-const TITLE_CAM = {pos: [-8, 6.8, 35] as Vec, target: [6, 1.9, 20] as Vec};
+const TITLE_CAM = {pos: [-12, 10, 33] as Vec, target: [8, 1.25, 15] as Vec};
 
 function localDayKey(): string {
   const d = new Date();
@@ -37,7 +36,7 @@ function localDayKey(): string {
 /** Home = 凝露港. Owns the state machine; the slime, harbour, home builder and UI only talk through here. */
 export class Game {
   state: State = 'loading'; private panelFrom: State = 'play'; private ui: GameUI; readonly slime: SlimeCharacter; private save = new Save();
-  private showing!: Showing; private portals: TimePortal[]; private lectern: Lectern; private shards: Shards; private fx: SeaFX; private puddles: HarborWater;
+  private showing!: Showing; private portals: TimePortal[]; private lectern: Lectern; private shards: Shards; private fx: SeaFX;
   private zones!: BuiltZones; private graphics!: Graphics; private life: LifeUI; private buildUI!: BuildUI; readonly builder!: HomeBuilder; readonly farmRegistry!: FarmRegistry;
   private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | {kind: 'spot'; spot: Interactable} | null = null;
   private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
@@ -89,12 +88,16 @@ export class Game {
       onLand: (speed, swimming) => { if (swimming && speed > 1.2) this.fx.splash(this.slime.position, speed); },
       onElementAttack: ev => this.handleElementAttack(ev),
     }).attach();
+    this.slime.arm=4.8;
     this.ui.bindCharacter(this.slime);
     // Restore persisted UE body shape preference (default 'dome')
     const savedHome = ensureHome(this.save.data.life);
     this.slime.setBodyShape(savedHome.bodyShape ?? 'dome', true);
 
     this.buildUI = new BuildUI({
+      setTool: tool => this.builder.setTool(tool),
+      restore: redo => this.builder.restore(redo),
+      transform: scale => this.builder.transform(scale),
       selectItem: id => this.builder.selectItem(id),
       toggleDemolish: () => this.builder.setDemolish(!this.builder.demolishMode),
       applyPreset: id => this.builder.applyPreset(id),
@@ -109,6 +112,7 @@ export class Game {
     this.builder = new HomeBuilder({
       ctx,
       life: this.save.data.life,
+      nativeFootprints: home.footprints,
       souvenirs: () => this.save.data.souvenirs,
       dayKey: () => localDayKey(),
       ground: (x, z) => this.slime.world.terrain(x, z),
@@ -129,7 +133,6 @@ export class Game {
     this.graphics.onAutoChange = p => this.ui.toast(`画面有点吃力，已自动调到「${PRESET_NAMES[p]}」画质 · 暂停菜单里可以改`, 3600);
     (window as any).__graphics = this.graphics;
     window.__slime = this.slime; (window as any).__game = this;
-    this.puddles = new HarborWater(ctx, this.slime);
     this.shards = new Shards(ctx, this.save.data.shards);
     this.shards.onCollect = (spot, n) => { this.save.add('shards', spot.id); this.slime.setMood('Happy', 1, 70); this.ui.toast(n === shardSpots.length ? `✦ 12 枚时光碎片全部找齐了！` : `✦ 时光碎片 ${n} / ${shardSpots.length} · ${spot.hint}`); };
     const query = new URLSearchParams(location.search);
@@ -164,6 +167,8 @@ export class Game {
   private builderUIState() {
     return {
       selectedId: this.builder.selectedItemId,
+      tool: this.builder.tool, presetId: this.builder.presetId,
+      canUndo: this.builder.history.canUndo, canRedo: this.builder.history.canRedo,
       demolish: this.builder.demolishMode,
       expandMode: this.builder.expandMode,
       selectedSlotId: this.builder.selectedSlotId,
@@ -239,7 +244,7 @@ export class Game {
 
   private start() {
     if (!this.slime.ready || (this.state !== 'title' && this.state !== 'loading')) return;
-    this.ui.title(null); this.ui.panel(null); this.slime.play(); this.slime.yaw = spawnYaw; this.state = 'play'; this.ui.showHud(true); this.life.show(true); this.refreshHud();
+    this.ui.title(null); this.ui.panel(null); this.slime.play(); this.slime.yaw = spawnYaw; this.slime.pitch = .10; this.state = 'play'; this.ui.showHud(true); this.life.show(true); this.refreshHud();
     if (this.returnFrom) {
       const origin = this.returnFrom;
       const portal = this.portals.find(p => gateContains(p.gate, origin));
@@ -249,7 +254,7 @@ export class Game {
       const returnDay = this.showing.shown.day;
       this.returnFrom = null; history.replaceState(null, '', location.pathname);
       this.applyShowing(returnDay);
-    } else if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('欢迎回到凝露港 · 按 V 自由建造家园，二段跳后按空格撑伞！', 4500), 600);
+    } else if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('临水书埠 · 沿河去钓鱼，沿石径去公园，按 V 建造家园。', 4500), 600);
   }
   private resume() { if (this.state === 'door') this.stepOutOfDoor(); if (this.state === 'shop') this.buildUI.closeSeedShop(); if (this.state === 'title' || this.state === 'loading') { this.ui.panel(null); this.state = 'title'; return; } this.ui.panel(null); this.slime.play(); this.state = 'play'; this.ui.showHud(true); this.refreshHud(); }
   private pauseGame() { if (this.state !== 'play') return; this.state = 'pause'; this.slime.pause(); this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
@@ -345,8 +350,9 @@ export class Game {
   }
   private update(t: number, dt: number) {
     const s = this.slime;
-    s.update(t, dt); this.puddles.update(dt); this.fx.update(dt, s); this.lectern.update(t);
+    s.update(t, dt); this.fx.update(dt, s); this.lectern.update(t);
     this.builder.update(t, dt);
+    if(this.builder.active)this.buildUI.setStatus(this.builder.currentGhostStatus.reason);
     for (const p of this.portals) { p.hover += ((this.focus?.kind === 'portal' && this.focus.portal === p ? 1 : 0) - p.hover) * (1 - Math.exp(-dt * 8)); p.update(t, dt); }
     if (this.state === 'play' && s.mode !== 'play') { this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
     this.shards.update(t, dt, this.state === 'play' ? s.position : [0, -99, 0]);
@@ -361,7 +367,7 @@ export class Game {
     // Zero-latency per-frame crosshair & ARPG combat HUD sync (1s switch CD + E/R/Q CD + Q energy ring)
     this.ui.setCrosshair(s.aiming, s.aimReady, s.aimRecoil > 0.25);
     this.ui.updateCharacterHud();
-    if (s.swimming && this.save.add('seenHints', 'swim')) this.ui.toast('漂起来了！水属性游得最快 · 东边的船坡和浮码头可以上岸', 4200);
+    if (s.swimming && this.save.add('seenHints', 'swim')) this.ui.toast('漂起来了！水属性游得最快 · 沿浅滩或廊桥旁的石岸可以上岸', 4200);
     this.interact();
     this.hudTimer -= dt; if (this.hudTimer <= 0) { this.hudTimer = .2; this.refreshHud(); }
   }

@@ -1,3 +1,4 @@
+import {riverLevel} from '../home/waterway';
 import {FishingSession, GREEN, landCatch, type FishSpot} from '../life/fishing';
 import {ITEMS} from '../life/catalog';
 import {takeItem} from '../life/state';
@@ -9,7 +10,7 @@ import type {PlayerHandle, ZoneContext} from './types';
  */
 export function fishingSpot(z: ZoneContext, id: string, stand: Vec, toward: [number, number], spot: FishSpot) {
   const {T, life} = z, floatAt = new T.Vector3(stand[0] + toward[0] * 4.2, 0, stand[2] + toward[1] * 4.2);
-  const water = spot === 'lake' ? -.45 : -1.8;
+  const water = spot === 'lake' ? -.45 : riverLevel;
   const bob = new T.Group(); bob.name = 'fishing-float'; bob.visible = false; z.ctx.scene.add(bob);
   const top = new T.Mesh(new T.SphereGeometry(.09, 10, 8), z.toon(0xe0453a)); top.position.y = .05; const low = new T.Mesh(new T.SphereGeometry(.085, 10, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), z.toon(0xffffff)); bob.add(top, low);
   const line = new T.Line(new T.BufferGeometry().setFromPoints([new T.Vector3(), new T.Vector3()]), new T.LineBasicMaterial({color: 0x2f2a24})); line.name = 'fishing-line'; line.visible = false; line.frustumCulled = false; z.ctx.scene.add(line);

@@ -142,14 +142,14 @@ export class FrontierRenderer {
 
       const u = (x - slot.min[0]) / w;
       const v = (z - slot.min[1]) / h;
-      c.setHex(theme.grassHex);
+      c.setHex(theme.grassHex).lerp(tint.setHex(0xa4ad89), .42);
       const big = Math.sin(x * 0.11 + Math.sin(z * 0.08) * 1.8) * Math.sin(z * 0.12 + Math.cos(x * 0.06) * 1.8);
       if (big > 0.25) c.lerp(tint.setHex(theme.accentHex), Math.min(0.45, (big - 0.25) * 1.1));
       // Feather vertex colour along outer 6m of each tile toward neutral inland grass so seams blend organically
       const distEdge = Math.min(x - slot.min[0], slot.max[0] - x, z - slot.min[1], slot.max[1] - z);
       if (distEdge < 6) {
         const ef = 1 - distEdge / 6;
-        c.lerp(tint.setHex(0x88b56c), ef * ef * 0.85);
+        c.lerp(tint.setHex(0xa2b18a), ef * ef * 0.85);
       }
 
       // Gentle cross-path down the center of farmland / jiangnan tiles
@@ -185,7 +185,7 @@ export class FrontierRenderer {
     if (tile.theme === 'jiangnan') {
       const centerY = expansionHeight(cx, cz, slot, tile.theme);
       const waterMat = new T.MeshStandardMaterial({
-        color: 0x5fb8c9,
+        color: 0x75a89b,
         roughness: 0.18,
         metalness: 0.1,
         transparent: true,

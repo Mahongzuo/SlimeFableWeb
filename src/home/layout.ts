@@ -1,11 +1,13 @@
 import {Box,Vec} from '../slime/types';
 /** Home plaza on the harbour's front quay (metres, Y up). Pure data: collision and meshes both read it. */
-export const SEA_LEVEL = -1.8;
-export const plazaCenter: Vec = [13, 0, 21];
-export const homeSpawn: Vec = [4.5, 0, 21];
+export const SEA_LEVEL = -.38;
+export const plazaCenter: Vec = [10, 0, 17];
+export const homeSpawn: Vec = [1.5, 0, 17];
 export const spawnYaw = -Math.PI / 2; // facing +X, towards the lectern
 export const portalRadius = 8;
-export const portalAngles = [-78, -47, -16, 16, 47, 78];
+export const quayPavilion = {x: 3, z: 29, width: 3.6};
+export const nativeLane = {x: 8, firstZ: 24, lastZ: 34};
+export const portalAngles = [-87, -54, -20, 20, 54, 87];
 export interface PortalSlot {slot: number; position: Vec; yaw: number}
 /** Six doors on the east half-circle, numbered in story order from the sea side round to the back. */
 export const portalSlots: PortalSlot[] = portalAngles.map((deg, i) => {
@@ -32,16 +34,10 @@ export function plazaBoxes(): Box[] {
 /** Time shards: a reason to explore every corner, roof and the water. y is resolved against the scene at build time. */
 export interface ShardSpot {id: string; x: number; z: number; sea?: boolean; lift?: number; hint: string}
 export const shardSpots: ShardSpot[] = [
-  {id: 'plaza-back', x: 8, z: 27.5, hint: '广场后面'},
-  {id: 'office-steps', x: -17, z: 15.2, lift: .3, hint: '办公楼台阶'},
-  {id: 'office-back', x: -25.5, z: 26, hint: '办公楼背后'},
-  {id: 'pontoon', x: 20.8, z: 8, hint: '浮码头'},
-  {id: 'ramp-water', x: 27, z: 3.2, sea: true, hint: '船坡下的水面'},
-  {id: 'basin-mid', x: 4, z: -8, sea: true, hint: '港池中央'},
-  {id: 'basin-boats', x: 13, z: -15, sea: true, hint: '港池深处'},
-  {id: 'left-quay', x: -13, z: -19.5, hint: '仓库南边'},
-  {id: 'hill-top', x: -25.5, z: -25.5, hint: '山坡顶上'},
-  {id: 'pier-mid', x: -1, z: -25, hint: '防波堤中段'},
-  {id: 'pier-light', x: 8.6, z: -25, hint: '灯塔脚下'},
-  {id: 'breakwater', x: 22, z: -29, hint: '外侧防波堤'},
+  {id:'plaza-back',x:8,z:27.5,hint:'书院北侧石径'}, {id:'office-steps',x:-15,z:-1,hint:'水巷茶舍门前'},
+  {id:'office-back',x:-16,z:-12,hint:'粉墙山后'}, {id:'pontoon',x:-9,z:9,hint:'柳岸钓台'},
+  {id:'ramp-water',x:-6,z:2,sea:true,hint:'廊桥下游'}, {id:'basin-mid',x:-6.4,z:-7,sea:true,hint:'水巷河心'},
+  {id:'basin-boats',x:-7,z:-18,sea:true,hint:'南溪浅水'}, {id:'left-quay',x:-18,z:3,hint:'巷尾石路'},
+  {id:'hill-top',x:-20,z:-21,hint:'观景坡顶'}, {id:'pier-mid',x:4,z:-20,hint:'银杏茶坡'},
+  {id:'pier-light',x:13,z:-23,hint:'山亭旁'}, {id:'breakwater',x:24,z:-15,hint:'远山竹径'},
 ];

@@ -1,0 +1,165 @@
+{
+  "edition": "pilot",
+  "weather": {
+    "clear": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "rain": {
+      "rain": 1,
+      "rainbow": 0
+    },
+    "rainbow": {
+      "rain": 0.25,
+      "rainbow": 1
+    },
+    "overlook": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "seam": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "seam-side": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "waterlane": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "lake": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "farm": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "forest": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "park": {
+      "rain": 0,
+      "rainbow": 0
+    }
+  },
+  "errors": [],
+  "cycle": [
+    {
+      "time": 12,
+      "rain": 0,
+      "bow": 0,
+      "sun": 1
+    },
+    {
+      "time": 64,
+      "rain": 1,
+      "bow": 0,
+      "sun": 0.53
+    },
+    {
+      "time": 98,
+      "rain": 0,
+      "bow": 1,
+      "sun": 1
+    },
+    {
+      "time": 312,
+      "rain": 0,
+      "bow": 0,
+      "sun": 0.14
+    }
+  ],
+  "frameMs": 5.1099999999627475,
+  "fluid": true,
+  "gates": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "seam": {
+    "rays": [
+      [
+        0
+      ],
+      [
+        1
+      ]
+    ],
+    "vertices": 7,
+    "gap": 9.75764833516246e-10
+  },
+  "expansion": "tile_1_0",
+  "edits": {
+    "tiles": 3,
+    "pavilion": true,
+    "cropMoved": true,
+    "groupSize": 6,
+    "reload": true,
+    "narrowDrawer": true
+  },
+  "deformation": {
+    "spread": 0.6354761904770775,
+    "vertices": 5460,
+    "particles": 384
+  },
+  "journeys": [
+    [
+      1,
+      "1015-2003",
+      2.3,
+      236
+    ],
+    [
+      2,
+      "1015-1997",
+      2.3,
+      248
+    ],
+    [
+      3,
+      "1015-defense",
+      2.3,
+      270
+    ],
+    [
+      4,
+      "1015-match",
+      2.3,
+      270
+    ],
+    [
+      5,
+      "1015-skirmish",
+      2.3,
+      248
+    ],
+    [
+      6,
+      "1015-rpg",
+      2.3,
+      236
+    ]
+  ],
+  "fishing": [
+    "fish-harbor-pier",
+    "fish-harbor-pontoon",
+    "fish-pier",
+    "fish-east",
+    "fish-west"
+  ],
+  "terracePlots": 9,
+  "legacy": {
+    "id": "legacy",
+    "coins": 57,
+    "crop": "seed-radish",
+    "newGroundY": 0.024412661458360813
+  },
+  "assets": "local only, legacy scene absent"
+}

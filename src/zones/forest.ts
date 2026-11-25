@@ -65,9 +65,11 @@ export const forest: ZoneBuilder = z => {
   batch('creek-pebbles-fx', new T.IcosahedronGeometry(1, 0), 0x929185, pebbles);
 
   const spots: [number, number, number][] = [];
-  for (let tries = 0; spots.length < 279 && tries < 6000; tries++) {
+  for (let tries = 0; spots.length < 190 && tries < 6000; tries++) {
     const x = -103 + z.rand() * 70, zz = 34 + z.rand() * 104, s = 1.1 + z.rand() * .65;
-    if (pathDistance(x, zz) < 3.6 || creekDistance(x, zz) < 2.8 || Math.hypot(x + 70, zz - 95) < 7 || Math.hypot(x + 89, zz - 77) < 6) continue;
+    const campClearing = Math.hypot(x + 54, zz - 75) < 6 || Math.hypot(x + 92, zz - 102) < 5;
+    const treehouseVista = zz > 84 && zz < 96 && x > -71 && x < -58;
+    if (campClearing || treehouseVista || pathDistance(x, zz) < 3.6 || creekDistance(x, zz) < 2.8 || Math.hypot(x + 70, zz - 95) < 7 || Math.hypot(x + 89, zz - 77) < 6) continue;
     if (spots.some(([px, pz]) => Math.hypot(px - x, pz - zz) < 2.9)) continue;
     spots.push([x, zz, s]);
   }
@@ -75,10 +77,24 @@ export const forest: ZoneBuilder = z => {
   root.add(trees(z, spots.slice(pineCount), [0x386844, 0x487647, 0x527a48, 0x315c40]));
   batch('pine-trunks', new T.CylinderGeometry(.18, .28, 1, 7).translate(0, .5, 0), 0x685039,
     pines.map(([x, zz, s]) => [x, z.ground(x, zz), zz, s, s * 4.5, s]));
-  for (let layer = 0; layer < 3; layer++) {
-    batch(`pine-foliage-${layer}`, new T.ConeGeometry(1, 1, 7), [0x294e39, 0x315f3f, 0x3d6c44][layer],
-      pines.map(([x, zz, s]) => [x, z.ground(x, zz) + (3.2 + layer * 1.05) * s, zz, (1.65 - layer * .36) * s, 2.6 * s, (1.65 - layer * .36) * s]));
+  // Long limbs and flattened needle clusters leave sightlines under mature pines.
+  const limbs: Pose[] = [], shaded: Pose[] = [], tips: Pose[] = [];
+  for (const [x, zz, size] of pines) {
+    const baseY = z.ground(x, zz), turn = z.rand() * Math.PI * 2;
+    for (let tier = 0; tier < 4; tier++) {
+      const angle = turn + tier * 2.4, reach = (1.25 - tier * .22) * size;
+      const dx = Math.cos(angle) * reach, dz = -Math.sin(angle) * reach;
+      const y = baseY + (2.8 + tier * .48) * size;
+      limbs.push([x + dx * .5, y, zz + dz * .5, reach, size * .12, size * .13, angle, 0, .18]);
+      const width = (1.18 - tier * .13) * size;
+      shaded.push([x + dx, y + .15 * size, zz + dz, width * 1.28, size * .48, width, angle]);
+      tips.push([x + dx * 1.12, y + .38 * size, zz + dz * 1.12, width * 1.08, size * .37, width * .92, angle]);
+    }
   }
+  beam('pine-branches', 0x6b5946, limbs);
+  const needles = new T.IcosahedronGeometry(1, 1);
+  batch('pine-foliage-shadow', needles, 0x426a56, shaded);
+  batch('pine-foliage-tips', needles, 0x628566, tips);
 
   const base = z.ground(-70, 95), deck = base + 4;
   batch('treehouse-trunk', new T.CylinderGeometry(.65, .95, 8.5, 9).translate(0, 4.25, 0), 0x624832, [[-70, base, 95, 1, 1, 1]]);

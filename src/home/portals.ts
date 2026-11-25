@@ -27,16 +27,30 @@ export class TimePortal {
     const T = this.T = ctx.THREE, toon = ctx.mats.toon;
     const g = this.group = new T.Group(); g.name = `time-portal-${slot.slot}`;
     g.position.fromArray(slot.position); g.rotation.y = slot.yaw;
-    const stone = toon(0xe9e0cc), dark = toon(0xb9ad97);
+    const stone = toon(0xb7c0b5), dark = toon(0x80938d), timber = toon(0x735744);
     const plinth = new T.Mesh(new T.CylinderGeometry(1.5, 1.62, BASE, 32), dark); plinth.position.y = BASE / 2; g.add(plinth);
     const top = new T.Mesh(new T.CylinderGeometry(1.32, 1.38, .06, 32), stone); top.position.y = BASE + .02; g.add(top);
     for (const side of [-1, 1]) {
-      const p = new T.Mesh(new T.BoxGeometry(.42, ARCH_H, .42), stone); p.position.set(side * pillarOffset, BASE + ARCH_H / 2, 0); g.add(p);
+      const p = new T.Mesh(new T.BoxGeometry(.36, ARCH_H, .36), timber); p.position.set(side * pillarOffset, BASE + ARCH_H / 2, 0); g.add(p);
       const cap = new T.Mesh(new T.BoxGeometry(.54, .14, .54), dark); cap.position.set(side * pillarOffset, BASE + ARCH_H, 0); g.add(cap);
       const foot = new T.Mesh(new T.BoxGeometry(.54, .18, .54), dark); foot.position.set(side * pillarOffset, BASE + .09, 0); g.add(foot);
     }
     const arch = new T.Mesh(new T.TorusGeometry(pillarOffset, .2, 10, 32, Math.PI), stone); arch.position.y = BASE + ARCH_H; g.add(arch);
     this.keystone = new T.Mesh(new T.BoxGeometry(.46, .5, .5), toon(0xcfc3a8)); this.keystone.position.y = BASE + ARCH_H + pillarOffset; g.add(this.keystone);
+    // One solid curved roof with a continuous ridge and lifted eaves.
+    const profile = new T.Shape();
+    profile.moveTo(-1.70, .04); profile.quadraticCurveTo(-1.15,-.17,0,.24);
+    profile.quadraticCurveTo(1.15,-.17,1.70,.04);profile.lineTo(1.70,.16);
+    profile.quadraticCurveTo(1.12,.03,0,.43);profile.quadraticCurveTo(-1.12,.03,-1.70,.16);profile.closePath();
+    const roof = new T.Mesh(new T.ExtrudeGeometry(profile,{depth:.95,bevelEnabled:false}),toon(0x506a64));
+    roof.position.set(0,4.06,-.475); g.add(roof);
+    const beam = new T.Mesh(new T.BoxGeometry(2.68,.20,.50),timber);
+    beam.position.set(0,4.00,0);g.add(beam);
+    for(const side of [-1,1]){
+      const lamp=new T.Mesh(new T.SphereGeometry(.145,8,6),toon(0xc87952));
+      lamp.scale.y=1.28;lamp.position.set(side*1.39,3.83,.09);g.add(lamp);
+    }
+    g.traverse((m:any)=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true;}});
     const shape = new T.Shape(); shape.moveTo(-ARCH_W, BASE); shape.lineTo(ARCH_W, BASE); shape.lineTo(ARCH_W, BASE + ARCH_H); shape.absarc(0, BASE + ARCH_H, ARCH_W, 0, Math.PI, false); shape.lineTo(-ARCH_W, BASE);
     this.uniforms = {uTime: {value: 0}, uOpen: {value: 0}, uHover: {value: 0}, uA: {value: new T.Color('#ffffff')}, uB: {value: new T.Color('#888888')}};
     this.disc = new T.Mesh(new T.ShapeGeometry(shape, 24), new T.ShaderMaterial({uniforms: this.uniforms, vertexShader: vert, fragmentShader: frag, transparent: true, depthWrite: false, side: T.DoubleSide}));
@@ -96,7 +110,7 @@ export class TimePortal {
     this.tag.material.map = tagTexture(T, (g2, w, h) => {
       paperCard(g2, w, h);
       g2.fillStyle = '#2f2a24'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
-      g2.font = `700 ${gate.type==="mode"||gate.archive.length?65:96}px ${SERIF}`; g2.fillText(gateTitle(gate), w / 2, 96);
+      g2.font = `700 ${gate.type==="mode"||gate.archive.length?65:96}px ${SERIF}`; g2.fillText(this.slot.slot + " · " + gateTitle(gate), w / 2, 96);
       g2.font = `500 34px ${SANS}`; g2.fillStyle = '#5b5249';
       const subtitle=gateSummary(gate); const e = subtitle.length > 13 ? subtitle.slice(0, 12) + '…' : subtitle; g2.fillText(e, w / 2, 178);
       if (complete) { g2.fillStyle = '#c8553d'; g2.beginPath(); g2.arc(w - 64, 50, 24, 0, Math.PI * 2); g2.fill(); g2.fillStyle = '#fff'; g2.font = `700 28px ${SANS}`; g2.fillText('✓', w - 64, 52); }

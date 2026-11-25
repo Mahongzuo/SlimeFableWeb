@@ -68,6 +68,19 @@ export const farm: ZoneBuilder = z => {
     const x = TERRACE.first - (k - .5) * TERRACE.width, zz = 8 + r * 6, plot = new T.Mesh(new T.BoxGeometry(7, .16, 4), soil); plot.name = 'farm-plot';
     const y = inland(x, zz) + .02; plot.position.set(x, y, zz); plot.receiveShadow = true; root.add(plot); plots.push({id: `farm-${k}-${r}`, x, z: zz, y: y + .08});
   }
+  // The standing rice sits on its own southern terraces, clear of all nine playable beds.
+  // Loose rows follow the contour and reveal the narrow paths between the fields.
+  for (const [cx, cz] of [[-46, -13], [-57, -15], [-68, -16], [-79, -19]]) {
+    for (let row = 0; row < 8; row++) for (let hill = 0; hill < 15; hill++) {
+      const x = cx + (row - 3.5) * .74 + .13 * Math.sin(hill * .34);
+      const zz = cz + (hill - 7) * .54, y = inland(x, zz);
+      for (let stem = 0; stem < 3; stem++) {
+        const offset = (stem - 1) * .1, height = .55 + .13 * Math.sin(hill + row * .6 + stem);
+        block('rice-stalks-fx', 0x87945d, x + offset, y + height / 2, zz, .04, height, .035, -offset);
+        round('round', stem === 1 ? 0xcbb46b : 0xb7a456, x + offset + .03, y + height, zz, .06, .14, .055, 0, -.46);
+      }
+    }
+  }
   // Low bed frames leave the original crop coordinates and heights intact.
   for (const p of plots) {
     for (const side of [-1, 1]) {

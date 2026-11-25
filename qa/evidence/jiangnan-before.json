@@ -1,0 +1,40 @@
+{
+  "edition": "before",
+  "weather": {
+    "clear": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "rain": {
+      "rain": 1,
+      "rainbow": 0
+    },
+    "rainbow": {
+      "rain": 0.25,
+      "rainbow": 1
+    },
+    "overlook": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "seam": {
+      "rain": 0,
+      "rainbow": 0
+    },
+    "seam-side": {
+      "rain": 0,
+      "rainbow": 0
+    }
+  },
+  "errors": [],
+  "frameMs": 12.140000000037253,
+  "fluid": true,
+  "gates": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ]
+}

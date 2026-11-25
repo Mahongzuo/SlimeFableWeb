@@ -1,5 +1,5 @@
 import {Vec, distance} from '../slime/types';
-import {plazaCenter, portalAngles, portalRadius, SEA_LEVEL, ShardSpot, shardSpots} from './layout';
+import {plazaCenter, SEA_LEVEL, ShardSpot, shardSpots} from './layout';
 /** The lectern holding the history book, plus the stone ring that ties the six doors together. */
 export class Lectern {
   readonly position: Vec = [...plazaCenter]; private glyph: any; private book: any;
@@ -15,12 +15,7 @@ export class Lectern {
     for (const side of [-1, 1]) { const page = new T.Mesh(new T.BoxGeometry(.44, .035, .6), toon(0xf7f1e3)); page.position.set(side * .235, .03, 0); page.rotation.z = side * -.07; this.book.add(page); }
     this.glyph = ctx.mats.glowSprite(0xf2c14e, 1.1, .55); this.glyph.position.y = 1.65; g.add(this.glyph);
     ctx.scene.add(g);
-    // floor inlay: two thin stone rings and spokes towards each door
-    const inlay = new T.Group(); inlay.name = 'plaza-inlay';
-    const ringMat = toon(0xd9cfb9);
-    for (const [r0, r1] of [[1.3, 1.5], [portalRadius - 2.6, portalRadius - 2.35]]) { const ring = new T.Mesh(new T.RingGeometry(r0, r1, 64), ringMat); ring.rotation.x = -Math.PI / 2; inlay.add(ring); }
-    for (const deg of portalAngles) { const a = deg * Math.PI / 180, len = portalRadius - 4.1; const spoke = new T.Mesh(new T.PlaneGeometry(len, .12), ringMat); spoke.rotation.x = -Math.PI / 2; spoke.rotation.z = -a; spoke.position.set(Math.cos(a) * (1.5 + len / 2), 0, Math.sin(a) * (1.5 + len / 2)); inlay.add(spoke); }
-    inlay.position.set(plazaCenter[0], .012, plazaCenter[2]); inlay.traverse((m: any) => { m.receiveShadow = true; }); ctx.scene.add(inlay);
+
   }
   update(t: number) { this.glyph.position.y = 1.65 + Math.sin(t * 2) * .05; this.glyph.material.opacity = .45 + Math.sin(t * 3) * .1; }
 }

@@ -1,4 +1,6 @@
 import {Game} from './game/game';
-const app = window.__app;
-if (!app) throw new Error('港口场景尚未初始化');
+import {createGardenStage} from './home/garden-stage';
+const app=createGardenStage();
+(window as any).__app=app;
 new Game(app);
+app.run();

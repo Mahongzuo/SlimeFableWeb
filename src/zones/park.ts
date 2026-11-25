@@ -28,25 +28,12 @@ export const park: ZoneBuilder = z => {
   root.add(signpost(z, 16, 34, Math.PI, '风车公园', '蘑菇弹跳 · 环形跑酷'));
 
   const towerY = z.ground(20, 64);
-  mesh('windmill-stone-tower', new T.CylinderGeometry(1.25, 2, 5, 10), 0xdccdb3, 20, towerY + 2.5, 64);
-  mesh('windmill-roof', new T.ConeGeometry(1.85, 2, 10), 0x596d70, 20, towerY + 6, 64);
-  // Tangent blocks follow the tapered tower, half a block offset on alternate courses.
-  const bands: Part[] = [];
-  for (let row = 0; row < 12; row++) for (let i = 0; i < 20; i++) {
-    const h = .22 + row * .4, r = 2 - h * .15, a = (i + (row % 2) * .5) * Math.PI / 10;
-    bands.push([20 + Math.sin(a) * r, towerY + h, 64 + Math.cos(a) * r, r * .31, .36, .2, 0, 0, a]);
-  }
-  batch('windmill-staggered-stone', box, z.ctx.P.concrete, bands);
-  const blades = new T.Group(); blades.name = 'windmill-blades-fx'; blades.position.set(20, towerY + 4.4, 62.45); root.add(blades);
-  batch('windmill-sails-fx', box, 0xffe5a4, [[0, 1.65, 0, .65, 2.8, .12], [1.65, 0, 0, 2.8, .65, .12], [0, -1.65, 0, .65, 2.8, .12], [-1.65, 0, 0, 2.8, .65, .12]], blades);
-  mesh('windmill-hub-fx', new T.SphereGeometry(.3, 8, 6), 0x805d46, 0, 0, -.12, blades);
-
   const mushroomSites = [[-18, 40, .65], [-18, 49, .9], [-12, 44, 1.15], [-6, 48, 1.4], [-3, 55, .8]];
   const stems: Part[] = [];
   const mushrooms = mushroomSites.map(([x, zz, h], i) => {
     const y = z.ground(x, zz), radius = 1.35;
     stems.push([x, y + h / 2, zz, .42, h, .42]);
-    const cap = mesh(`bounce-mushroom-cap-${i}`, new T.SphereGeometry(radius, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), [0xe78388, 0xf3bd59, 0x8faddb, 0x9fc96a, 0xc998cf][i], x, y + h, zz);
+    const cap = mesh(`bounce-mushroom-cap-${i}`, new T.SphereGeometry(radius, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), [0xbd8c74, 0xc7ac72, 0x8fa9a3, 0x9eae7f, 0xb39b9a][i], x, y + h, zz);
     cap.scale.y = .32;
     return {x, z: zz, top: y + h + radius * .32, radius, cap, pulse: 0};
   });
@@ -72,7 +59,7 @@ export const park: ZoneBuilder = z => {
   for (let i = 0; i < 8; i++) slideParts.push([19, sy + .15 + i * .25, 43.3, 1.4, .12, .24]);
   batch('slide-ladder-platform', box, 0xe4bc76, slideParts);
   const endY = z.ground(19, 49) + .12, drop = sy + 2 - endY, slope = Math.atan2(drop, 4.3);
-  batch('slide-walkable-ramp', box, 0x81c8c1, [[19, (sy + 2 + endY) / 2, 46.85, 1.5, .16, Math.hypot(4.3, drop), slope]]);
+  batch('slide-walkable-ramp', box, 0x82a296, [[19, (sy + 2 + endY) / 2, 46.85, 1.5, .16, Math.hypot(4.3, drop), slope]]);
   const swingY = z.ground(-8, 65), swing: Part[] = [];
   for (const x of [-10, -6]) for (const side of [-1, 1]) swing.push([x, swingY + 1.6, 65 + side * .7, .18, 3.5, .18, side * .4]);
   swing.push([-8, swingY + 3.2, 65, 4.5, .22, .22]);
@@ -116,12 +103,7 @@ export const park: ZoneBuilder = z => {
   }
   for (const x of [17.8, 22.2]) for (const h of [.6, 1.05]) add(timber, wood, x, towerY + h, 61.4, .16, .16, 2);
   for (const x of [18.4, 21.6]) for (const h of [.6, 1.05]) add(timber, wood, x, towerY + h, 60.5, 1.2, .16, .16);
-  for (let i = 0; i < 6; i++) add(timber, wood, 19.5 + i * .2, towerY + 1.12, 62.12, .19, 1.85, .2);
-  for (const h of [.5, 1.65]) add(timber, 0x584a3d, 20, towerY + h, 61.98, 1.25, .15, .15);
-  for (const x of [19.2, 20.8]) stone(x, towerY + 1.15, 62.15, .3, 2.1, .35);
-  stone(20, towerY + 2.25, 62.15, 1.9, .25, .55);
-  for (let i = 0; i < 9; i++) add(round, tile, 19.1 + i * .225, towerY + 2.43, 62.12, .14, .85, .14, Math.PI / 2);
-  add(hoops, 0x514f46, 20.35, towerY + 1.1, 61.97, .12, .12, .12);
+
   // Close-set stone treads are embedded into the mound rather than floating above it.
   const stairStart = z.ground(20, 53.5) + .16;
   for (let i = 0; i < 19; i++) {
@@ -231,10 +213,10 @@ export const park: ZoneBuilder = z => {
   const spots: [number, number, number][] = [];
   for (let i = 0; i < 26; i++) {
     const a = i / 26 * Math.PI * 2, r = 19 + z.rand() * 4, x = Math.cos(a) * r * 1.3, zz = 55 + Math.sin(a) * r;
-    if (pathDistance(x, zz) > 3 && x > -29 && x < 29 && Math.hypot(x - 20, zz - 64) > 5 && route.every(p => Math.hypot(x - p[0], zz - p[1]) > 3) && mushroomSites.every(p => Math.hypot(x - p[0], zz - p[1]) > 3)) spots.push([x, zz, .8 + z.rand() * .5]);
+    if ((x<1 || x>15 || zz>43) && pathDistance(x, zz) > 3 && x > -29 && x < 29 && Math.hypot(x - 20, zz - 64) > 5 && route.every(p => Math.hypot(x - p[0], zz - p[1]) > 3) && mushroomSites.every(p => Math.hypot(x - p[0], zz - p[1]) > 3)) spots.push([x, zz, .8 + z.rand() * .5]);
   }
-  root.add(trees(z, spots, [0x7fb35f, 0x9cc46a, 0x6aa65c]));
-  root.add(tufts(z, 5000, {min: [-29, 31], max: [30, 79]}, (x, zz) => pathDistance(x, zz) < 2.4
+  root.add(trees(z, spots, [0x8ba17a, 0xa6b58b, 0x839b73]));
+  root.add(tufts(z, 5000, {min: [-29, 31], max: [30, 79]}, (x, zz) => (x>=6.7 && x<=13.3 && zz<40) || pathDistance(x, zz) < 2.4
     || playAreas.some(([cx, cz, w, d]) => Math.abs(x - cx) < w / 2 + .2 && Math.abs(zz - cz) < d / 2 + .2)
     || (Math.abs(x - 20) < 1.2 && zz > 53 && zz < 63)
     || picnicSites.some(([px, pz]) => x > px - .3 && x < px + 2 && zz > pz - .3 && zz < pz + 1.8)));
@@ -248,7 +230,7 @@ export const park: ZoneBuilder = z => {
   return {root, update: (t, dt, player) => {
     life(t, dt, player);
     updateCritters(t, dt, player);
-    const step = Math.max(0, dt); clock += step; blades.rotation.z += step * Math.PI * 2 * .6;
+    const step = Math.max(0, dt); clock += step;
     const [x, y, zz] = player.position;
     for (const m of mushrooms) {
       m.pulse = Math.max(0, m.pulse - step);

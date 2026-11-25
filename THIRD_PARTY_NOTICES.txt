@@ -1,4 +1,5 @@
-SunHarbor original scene and SlimeFable reference logic were supplied by the user.
+The historical SunHarbor prototype is preserved in Git tag backup-before-jiangnan-20261125.
+The active home uses project-authored scenery and DreamWorld models.
 The Unreal project is not included, modified, or required at runtime.
 
 Marching Cubes lookup tables: Three.js r170, https://github.com/mrdoob/three.js

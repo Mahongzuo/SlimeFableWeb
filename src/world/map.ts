@@ -1,13 +1,13 @@
 import type {GroundSurface, FluidVolume} from '../slime/world';
-import {hill} from '../home/harbor-world';
+import {valleyHeight} from '../home/waterway';
 /**
- * Home map: the original 60 m harbour block stays where it is; new land grows north and west of it (about 6× the area).
+ * Home map of the book court, canal and four adjoining activity regions.
  * Everything here is pure data / pure functions so the worker, tests and zone builders agree on the same ground.
  */
 export type ZoneId = 'harbor' | 'park' | 'lake' | 'farm' | 'forest';
 export interface ZoneRect {id: ZoneId; name: string; min: [number, number]; max: [number, number]}
 export const ZONES: ZoneRect[] = [
-  {id: 'harbor', name: '凝露港', min: [-30, -30], max: [30, 30]},
+  {id: 'harbor', name: '凝露港', min: [-30, -31], max: [31, 30]},
   {id: 'park', name: '风车公园', min: [-30, 30], max: [31, 80]},
   {id: 'lake', name: '镜湖', min: [-30, 80], max: [31, 142]},
   {id: 'farm', name: '梯田农场', min: [-106, -31], max: [-30, 30]},
@@ -39,14 +39,15 @@ export const pathDistance = (x: number, z: number) => { let d = Infinity; for (c
 export const lakeEdge = (x: number, z: number) => Math.hypot((x - LAKE.center[0]) / LAKE.rx, (z - LAKE.center[1]) / LAKE.rz);
 const hills = (x: number, z: number) => 1.1 + .9 * Math.sin(x * .071 + 1.1) * Math.sin(z * .064 + .4) + .45 * Math.sin(x * .13 - z * .09 + 2) + .25 * Math.sin(z * .19 + x * .05);
 
-/** Ground height of the new land (not used inside the harbour block). */
+/** Shared ground height for scenery, collision and building. */
 export function inland(x: number, z: number): number {
   const zone = zoneAt(x, z), d = Math.max(-30 - x, z - 30, 0), seam = smooth(2, 16, d);
+  if(zone==='harbor')return valleyHeight(x,z);
   let h = 0;
   if (zone === 'farm') {
     const k = Math.max(0, Math.min(TERRACE.count, Math.floor((TERRACE.first - x) / TERRACE.width) + 1));
     h = k * TERRACE.rise + .12 * Math.sin(z * .2) * smooth(-2, 4, TERRACE.first - x);
-    h = Math.max(h, hill(-30, z) * (1 - smooth(0, 9, d)));
+    h = Math.max(h, valleyHeight(-30, z) * (1 - smooth(0, 9, d)));
   } else if (zone === 'forest') h = hills(x, z) * 1.5 * seam;
   else if (zone === 'park') {
     const mound = 3.2 * (1 - smooth(0, 1, Math.hypot(x - 20, z - 64) / 10));
@@ -57,7 +58,7 @@ export function inland(x: number, z: number): number {
     if (e < 1.15) h = Math.min(h, LAKE.level + .35 - LAKE.depth * (1 - smooth(.35, 1.15, e)) + .35 * smooth(.85, 1.15, e));
   }
   // paths are flattened a little so the slime can roll along them
-  const p = pathDistance(x, z); if (p < 3 && zone !== 'harbor') h = h * (.55 + .45 * smooth(1.2, 3, p));
+  const p = pathDistance(x, z); if (p < 3) h = h * (.55 + .45 * smooth(1.2, 3, p));
   return h;
 }
 /** Analytic ground for the collision world: two 1 m grids (north strip, west strip). */
@@ -67,6 +68,6 @@ export function inlandSurfaces(): GroundSurface[] {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) values.push(inland(min[0] + i, min[1] + j));
     return {min, max, height: 0, grid: {width: w, height: h, values}};
   };
-  return [grid([-106, 30], [31, 142]), grid([-106, -31], [-30, 30])];
+  return [grid([-30,-31],[31,30]),grid([-106, 30], [31, 142]), grid([-106, -31], [-30, 30])];
 }
 export const lakeFluid: FluidVolume = {min: [LAKE.center[0] - LAKE.rx * 1.2, LAKE.center[1] - LAKE.rz * 1.2], max: [LAKE.center[0] + LAKE.rx * 1.2, LAKE.center[1] + LAKE.rz * 1.2], level: LAKE.level, sink: .14};

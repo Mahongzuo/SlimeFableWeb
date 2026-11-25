@@ -1,5 +1,7 @@
+import {valleyHeight,riverLevel} from './waterway';
+import {portalSlots, plazaCenter, quayPavilion, nativeLane} from './layout';
 import type {Box, Vec} from '../slime/types';
-import type {ExpandedTile, PlacedProp} from '../life/state';
+import type {ExpandedTile, HomeBuildState, PlacedProp} from '../life/state';
 import {isInsideHomeTerritory} from '../world/expansion';
 
 export type BuildCategory = 'farm' | 'house' | 'plant' | 'facility';
@@ -242,7 +244,7 @@ export const HOME_PRESETS: PresetBlueprint[] = [
   {
     id: 'preset-jiangnan-court',
     name: '江南竹影小院',
-    subtitle: '月洞门 + 湖畔凉亭 + 翠竹 + 睡莲芦苇（立刻满足小熊猫与池蛙栖地）',
+    subtitle: '月洞门、木亭与双丛翠竹围合小院，柳荫下设纪念品台。',
     unlockLevel: 1,
     discountPrice: 45,
     items: [
@@ -293,7 +295,12 @@ export interface PlacementCheck {
   reason?: string;
 }
 
-export function isInPlazaNoBuild(x: number, z: number, radius: number): boolean {
+export function isInPlazaNoBuild(x: number, z: number, radius: number, protectLane=true): boolean {
+  if (portalSlots.some(p => Math.hypot(x-p.position[0],z-p.position[2]) < radius+2.25)) return true;
+  if (Math.hypot(x-plazaCenter[0],z-plazaCenter[2]) < radius+8.25) return true;
+  if (Math.hypot(x-quayPavilion.x,z-quayPavilion.z) < radius+quayPavilion.width/2) return true;
+  if (protectLane && x+radius>nativeLane.x-1 && x-radius<nativeLane.x+1 && z+radius>nativeLane.firstZ-1 && z-radius<nativeLane.lastZ+1) return true;
+  if (x+radius>18.8 && x-radius<22.6 && z+radius>10 && z-radius<25) return true;
   return (
     x + radius > PLAZA_NO_BUILD.minX &&
     x - radius < PLAZA_NO_BUILD.maxX &&
@@ -311,7 +318,14 @@ export function canPlaceProp(
   groundY: number | null,
   fluidLevel: number | null,
   expansions: ExpandedTile[] = [],
+  yaw = 0,
 ): PlacementCheck {
+  const c=Math.cos(yaw), s=Math.sin(yaw);
+  for (const side of [-.5,.5]) for(const end of [-.5,.5]){
+    const dx=item.width*scale*side,dz=item.depth*scale*end;
+    if(!isInsideHomeTerritory(x+dx*c+dz*s,z-dx*s+dz*c,expansions,0))
+      return {ok:false,reason:'物件超出领土边界'};
+  }
   const r = (Math.max(item.width, item.depth) * scale) * 0.45;
   if (!isInsideHomeTerritory(x, z, expansions, 2.5)) {
     return {ok: false, reason: '超出家园领土边界（可在「扩建领土」中开垦新地块）'};
@@ -327,9 +341,15 @@ export function canPlaceProp(
   for (const p of existing) {
     const other = BUILD_ITEMS[p.itemId];
     if (!other) continue;
-    const or = (Math.max(other.width, other.depth) * p.scale) * 0.42;
-    const minDist = item.solid || other.solid ? r + or : (r + or) * 0.55;
-    if (Math.hypot(x - p.x, z - p.z) < minDist) {
+    // Separating axes of both oriented footprints. Foliage may interleave at its edges.
+    const margin = item.solid || other.solid ? .49 : .34;
+    const extent=(angle:number, rotation:number,w:number,d:number)=>
+      margin*(Math.abs(Math.cos(angle-rotation))*w + Math.abs(Math.sin(angle-rotation))*d);
+    const separated=[yaw,yaw+Math.PI/2,p.yaw,p.yaw+Math.PI/2].some(angle=>{
+      const distance=Math.abs((x-p.x)*Math.cos(angle)-(z-p.z)*Math.sin(angle));
+      return distance>=extent(angle,yaw,item.width*scale,item.depth*scale)+extent(angle,p.yaw,other.width*p.scale,other.depth*p.scale);
+    });
+    if (!separated) {
       return {ok: false, reason: `与已摆放的「${other.name}」重叠`};
     }
   }
@@ -349,4 +369,56 @@ export function buildPropCollisionBox(prop: PlacedProp): Box | null {
   const min: Vec = [prop.x - hw, prop.y - 0.2, prop.z - hd];
   const max: Vec = [prop.x + hw, prop.y + h, prop.z + hd];
   return {min, max, camera: !def.farmBed, name: `home-${prop.id}`};
+}
+
+/** Keep pavilion entrances traversable while giving columns, floor and roof support. */
+export function propCollisionParts(prop:PlacedProp):Box[] {
+  if(prop.itemId!=='pack-pavilion'){
+    const box=buildPropCollisionBox(prop);return box?[box]:[];
+  }
+  const result:Box[]=[],c=Math.cos(prop.yaw),s=Math.sin(prop.yaw),k=prop.scale;
+  const part=(dx:number,dz:number,r:number,bottom:number,top:number,kind:string)=>{
+    const x=prop.x+k*(dx*c+dz*s),z=prop.z+k*(dz*c-dx*s);
+    result.push({name:'pavilion-'+prop.id+'-'+kind,min:[x-r*k,prop.y+bottom*k,z-r*k],max:[x+r*k,prop.y+top*k,z+r*k],camera:true});
+  };
+  part(0,0,1.26,-.06,.12,'floor');part(0,0,1.28,1.94,2.4,'roof');
+  for(let i=0;i<6;i++){
+    const a=i*Math.PI/3;part(Math.cos(a)*1.25,Math.sin(a)*1.25,.08,.1,2.02,'post-'+i);
+  }
+  return result;
+}
+
+/** Re-seat old harbour builds on the new terrain once, preserving IDs, crops and inventories. */
+export function settleLegacyGarden(home: HomeBuildState) {
+  if (home.gardenTerrain === 1) return false;
+  for (const p of home.placed) {
+    const def=BUILD_ITEMS[p.itemId];
+    if (!def || p.x < -30 || p.x > 31 || p.z < -31 || p.z > 30) continue;
+    const neighbours=home.placed.filter(other=>other!==p);
+    const settle=(x:number,z:number)=>{
+      const c=Math.cos(p.yaw),s=Math.sin(p.yaw),y=valleyHeight(x,z);
+      for (const side of [-.5,.5]) for (const end of [-.5,.5]) {
+        const dx=side*def.width*p.scale,dz=end*def.depth*p.scale;
+        const px=x+dx*c+dz*s,pz=z-dx*s+dz*c;
+        if (px < -30 || px > 31 || pz < -31 || pz > 30) return false;
+        const h=valleyHeight(px,pz);
+        if (!def.waterAllowed && (h < riverLevel-.08 || Math.abs(h-y)>.55)) return false;
+      }
+      if (!canPlaceProp(def,x,z,p.scale,neighbours,y,riverLevel,home.expansions,p.yaw).ok) return false;
+      p.x=x;p.z=z;p.y=def.waterAllowed?Math.max(y,riverLevel):y;
+      return true;
+    };
+    if (settle(p.x,p.z)) continue;
+    // A former quay can now be a river or a public path. Prefer the nearest stable bank.
+    let found=false;
+    for (let radius=1;radius<=48 && !found;radius++) {
+      const count=Math.ceil(Math.PI*radius);
+      for (let i=0;i<count;i++) {
+        const angle=i*Math.PI*2/count;
+        if (settle(p.x+radius*Math.cos(angle),p.z+radius*Math.sin(angle))) {found=true;break;}
+      }
+    }
+  }
+  home.gardenTerrain=1;
+  return true;
 }

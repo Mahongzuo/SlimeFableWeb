@@ -28,6 +28,7 @@ export interface DexEntry {n: number; first: number; /** biggest size (fish cm) 
 export interface RequestState {id: string; item: string; count: number; reward: number; done: boolean}
 
 export interface PlacedProp {
+  paidShells?: number;
   id: string;
   itemId: string;
   x: number;
@@ -65,7 +66,11 @@ export interface ExpandedTile {
   unlockedAt: number;
 }
 
+export type GroundFinish = 'stone' | 'earth' | 'border';
+export interface GroundTile {x: number; z: number; finish: GroundFinish}
 export interface HomeBuildState {
+  gardenTerrain?: 1;
+  paving: GroundTile[];
   placed: PlacedProp[];
   expansions: ExpandedTile[];
   xp: number;
@@ -94,6 +99,7 @@ export interface LifeData {
 }
 
 export const freshHome = (): HomeBuildState => ({
+  paving: [],
   placed: [],
   expansions: [],
   xp: 0,
@@ -114,6 +120,7 @@ export function ensureHome(life: LifeData): HomeBuildState {
       ...base,
       ...life.home,
       placed: Array.isArray(life.home.placed) ? life.home.placed : [],
+      paving: Array.isArray(life.home.paving) ? life.home.paving : [],
       expansions: Array.isArray(life.home.expansions) ? life.home.expansions : [],
       unlocks: Array.isArray(life.home.unlocks) ? life.home.unlocks : [],
       visitors: life.home.visitors ?? {},
