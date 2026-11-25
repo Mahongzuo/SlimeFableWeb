@@ -7,7 +7,7 @@ import {Combat,isSelfSkill,skillAimStatus,stopAtMeleeTarget,type CombatTarget,ty
 import {elements} from './elements';
 import {CLING,stepCling,tryAttach,type ClingState} from './cling';
 import {createWorld,CollisionWorld,GroundSurface,WorldDefinition} from './world';
-import {SlimeUmbrellaView,UMBRELLA,UmbrellaLogic} from './umbrella';
+import {UMBRELLA,UmbrellaLogic} from './umbrella';
 import {SlashVfxSystem} from './slash-vfx';
 import {SkillRuntime,type CombatHudSnapshot,type ReactionResult,type SkillDef,type SkillSlot} from './skills';
 import {SkillVfxSystem} from './skill-vfx';
@@ -40,7 +40,7 @@ function createUI(mount?:HTMLElement){
  <div class="metrics"><div class="status" id="status">正在唤醒果冻…</div><div id="metrics"></div></div>
  <section class="intro glass"><div class="eyebrow">A LITTLE JELLY, A QUIET HARBOR</div><h1>在晴雨之间<br>软软地出发。</h1><p>让身体随脚步轻轻晃动，留下一路元素印记。<br>分出一小团自己，再把它们慢慢收回来。</p><button id="play" class="primary"><span>开始游玩</span><span>↗</span></button><small class="note">桌面键鼠体验 · 原生软体模拟 · 六属性切换</small></section>
  <section class="element-panel glass"><div class="element-title"><span>身体里的六种天气</span><span>ELEMENT / 01—06</span></div><div class="elements">${elements.map((e,i)=>`<button class="element ${i===0?'active':''}" data-element="${i}" style="--element:${e.color}" aria-label="切换${e.name}属性" aria-pressed="${i===0}"><b>${e.icon}</b><span>${e.name}</span><kbd>${i+1}</kbd></button>`).join('')}</div><div class="element-description"><b id="element-tag">WATER / 水</b><span id="element-trail">涟漪水痕</span></div></section>
- <div class="hint"><div><kbd>W A S D</kbd> 移动 <kbd>Shift</kbd> 冲刺 <kbd>空格</kbd> 两段跳 / 开伞 <kbd>C</kbd> 摊开</div><div><kbd>G</kbd>/<kbd>右键</kbd> 瞄准 · 左键发射 <kbd>X</kbd> 回收 <kbd>左键</kbd> 连击 <kbd>滚轮</kbd> 视距 <kbd>Esc</kbd> 暂停</div></div><div class="crosshair ue-crosshair"><i></i><i></i><i></i><i></i></div>
+ <div class="hint"><div><kbd>W A S D</kbd> 移动 <kbd>Shift</kbd> 冲刺 <kbd>空格</kbd> 两段跳 / 化伞 <kbd>C</kbd> 摊开</div><div><kbd>G</kbd>/<kbd>右键</kbd> 瞄准 · 左键发射 <kbd>X</kbd> 回收 <kbd>左键</kbd> 连击 <kbd>滚轮</kbd> 视距 <kbd>Esc</kbd> 暂停</div></div><div class="crosshair ue-crosshair"><i></i><i></i><i></i><i></i></div>
  <div class="combo hidden"><span id="shot-count">分身 0 / 5</span><strong id="combo-name">自由漫游</strong><small id="combat-hint">沿码头前行，可在木靶旁试试四段连击</small></div><div class="toast" role="status"></div>`;
  (mount??document.body).appendChild(ui);ui.classList.add('viewing');
  const $=(s:string)=>ui.querySelector(s) as HTMLElement;
@@ -51,7 +51,6 @@ export class SlimeCharacter {
  position:Vec=[0,0,0];velocity:Vec=[0,0,0];forward:Vec=[0,0,-1];grounded=true;jumps=0;spread=0;element=0;quality:Quality='high';mode:'observe'|'play'|'paused'='observe';yaw=0;pitch=.23;arm=2.6;currentArm=2.6;keys=new Set<string>();generation=0;swimming=false;
  readonly bodyShape='dome';readonly shapeBlend=1;
  readonly umbrella=new UmbrellaLogic();
- private umbrellaView:SlimeUmbrellaView;
  readonly slashVfx:SlashVfxSystem;
  readonly skills=new SkillRuntime();
  readonly skillVfx:SkillVfxSystem;
@@ -88,7 +87,6 @@ export class SlimeCharacter {
   this.$('.brand strong').textContent=options.title??'史莱姆 · 可复用角色';
   this.renderer=new SlimeRenderer(ctx,this.world);this.decals=new TrailDecals(this.T,this.world,ctx);this.combat=new Combat(options.battleTargets??options.trainingTargets??[],!options.battleTargets);
   if(options.battleTargets)this.combat.nextSwingDirection=()=>this.meleeAim();
-  this.umbrellaView=new SlimeUmbrellaView(ctx);
   this.slashVfx=new SlashVfxSystem(ctx);
   this.skillVfx=new SkillVfxSystem(ctx);
   this.combat.onSwingStart=ev=>{
@@ -211,7 +209,7 @@ export class SlimeCharacter {
  }
 
 
- teleport(p:Vec){this.cameraHeight.reset();this.currentArm=this.arm;this.frameAnchor=null;this.pendingImpacts.length=0;this.sentLaunches=0;this.commands=[];this.cling=null;this.umbrella.cancel(true);this.umbrellaView.reset();this.position=[...p];this.velocity=[0,0,0];this.generation++;this.decals.reset();}
+ teleport(p:Vec){this.cameraHeight.reset();this.currentArm=this.arm;this.frameAnchor=null;this.pendingImpacts.length=0;this.sentLaunches=0;this.commands=[];this.cling=null;this.umbrella.cancel(true);this.position=[...p];this.velocity=[0,0,0];this.generation++;this.decals.reset();}
 
  /** Move an existing platform in the worker without regenerating the body or its clones. */
  syncBox(index:number){const box=this.world.boxes[index];if(box&&!this.worldPending)this.worker.postMessage({boxUpdate:{index,min:box.min,max:box.max}});}
@@ -327,7 +325,7 @@ export class SlimeCharacter {
   return true;
  }
  reset(){
-  this.cameraHeight.reset();this.currentArm=this.arm;this.face.reset();this.frameAnchor=null;this.pendingImpacts.length=0;this.sentLaunches=0;this.commands=[];this.cling=null;this.umbrella.cancel(true);this.umbrellaView.reset();this.slashVfx.reset();this.skillVfx.reset();this.skills.reset();this.debugFreeze=false;
+  this.cameraHeight.reset();this.currentArm=this.arm;this.face.reset();this.frameAnchor=null;this.pendingImpacts.length=0;this.sentLaunches=0;this.commands=[];this.cling=null;this.umbrella.cancel(true);this.slashVfx.reset();this.skillVfx.reset();this.skills.reset();this.debugFreeze=false;
   this.position=[...this.spawn];this.velocity=[0,0,0];this.forward=[0,0,-1];this.grounded=true;this.jumps=0;this.spread=0;this.impact=0;this.jumpStretch=0;this.airBounce=0;this.coyoteTimer=0;this.jumpBuffer=0;this.jumpHeld=false;
   this.aiming=false;this.aimReady=false;this.rightAimHeld=false;this.keys.clear();this.combat.reset();this.decals.reset();this.generation++;this.resets++;this.latest=null;this.yaw=0;this.pitch=.23;
   if(this.mode==='play')this.camPos.set(this.position[0],1.1,this.position[2]+this.arm);
@@ -482,6 +480,7 @@ export class SlimeCharacter {
   }else if(!norm)this.clingPush=0;
 
   if(this.cling){
+   this.umbrella.step(dt,time,0,false,true,false);
    const r=stepCling(this.world,this.cling,this.position,{move:mv,jump:this.jumpRequest,detach:this.detachRequest},dt);
    this.jumpRequest=false;this.jumpBuffer=0;this.detachRequest=false;this.position=r.position;this.velocity=r.velocity;this.cling=r.state;this.grounded=r.event==='mantle'||r.event==='floor';this.swimming=false;
    if(this.cling && !this.cling.mantle && !transientElement(this.element)){
@@ -673,17 +672,12 @@ export class SlimeCharacter {
    this.combat.targets.forEach(t=>t.hitFlash=Math.max(0,t.hitFlash-dt*4));
    this.umbrella.step(dt,time,0,true,false,false);
   }
-  this.face.update(dt,this.velocity,this.grounded,this.aiming,this.combat.active);
+  this.face.update(dt,this.velocity,this.grounded,this.aiming,this.combat.active,this.umbrella.open);
   this.renderer.setFace(this.face);
   this.decals.update(time,this.element,this.grounded&&!this.swimming&&!this.cling);
   this.decals.prune(this.latest?.shots.map(s=>s.id)??[]);
   this.updateLightning(time);
 
-  // Update 3D umbrellas for main body + returning airborne mini-slime shots
-  const bodyCenter=this.latest?.centers[0]??[this.position[0],this.position[1]+.2,this.position[2]];
-  const offset=this.frameAnchor?[this.position[0]-this.frameAnchor[0],this.position[1]-this.frameAnchor[1],this.position[2]-this.frameAnchor[2]]:[0,0,0];
-  const bodyBase:Vec=[bodyCenter[0]+offset[0],bodyCenter[1]+offset[1]+.18,bodyCenter[2]+offset[2]];
-  this.umbrellaView.update(dt,time,this.element,this.umbrella.open,this.umbrella.openAmount,bodyBase,.27,this.velocity,this.latest?.shots??[]);
   this.slashVfx.update(dt,time,[this.position[0],this.position[1],this.position[2]]);
   if(!this.options.battleTargets||this.mode==='play'){
    this.skills.step(dt);this.skillVfx.update(dt,this.skillCallbacks());
@@ -698,7 +692,7 @@ export class SlimeCharacter {
     dt:this.debugFreeze||this.options.battleTargets&&this.mode!=='play'?0:this.simDt,quality:this.quality,commands:this.commands.splice(0),
     cling:this.cling&&!this.cling.mantle?{point:[...this.cling.point],normal:[...this.cling.normal]}:null,
     battleTargets:this.options.battleTargets?this.battleColliders():undefined,
-    generation:this.generation,shapeBlend:this.shapeBlend,jumpStretch:this.jumpStretch,airBounce:this.airBounce,umbrella:this.umbrella.open,
+    generation:this.generation,shapeBlend:this.shapeBlend,jumpStretch:this.jumpStretch,airBounce:this.airBounce,glideAmount:this.umbrella.openAmount,
    };
    this.sentLaunches=input.commands.filter(c=>c.type==='launch').length;
    const recycle=this.recycle;this.recycle=undefined;this.sentAnchor=[...input.anchor];
@@ -730,7 +724,7 @@ export class SlimeCharacter {
    this.lastUi=time;const mean=(a:number[])=>a.length?a.reduce((s,v)=>s+v,0)/a.length:0;
    this.$('#metrics').textContent=`${Math.round(1000/(mean(this.frameTimes.slice(-90))||16.7))} FPS · PBF ${this.latest?.particleCount??384} 粒子 · ${this.latest?.count??0} 顶点`;
    this.$('#shot-count').textContent=`分身 ${this.latest?.shots.length??0} / 5`;
-   this.$('#combo-name').textContent=this.umbrella.open?'撑伞滑翔':this.combat.active?this.combat.lastName+' / '+(this.combat.index+1):this.keys.has('KeyX')?'正在收回分身':this.aiming?'炮弹瞄准':'自由漫游';
+   this.$('#combo-name').textContent=this.umbrella.open?'伞形滑翔':this.combat.active?this.combat.lastName+' / '+(this.combat.index+1):this.keys.has('KeyX')?'正在收回分身':this.aiming?'炮弹瞄准':'自由漫游';
    this.$('#combat-hint').textContent=this.combat.totalHits?`命中 ${this.combat.totalHits} 次 · ${elements[this.element].name}属性`:'沿码头前行，可在木靶旁试试四段连击';
   }
  }
@@ -743,7 +737,7 @@ export class SlimeCharacter {
  }
 
  dispose(){
-  if(!this.running)return;this.running=false;this.observe();this.worker.terminate();this.renderer.dispose();this.decals.dispose();this.umbrellaView.dispose();this.slashVfx.dispose();this.skillVfx.dispose();
+  if(!this.running)return;this.running=false;this.observe();this.worker.terminate();this.renderer.dispose();this.decals.dispose();this.slashVfx.dispose();this.skillVfx.dispose();
   for(const {target,type,fn} of this.listeners)target.removeEventListener(type,fn);
   for(const o of [...this.targetMeshes,this.lightning]){o.removeFromParent();o.traverse?.((m:any)=>{m.geometry?.dispose();if(Array.isArray(m.material))m.material.forEach((a:any)=>a.dispose());else m.material?.dispose()})}
   for(const l of this.targetLabels)l.remove();

@@ -89,3 +89,41 @@ test('UE Dome (bell flare) produces a wider, lower bell silhouette than Ball wit
   assert.ok(dome.width > ball.width * 1.15, `expected dome width ${dome.width} > ball ${ball.width}`);
   assert.ok(dome.height < ball.height * 0.92, `expected dome height ${dome.height} < ball ${ball.height}`);
 });
+
+test('gliding opens one continuous fluid canopy with a raised centre, then returns to the airborne body',()=>{
+  for(const quality of ['high','balanced'] as const){
+    const solver=new SlimeSolver([0,4,0],flatWorld),surface=new SurfaceBuilder();
+    const input=makeInput({anchor:[0,4,0],grounded:false});
+    function sample(amount:number,steps:number){
+      for(let i=0;i<steps;i++)solver.step(1/60,{...input,glideAmount:amount});
+      const f=surface.build(solver,quality);
+      assert.equal(f.overflow,false);assert.deepEqual(f.clusterIds,[0]);
+      let minX=Infinity,maxX=-Infinity,top=-Infinity,bottom=Infinity,centreBottom=Infinity,centreTop=-Infinity,edgeBottom=Infinity;
+      const neighbours=new Map<string,Set<string>>();
+      for(let i=0;i<f.count;i+=3){
+        const triangle:string[]=[];
+        for(let k=0;k<3;k++){
+          const j=(i+k)*3,x=f.positions[j],y=f.positions[j+1],z=f.positions[j+2],r=Math.hypot(x,z);
+          minX=Math.min(minX,x);maxX=Math.max(maxX,x);top=Math.max(top,y);bottom=Math.min(bottom,y);
+          if(r<.07){centreBottom=Math.min(centreBottom,y);centreTop=Math.max(centreTop,y);}
+          if(r>.28)edgeBottom=Math.min(edgeBottom,y);
+          triangle.push([x,y,z].map(v=>Math.round(v*10000)).join(','));
+        }
+        for(const key of triangle){
+          if(!neighbours.has(key))neighbours.set(key,new Set());
+          for(const other of triangle)neighbours.get(key)!.add(other);
+        }
+      }
+      const pending=[neighbours.keys().next().value!],seen=new Set<string>();
+      while(pending.length){const key=pending.pop()!;if(seen.has(key))continue;seen.add(key);for(const other of neighbours.get(key)!)pending.push(other);}
+      assert.ok(seen.size>=neighbours.size*.99,'the fluid canopy should remain connected');
+      return {width:maxX-minX,height:top-bottom,thickness:centreTop-centreBottom,arch:centreBottom-edgeBottom};
+    }
+    const closed=sample(0,45),opening=sample(.5,15),open=sample(1,45),folded=sample(0,45);
+    assert.ok(opening.width>closed.width && open.width>opening.width);
+    assert.ok(open.width>closed.width*1.55 && open.width>1.85*open.height);
+    assert.ok(open.thickness<closed.thickness*.66,'the fluid thins as the canopy opens');
+    assert.ok(open.arch>.10,'the outer lip should hang below the centre of the underside');
+    assert.ok(Math.abs(folded.width-closed.width)<.065);
+  }
+});

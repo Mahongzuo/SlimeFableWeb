@@ -34,8 +34,8 @@ export interface FrameInput {
   jumpStretch?:number;
   /** Transient mid-air double-jump "duang" bounce (0..1). */
   airBounce?:number;
-  /** True while main body umbrella is deployed. */
-  umbrella?:boolean;
+  /** Fraction of the glide unfold animation, including the return to the resting shape. */
+  glideAmount?:number;
   battleTargets?:BattleCollider[];
 }
 export interface ShotView {id:number; phase:'separating'|'flying'|'active'|'returning'|'merging'; center:Vec; radius:number; age:number; mergeProgress:number; umbrella?:boolean}

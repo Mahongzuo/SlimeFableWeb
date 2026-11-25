@@ -1,11 +1,11 @@
 import {CannonImpact,CannonLaunchSpec,firstBattleContact,FrameInput,ShotView,Vec,cannonPositionAt,clamp,distance,mix,smooth,solveCannonLaunch} from './types';
-import {UMBRELLA} from './umbrella';
+import {advanceGlideForm,UMBRELLA} from './umbrella';
 import {CollisionWorld,flatWorld} from './world';
 
 export interface Particle {p:Vec;old:Vec;v:Vec;rest:Vec;group:number;lambda:number;flat?:Vec}
 interface Shot {
   id:number;phase:ShotView['phase'];center:Vec;v:Vec;start:Vec;target:Vec;
-  age:number;phaseAge:number;radius:number;grounded:boolean;umbrella:boolean;
+  age:number;phaseAge:number;radius:number;grounded:boolean;umbrella:boolean;glideAmount:number;
   cannon?:CannonLaunchSpec;
 }
 const SPACING=.046,H=SPACING*2.4,H2=H*H;
@@ -35,7 +35,7 @@ export class SlimeSolver {
   const id=this.nextId++,radius=.27*Math.cbrt(.3);
   const out:Vec=cannon?[...cannon.muzzle]:[this.center[0]+forward[0]*.58,this.center[1]+.08,this.center[2]+forward[2]*.58];
   const sepStart:Vec=cannon?[...cannon.start]:[...this.center];
-  const s:Shot={id,phase:'separating',center:[...sepStart],v:[0,0,0],start:out,target:[...target],age:0,phaseAge:0,radius,grounded:false,umbrella:false,cannon};
+  const s:Shot={id,phase:'separating',center:[...sepStart],v:[0,0,0],start:out,target:[...target],age:0,phaseAge:0,radius,grounded:false,umbrella:false,glideAmount:0,cannon};
   const rest=this.lattice(115);
   for(const r of rest){const p=r.map((v,k)=>v+sepStart[k]) as Vec;this.particles.push({p,old:[...p],v:[0,0,0],rest:r,group:id,lambda:0})}
   this.shots.push(s);return true;
@@ -138,6 +138,9 @@ export class SlimeSolver {
   const jumpStretch=clamp(input.jumpStretch??0,0,1);
   const airBounce=clamp(input.airBounce??0,0,1);
   this.shotStep(dt,input);
+  const bodyGlide=smooth(input.glideAmount??0);
+  for(const shot of this.shots)shot.glideAmount=advanceGlideForm(shot.glideAmount,shot.umbrella,dt);
+
 
   const ps=this.particles;
   const domeAnchorY=this.restCenterY*mix(1,DOME.anchorHeightScale,effectiveDome);
@@ -205,11 +208,10 @@ export class SlimeSolver {
    rx=f[0]*localForward*stretch+f[2]*localSide*sidePinch;
    rz=f[2]*localForward*stretch-f[0]*localSide*sidePinch;
 
-   // Jump vertical stretch / mid-air double-jump "duang" / umbrella gentle hang
+   // Jump vertical stretch / mid-air double-jump "duang"
    if(!s){
     if(jumpStretch>0){sy*=1+jumpStretch*.38;sx*=1-jumpStretch*.14}
     if(airBounce>0){const wave=Math.sin(airBounce*Math.PI);sy*=1-wave*.22;sx*=1+wave*.16}
-    if(input.umbrella&&!input.grounded){sy*=1.08;sx*=.94}
     if(input.pose.active){
      const side=rx*f[2]-rz*f[0],fw=rx*f[0]+rz*f[2];
      rx=f[0]*fw*input.pose.stretch[0]+f[2]*side*input.pose.stretch[2];
@@ -220,6 +222,18 @@ export class SlimeSolver {
     if(cl){const n=cl.normal,dn=rx*n[0]+rz*n[2];rx-=n[0]*dn*.5;rz-=n[2]*dn*.5;rx+=-n[0]*.06;rz+=-n[2]*.06;sy=Math.max(sy,1.15)}
    }
 
+   const glide=s?smooth(s.glideAmount):bodyGlide;
+   if(glide>0){
+    // Fan the same rest lattice into a shallow, scalloped vault; each lobe stays joined to its neighbours.
+    const radius=s?s.radius*.76:.205;
+    const radial=Math.min(1.12,Math.hypot(p.rest[0],p.rest[2])/radius);
+    const rim=radial*radial,flute=Math.cos(6*Math.atan2(p.rest[2],p.rest[0]));
+    const crown=.78-1.27*rim+.30*Math.exp(-11*rim);
+    const lip=.20*rim*flute;
+    sx=mix(sx,2.16+.09*rim*flute,glide);
+    ry=mix(ry*sy,p.rest[1]*(.34-.10*Math.min(1,rim))+radius*(crown+lip),glide);
+    sy=1;
+   }
    const target:Vec=[c[0]+rx*sx,c[1]+ry*sy,c[2]+rz*sx];
    if(!s&&input.grounded){
     const localFloor=this.world.support(target[0],target[2],input.anchor[1]+.05);
@@ -232,7 +246,7 @@ export class SlimeSolver {
    }
 
    for(let k=0;k<3;k++){
-    let stiffness=s?380:140;
+    let stiffness=(s?380:140)*(1+.72*glide);
     if(!s&&k===1&&p.p[1]<target[1])stiffness*=upwardRestore;
     const carrier=s?s.v[k]:this.centerVelocity[k];
     const acc=(target[k]-p.p[k])*stiffness+(carrier-p.v[k])*(s?26:16)+(k===1&&!s?-2.2:0);
@@ -263,6 +277,8 @@ export class SlimeSolver {
    const bodyRy=mix(.28*domeHeight,.05,input.spread)*(1+jumpStretch*.32);
    const axes:Vec=s?[s.radius*1.18*shrink,s.radius*.95*shrink,s.radius*1.18*shrink]:[bodyRx,bodyRy,bodyRx];
    if(!s&&input.pose.active){axes[0]*=Math.max(input.pose.stretch[0],input.pose.stretch[2]);axes[2]*=Math.max(input.pose.stretch[0],input.pose.stretch[2]);axes[1]*=input.pose.stretch[1]}
+   const glide=s?smooth(s.glideAmount):bodyGlide;
+   axes[0]*=1+glide;axes[2]*=1+glide;
    if(!s&&cl)axes[1]=Math.max(axes[1],.42);
    if(!s&&input.grounded){const ground=this.world.support(p.p[0],p.p[2],input.anchor[1]+.05);if(ground===null||ground<input.anchor[1]-.08){axes[1]+=.35;p.p[1]=Math.max(p.p[1],input.anchor[1]-.35+.023)}}
    const ell=Math.hypot((p.p[0]-c[0])/axes[0],(p.p[1]-c[1])/axes[1],(p.p[2]-c[2])/axes[2]);

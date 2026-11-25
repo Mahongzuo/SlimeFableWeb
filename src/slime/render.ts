@@ -10,11 +10,10 @@ uniform vec3 uOffset;
 void main(){vWorld=position+uOffset;vNormal=normalize(normal);vCluster=cluster;gl_Position=projectionMatrix*viewMatrix*vec4(position+uOffset,1.);}`;
 
 const fragment=`precision highp float;uniform mat4 projectionMatrix;
-uniform sampler2D uBackground;uniform sampler2D uDepth;uniform vec2 uResolution;uniform vec3 uCenters[6];uniform vec3 uRadii[6];uniform vec3 uColor;uniform vec3 uRim;uniform vec3 uForward;uniform vec3 uSun;uniform float uTime;uniform float uNear;uniform float uFar;uniform float uReflectionPass;uniform float uXray;uniform float uQuality;uniform float uElement;uniform float uBlink;uniform float uSpread;uniform float uDome;uniform vec4 uFacePose;uniform vec2 uFaceExtra;uniform vec4 uBubbles[64];uniform vec2 uBubbleStates[64];
+uniform sampler2D uBackground;uniform sampler2D uDepth;uniform vec2 uResolution;uniform vec3 uCenters[6];uniform vec3 uRadii[6];uniform vec3 uColor;uniform vec3 uRim;uniform vec3 uForward;uniform vec3 uSun;uniform float uTime;uniform float uNear;uniform float uFar;uniform float uReflectionPass;uniform float uXray;uniform float uQuality;uniform float uElement;uniform float uBlink;uniform float uSpread;uniform float uDome;uniform vec4 uFacePose;uniform vec4 uFaceMouth;uniform vec3 uFaceExtra;uniform vec4 uBubbles[64];uniform vec2 uBubbleStates[64];
 varying vec3 vWorld;varying vec3 vNormal;varying float vCluster;
 float linearDepth(float d){return uNear*uFar/(uFar+(uNear-uFar)*d);}
 float disk(vec2 p,vec2 c,vec2 size){return 1.-smoothstep(.82,1.,length((p-c)/size));}
-float stroke(vec2 p,vec2 a,vec2 b,float width){vec2 d=b-a;float t=clamp(dot(p-a,d)/max(dot(d,d),.00001),0.,1.);return 1.-smoothstep(width*.55,width,length(p-a-d*t));}
 // Physical thin-film interference spectrum (cyan -> emerald -> gold -> violet)
 vec3 thinFilm(float opd){
   return clamp(vec3(.5)+vec3(.5)*cos(6.2831853*(opd+vec3(.0,.33,.67))),0.,1.);
@@ -120,31 +119,54 @@ void main(){
 
   // ---- 5. Procedural Face (clean & readable inside clear jelly) ----
   vec3 right=normalize(vec3(uForward.z,0.,-uForward.x));
-  float domeComp=slot==0?uDome:0.;
-  vec2 face=vec2(dot(vWorld-center,right)/min(radii.x,.27*mix(1.,1.06,domeComp)),(vWorld.y-center.y)/min(radii.y,.20*mix(1.,.92,domeComp)));
-  float front=dot(normalize(vec3(vWorld.x-center.x,0.,vWorld.z-center.z)),uForward);
-  float eyes=0.,shine=0.,brows=0.;float mouthKind=uFacePose.w;
-  for(int side=-1;side<=1;side+=2){
-    float sx=float(side)*.33;vec2 ep=face-vec2(sx,.14);
-    float eh=.20*uFacePose.x/3.8*max(.08,1.-uBlink)*mix(1.,1.08,domeComp),ew=.11*uFacePose.y/3.2*mix(1.,.95,domeComp);
-    if(mouthKind>6.5){eyes+=stroke(ep,vec2(-float(side)*.07,.09),vec2(float(side)*.04,0.),.027)+stroke(ep,vec2(float(side)*.04,0.),vec2(-float(side)*.07,-.09),.027);}
-    else eyes+=disk(face,vec2(sx,.14),vec2(ew,eh));
-    shine+=disk(face,vec2(sx-.025,.21),vec2(.032,.044))*step(.10,eh);
-    if(abs(uFacePose.z)>.05)brows+=stroke(face,vec2(sx-.12,.41-float(side)*uFacePose.z*.07),vec2(sx+.12,.41+float(side)*uFacePose.z*.07),.018)*smoothstep(.05,.25,abs(uFacePose.z));
+  float scale=clamp((radii.x+radii.z)*.5,.055,.263);
+  vec3 local=vWorld-center;
+  vec2 face=vec2(dot(local,right)/scale,local.y/min(scale,max(radii.y*1.32,.065)));
+  float front=dot(normalize(vec3(local.x,0.,local.z)+vec3(.000001,0.,0.)),uForward);
+  float visible=smoothstep(.45,.72,front)*(1.-smoothstep(.45,.95,uSpread));
+  float ink=0.;
+  if(visible>.001 && abs(face.x)<.93 && abs(face.y)<.68){
+    vec3 painted=body;
+    for(int side=-1;side<=1;side+=2){
+      float signX=float(side),sx=signX*.35;
+      vec2 cheek=(face-vec2(signX*.57,-.075))/vec2(.172,.091);
+      float rose=exp(-dot(cheek,cheek)*1.8)*uFaceExtra.x;
+      painted=mix(painted,vec3(.99,.32,.41),rose*.78);
+      float closed=max(uBlink,side==1?uFaceExtra.z:0.);
+      float halfWidth=.141*uFacePose.x;
+      float height=mix(max(.019,.182*uFacePose.y),.022,closed);
+      vec2 ep=face-vec2(sx,.11+uFacePose.w);
+      float nx=clamp(ep.x/halfWidth,-1.,1.);
+      ep.y-=(1.-nx*nx)*mix(.079*uFacePose.z,.055,closed);
+      vec2 eye=ep/vec2(halfWidth,height);
+      float d=length(eye),aa=clamp(fwidth(d),.035,.36);
+      float pupil=1.-smoothstep(1.-aa,1.+aa,d);
+      float bevel=1.-smoothstep(1.+aa,1.18+aa,d);
+      painted=mix(painted,vec3(.81,.76,.81),bevel*.70);
+      vec3 iris=mix(vec3(.034,.025,.052),vec3(.13,.084,.13),(1.-smoothstep(-.90,.05,eye.y)));
+      painted=mix(painted,iris,pupil);
+      float awake=smoothstep(.055,.12,height);
+      float glint=disk(eye,vec2(-.30,.34),vec2(.32,.28));
+      float glimmer=disk(eye,vec2(.32,-.38),vec2(.14,.12));
+      painted=mix(painted,vec3(1.,.98,.94),awake*(glint+.68*glimmer)*pupil);
+      ink=max(ink,pupil);
+    }
+    float w=uFaceMouth.x,h=.022+.117*uFaceMouth.y;
+    float mx=clamp(face.x/w,-1.,1.);
+    float cupid=uFaceMouth.w*.055*(1.-smoothstep(0.,.77,abs(mx)));
+    float lip=-.18+uFaceMouth.z*(mx*mx-.45)+cupid;
+    vec2 mouth=vec2(face.x/w,(face.y-lip)/h);
+    float md=length(mouth),aa=clamp(fwidth(md),.04,.30);
+    float opening=1.-smoothstep(1.-aa,1.+aa,md);
+    float tongue=(1.-smoothstep(.68,1.06,length((mouth-vec2(.07,-.87))/vec2(.78,.59))))*smoothstep(.16,.59,uFaceMouth.y);
+    painted=mix(painted,mix(vec3(.085,.036,.057),vec3(.96,.32,.41),tongue),opening);
+    vec2 drop=face-vec2(.435,-.12);
+    float tear=uFaceExtra.y*disk(drop,vec2(0.),vec2(.044,.060));
+    painted=mix(painted,vec3(.60,.85,.99),tear);
+    painted=mix(painted,vec3(.99),tear*disk(drop,vec2(-.014,.016),vec2(.014)));
+    ink=max(ink,opening)*visible;
+    body=mix(body,painted,visible);
   }
-  float mouth=(1.-smoothstep(.026,.055,abs(length((face-vec2(0.,-.19))*vec2(1.,1.5))-.12)))*(1.-smoothstep(-.18,-.13,face.y));
-  if(mouthKind>.5&&mouthKind<1.5)mouth=stroke(face,vec2(-.1,-.25),vec2(.1,-.25),.027);
-  else if(mouthKind>1.5&&mouthKind<2.5)mouth=disk(face,vec2(0.,-.25),vec2(.075,.095));
-  else if(mouthKind>2.5&&mouthKind<3.5)mouth=(1.-smoothstep(.02,.04,abs(face.y-(-.26+.9*face.x*face.x))))*(1.-smoothstep(.1,.14,abs(face.x)));
-  else if(mouthKind>3.5&&mouthKind<4.5)mouth=disk(face,vec2(0.,-.26),vec2(.15,.07))*(1.-smoothstep(-.23,-.19,face.y));
-  else if(mouthKind>4.5&&mouthKind<5.5)mouth=stroke(face,vec2(-.08,-.25),vec2(.08,-.25),.02);
-  else if(mouthKind>5.5){vec2 mp=face-vec2(0.,-.21);mouth=stroke(mp,vec2(-.12,0.),vec2(-.06,-.08),.025)+stroke(mp,vec2(-.06,-.08),vec2(0.,-.025),.025)+stroke(mp,vec2(0.,-.025),vec2(.06,-.08),.025)+stroke(mp,vec2(.06,-.08),vec2(.12,0.),.025);}
-  float faceVisible=smoothstep(.46,.70,front)*(1.-smoothstep(.45,.95,uSpread));
-  float ink=clamp((eyes+mouth+brows)*faceVisible,0.,1.);
-  body=mix(body,vec3(.018,.040,.068),ink*.92);
-  body+=vec3(.92,.98,1.)*shine*ink*.92;
-  float blush=(disk(face,vec2(-.52,-.08),vec2(.13,.055))+disk(face,vec2(.52,-.08),vec2(.13,.055)))*uFaceExtra.y*faceVisible;
-  body=mix(body,vec3(.85,.26,.38),blush*.42);
 
   // ---- 6. Crisp Fine Carbonated Fizz Bubbles ----
   for(int i=0;i<64;i++){
@@ -182,7 +204,7 @@ export class SlimeRenderer {
   this.geometry.setAttribute('normal',new T.BufferAttribute(new Float32Array(27000),3).setUsage(T.DynamicDrawUsage));
   this.geometry.setAttribute('cluster',new T.BufferAttribute(new Float32Array(9000),1).setUsage(T.DynamicDrawUsage));
   this.geometry.setDrawRange(0,0);
-  const uniforms={uOffset:{value:new T.Vector3()},uBackground:{value:null},uDepth:{value:null},uResolution:{value:new T.Vector2()},uCenters:{value:Array.from({length:6},()=>new T.Vector3())},uRadii:{value:Array.from({length:6},()=>new T.Vector3(.3,.2,.3))},uColor:{value:new T.Color(elements[0].color)},uRim:{value:new T.Color(elements[0].rim)},uForward:{value:new T.Vector3(0,0,-1)},uSun:{value:ctx.sun.position.clone().normalize()},uTime:{value:0},uNear:{value:.05},uFar:{value:1500},uReflectionPass:{value:0},uXray:{value:0},uQuality:{value:1},uElement:{value:0},uBlink:{value:0},uSpread:{value:0},uDome:{value:1},uFacePose:{value:new T.Vector4(3.8,3.2,0,0)},uFaceExtra:{value:new T.Vector2(10.5,0)}};
+  const uniforms={uOffset:{value:new T.Vector3()},uBackground:{value:null},uDepth:{value:null},uResolution:{value:new T.Vector2()},uCenters:{value:Array.from({length:6},()=>new T.Vector3())},uRadii:{value:Array.from({length:6},()=>new T.Vector3(.3,.2,.3))},uColor:{value:new T.Color(elements[0].color)},uRim:{value:new T.Color(elements[0].rim)},uForward:{value:new T.Vector3(0,0,-1)},uSun:{value:ctx.sun.position.clone().normalize()},uTime:{value:0},uNear:{value:.05},uFar:{value:1500},uReflectionPass:{value:0},uXray:{value:0},uQuality:{value:1},uElement:{value:0},uBlink:{value:0},uSpread:{value:0},uDome:{value:1},uFacePose:{value:new T.Vector4(1,.92,.05,0)},uFaceMouth:{value:new T.Vector4(.115,.04,.085,0)},uFaceExtra:{value:new T.Vector3(.46,0,0)}};
   this.bubbles=new FizzBubbles(T,this.scene,uniforms);
   this.material=new T.ShaderMaterial({uniforms,vertexShader:vertex,fragmentShader:fragment,depthTest:true,depthWrite:true});
   this.mesh=new T.Mesh(this.geometry,this.material);this.mesh.name='PBF Slime';this.mesh.frustumCulled=false;this.mesh.renderOrder=1;this.scene.add(this.mesh);
@@ -230,7 +252,13 @@ export class SlimeRenderer {
   }
  }
  renderReflection(renderer:any,camera:any,target:any){if(!this.frame)return;const T=this.ctx.THREE,u=this.material.uniforms;if(!this.reflectionCopy){this.reflectionCopy=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,depthBuffer:false});this.reflectionCopyMat=new T.ShaderMaterial({depthTest:false,depthWrite:false,uniforms:{uImage:{value:null}},vertexShader:'varying vec2 vUv;void main(){vUv=position.xy*.5+.5;gl_Position=vec4(position.xy,0.,1.);}',fragmentShader:'uniform sampler2D uImage;varying vec2 vUv;void main(){gl_FragColor=texture2D(uImage,vUv);}'});this.reflectionCopyScene=new T.Scene();this.reflectionCopyScene.add(new T.Mesh(this.compositeGeo,this.reflectionCopyMat));}if(this.reflectionCopy.width!==target.width||this.reflectionCopy.height!==target.height)this.reflectionCopy.setSize(target.width,target.height);this.reflectionCopyMat.uniforms.uImage.value=target.texture;const auto=renderer.autoClear;renderer.autoClear=true;renderer.setRenderTarget(this.reflectionCopy);renderer.render(this.reflectionCopyScene,this.compositeCamera);u.uBackground.value=this.reflectionCopy.texture;u.uResolution.value.set(target.width,target.height);u.uNear.value=camera.near;u.uFar.value=camera.far;u.uReflectionPass.value=1;this.xray.visible=false;renderer.autoClear=false;renderer.setRenderTarget(target);renderer.render(this.scene,camera);this.xray.visible=true;u.uReflectionPass.value=0;renderer.autoClear=auto;}
- setFace(face:FaceDirector){const u=this.material.uniforms;u.uFacePose.value.set(...face.pose.slice(0,4));u.uFaceExtra.value.set(face.pose[4],face.pose[5]);u.uBlink.value=face.blink;}
+ setFace(face:FaceDirector){
+  const u=this.material.uniforms,p=face.pose;
+  u.uFacePose.value.set(p.eyeWidth,p.eyeOpen,p.eyeArc,p.gazeY);
+  u.uFaceMouth.value.set(p.mouthWidth,p.mouthOpen,p.smile,p.doubleSmile);
+  u.uFaceExtra.value.set(p.blush,p.tear,p.wink);
+  u.uBlink.value=face.blink;
+ }
  setOffset(o:Vec){this.offset=o;}
  private offset:Vec=[0,0,0];
  render(pass:any,forward:Vec,element:number,quality:Quality,underlay?:(actor:{color:any;depth:any})=>void){
