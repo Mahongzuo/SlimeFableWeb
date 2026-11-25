@@ -1,5 +1,6 @@
+import type {DailySpot} from '../game/home-rewards';
 import {Vec, distance} from '../slime/types';
-import {plazaCenter, SEA_LEVEL, ShardSpot, shardSpots} from './layout';
+import {plazaCenter, ShardSpot} from './layout';
 /** The lectern holding the history book, plus the stone ring that ties the six doors together. */
 export class Lectern {
   readonly position: Vec = [...plazaCenter]; private glyph: any; private book: any;
@@ -23,18 +24,26 @@ interface Shard {spot: ShardSpot; group: any; base: number; taken: boolean; fade
 /** Twelve collectible time shards hidden around the harbour; ids persist in the save. */
 export class Shards {
   readonly list: Shard[] = []; onCollect?: (spot: ShardSpot, count: number) => void;
-  constructor(private ctx: any, taken: string[]) {
-    const T = ctx.THREE, geo = new T.OctahedronGeometry(.17, 0), mat = ctx.mats.toon(0xf2c14e, {emissive: 0xf2a33a, emissiveIntensity: .45});
-    for (const spot of shardSpots) {
-      const g = new T.Group(); g.name = 'time-shard-' + spot.id;
-      const gem = new T.Mesh(geo, mat); gem.scale.set(1, 1.5, 1); g.add(gem);
-      g.add(ctx.mats.glowSprite(0xf7d77a, 1.0, .5));
-      const ground = spot.sea ? SEA_LEVEL : ctx.groundY(spot.x, spot.z);
-      const base = ground + .62 + (spot.lift ?? 0);
-      g.position.set(spot.x, base, spot.z); ctx.scene.add(g);
-      const was = taken.includes(spot.id); g.visible = !was;
-      this.list.push({spot, group: g, base, taken: was, fade: was ? 0 : 1});
-    }
+  private geo:any;private mat:any;
+  constructor(private ctx:any){
+    this.geo=new ctx.THREE.OctahedronGeometry(.17,0);
+    this.mat=ctx.mats.toon(0xf2c14e,{emissive:0xf2a33a,emissiveIntensity:.45});
+  }
+  arrange(spots:DailySpot[],taken:string[]){
+    const {ctx}=this;
+    for(const item of this.list)item.group.visible=false;
+    spots.forEach((spot,i)=>{
+      let item=this.list[i];
+      if(!item){
+        const group=new ctx.THREE.Group(),gem=new ctx.THREE.Mesh(this.geo,this.mat);
+        gem.scale.set(1,1.5,1);group.add(gem,ctx.mats.glowSprite(0xf7d77a,1,.5));ctx.scene.add(group);
+        item=this.list[i]={group,spot,base:0,taken:false,fade:1};
+      }
+      item.spot=spot;item.base=spot.y+.58;item.taken=taken.includes(spot.id);item.fade=item.taken?0:1;
+      item.group.name='time-shard-'+spot.id;item.group.scale.setScalar(1);
+      item.group.position.set(spot.x,item.base,spot.z);item.group.visible=!item.taken;
+    });
+    for(const unused of this.list.splice(spots.length))unused.group.removeFromParent();
   }
   get count() { return this.list.filter(s => s.taken).length; }
   update(t: number, dt: number, body: Vec) {

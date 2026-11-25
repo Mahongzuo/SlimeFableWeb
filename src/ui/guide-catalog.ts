@@ -38,12 +38,12 @@ export const BUILTIN_GUIDE_SECTIONS: GuideSection[] = [
     icon: '🫧',
     title: '移动、形态与滑翔伞',
     badge: '基础',
-    subtitle: '掌握果冻软体物理、钟型切换、二段跳滑翔伞与过肩分身炮弹。',
+    subtitle: '掌握果冻软体物理、二段跳滑翔伞与过肩分身炮弹。',
     keybinds: [
       {keys: ['W', 'A', 'S', 'D'], label: '移动'},
       {keys: ['Shift'], label: '冲刺'},
       {keys: ['空格'], label: '二段跳 / 空中开伞'},
-      {keys: ['8'], label: '钟型 / 圆球形态'},
+      {keys: ['8'], label: '家园天气与时间'},
       {keys: ['C'], label: '摊开钻缝'},
       {keys: ['G', '右键'], label: '过肩瞄准 + 左键发射分身'},
       {keys: ['X'], label: '按住收回分身'},
@@ -72,9 +72,9 @@ export const BUILTIN_GUIDE_SECTIONS: GuideSection[] = [
       },
       {
         icon: '🧗',
-        title: '贴墙攀爬与钟型形态',
+        title: '贴墙攀爬',
         tag: '探索技巧',
-        summary: '朝墙面持续推近即可黏附攀爬，爬到顶端自动翻上；按 8 可随时在 UE 钟型果冻与经典圆球间切换。',
+        summary: '朝墙面持续推近即可黏附攀爬，爬到顶端自动翻上；在家园按 8 可调节天气与时间。',
         bullets: [
           '按住 C 可将身体摊平，轻松钻过低矮门洞或栅栏缝隙。',
           '贴墙时按空格蹬墙跳，按 T 可立即松手下落。',

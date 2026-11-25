@@ -1,3 +1,4 @@
+import {transientElement} from './contact-fx';
 import {GroundCameraHeight} from './camera-follow';
 import {SlimeRenderer} from './render';
 import {TrailDecals} from './wet-film';
@@ -10,7 +11,7 @@ import {SlimeUmbrellaView,UMBRELLA,UmbrellaLogic} from './umbrella';
 import {SlashVfxSystem} from './slash-vfx';
 import {SkillRuntime,type CombatHudSnapshot,type ReactionResult,type SkillDef,type SkillSlot} from './skills';
 import {SkillVfxSystem} from './skill-vfx';
-import {BattleCollider,BodyShape,Box,CannonImpact,CannonLaunchSpec,firstBattleContact,FrameInput,MeshFrame,Vec,Quality,Command,cannonPositionAt,clamp,distance,idlePose,mix,smooth,solveCannonLaunch} from './types';
+import {BattleCollider,Box,CannonImpact,CannonLaunchSpec,firstBattleContact,FrameInput,MeshFrame,Vec,Quality,Command,cannonPositionAt,clamp,distance,idlePose,mix,smooth,solveCannonLaunch} from './types';
 
 export interface SlimeRenderPass {color:any;depth:any;time:number}
 /** Supply the same Three.js namespace used by your scene; no second renderer is created. */
@@ -39,7 +40,7 @@ function createUI(mount?:HTMLElement){
  <div class="metrics"><div class="status" id="status">正在唤醒果冻…</div><div id="metrics"></div></div>
  <section class="intro glass"><div class="eyebrow">A LITTLE JELLY, A QUIET HARBOR</div><h1>在晴雨之间<br>软软地出发。</h1><p>让身体随脚步轻轻晃动，留下一路元素印记。<br>分出一小团自己，再把它们慢慢收回来。</p><button id="play" class="primary"><span>开始游玩</span><span>↗</span></button><small class="note">桌面键鼠体验 · 原生软体模拟 · 六属性切换</small></section>
  <section class="element-panel glass"><div class="element-title"><span>身体里的六种天气</span><span>ELEMENT / 01—06</span></div><div class="elements">${elements.map((e,i)=>`<button class="element ${i===0?'active':''}" data-element="${i}" style="--element:${e.color}" aria-label="切换${e.name}属性" aria-pressed="${i===0}"><b>${e.icon}</b><span>${e.name}</span><kbd>${i+1}</kbd></button>`).join('')}</div><div class="element-description"><b id="element-tag">WATER / 水</b><span id="element-trail">涟漪水痕</span></div></section>
- <div class="hint"><div><kbd>W A S D</kbd> 移动 <kbd>Shift</kbd> 冲刺 <kbd>空格</kbd> 两段跳 / 开伞 <kbd>C</kbd> 摊开 <kbd>8</kbd> 钟型/圆球</div><div><kbd>G</kbd>/<kbd>右键</kbd> 瞄准 · 左键发射 <kbd>X</kbd> 回收 <kbd>左键</kbd> 连击 <kbd>滚轮</kbd> 视距 <kbd>Esc</kbd> 暂停</div></div><div class="crosshair ue-crosshair"><i></i><i></i><i></i><i></i></div>
+ <div class="hint"><div><kbd>W A S D</kbd> 移动 <kbd>Shift</kbd> 冲刺 <kbd>空格</kbd> 两段跳 / 开伞 <kbd>C</kbd> 摊开</div><div><kbd>G</kbd>/<kbd>右键</kbd> 瞄准 · 左键发射 <kbd>X</kbd> 回收 <kbd>左键</kbd> 连击 <kbd>滚轮</kbd> 视距 <kbd>Esc</kbd> 暂停</div></div><div class="crosshair ue-crosshair"><i></i><i></i><i></i><i></i></div>
  <div class="combo hidden"><span id="shot-count">分身 0 / 5</span><strong id="combo-name">自由漫游</strong><small id="combat-hint">沿码头前行，可在木靶旁试试四段连击</small></div><div class="toast" role="status"></div>`;
  (mount??document.body).appendChild(ui);ui.classList.add('viewing');
  const $=(s:string)=>ui.querySelector(s) as HTMLElement;
@@ -48,7 +49,7 @@ function createUI(mount?:HTMLElement){
 
 export class SlimeCharacter {
  position:Vec=[0,0,0];velocity:Vec=[0,0,0];forward:Vec=[0,0,-1];grounded=true;jumps=0;spread=0;element=0;quality:Quality='high';mode:'observe'|'play'|'paused'='observe';yaw=0;pitch=.23;arm=2.6;currentArm=2.6;keys=new Set<string>();generation=0;swimming=false;
- bodyShape:BodyShape='dome';shapeBlend=1;
+ readonly bodyShape='dome';readonly shapeBlend=1;
  readonly umbrella=new UmbrellaLogic();
  private umbrellaView:SlimeUmbrellaView;
  readonly slashVfx:SlashVfxSystem;
@@ -208,11 +209,7 @@ export class SlimeCharacter {
    },
   };
  }
- setBodyShape(shape:BodyShape,silent=false){
-  this.bodyShape=shape;
-  if(!silent)this.toast(shape==='dome'?'形态：钟型果冻（UE 扁圆顶）':'形态：经典圆球');
- }
- cycleBodyShape(){this.setBodyShape(this.bodyShape==='dome'?'ball':'dome');}
+
 
  teleport(p:Vec){this.cameraHeight.reset();this.currentArm=this.arm;this.frameAnchor=null;this.pendingImpacts.length=0;this.sentLaunches=0;this.commands=[];this.cling=null;this.umbrella.cancel(true);this.umbrellaView.reset();this.position=[...p];this.velocity=[0,0,0];this.generation++;this.decals.reset();}
 
@@ -244,9 +241,9 @@ export class SlimeCharacter {
 
  private bind(){
   this.on(window,'keydown',e=>{
-   if(e.repeat&&['Space','KeyT','Digit8'].includes(e.code))return;
+   if(e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable="true"]'))return;
+   if(e.repeat&&['Space','KeyT'].includes(e.code))return;
    if(/^Digit[1-6]$/.test(e.code)){this.setElement(Number(e.code.slice(-1))-1);return}
-   if(e.code==='Digit8'){this.cycleBodyShape();return}
    if(e.code==='KeyT'){if(this.options.battleTargets)return;if(this.cling)this.detachRequest=true;else this.reset();return}
    if(this.mode!=='play')return;
    if(!e.repeat){
@@ -487,6 +484,10 @@ export class SlimeCharacter {
   if(this.cling){
    const r=stepCling(this.world,this.cling,this.position,{move:mv,jump:this.jumpRequest,detach:this.detachRequest},dt);
    this.jumpRequest=false;this.jumpBuffer=0;this.detachRequest=false;this.position=r.position;this.velocity=r.velocity;this.cling=r.state;this.grounded=r.event==='mantle'||r.event==='floor';this.swimming=false;
+   if(this.cling && !this.cling.mantle && !transientElement(this.element)){
+    const {point,normal}=this.cling;
+    this.decals.wall.touch([point[0],this.position[1]+.16,point[2]],normal,this.element,this.elapsed);
+   }
    if(r.state)this.forward=[r.state.normal[0],0,r.state.normal[2]];
    else{
     this.clingCooldown=r.event==='jump'?CLING.cooldown:r.event==='mantle'||r.event==='floor'||r.event==='vault'?.15:CLING.cooldown*1.5;
@@ -658,8 +659,7 @@ export class SlimeCharacter {
   this.airBounce=Math.max(0,this.airBounce-dt*4.5);
   this.aimRecoil=Math.max(0,this.aimRecoil-dt*7);
   this.launchCooldown=Math.max(0,this.launchCooldown-dt);
-  const shapeTarget=this.bodyShape==='dome'?1:0;
-  this.shapeBlend=this.shapeBlend<shapeTarget?Math.min(shapeTarget,this.shapeBlend+dt/.35):Math.max(shapeTarget,this.shapeBlend-dt/.35);
+
 
   this.aiming=this.mode==='play'&&(this.options.defaultAim===true||this.keys.has('KeyG')||this.rightAimHeld);
   this.ui.classList.toggle('aiming',this.aiming);
@@ -675,7 +675,7 @@ export class SlimeCharacter {
   }
   this.face.update(dt,this.velocity,this.grounded,this.aiming,this.combat.active);
   this.renderer.setFace(this.face);
-  this.decals.update(time);
+  this.decals.update(time,this.element,this.grounded&&!this.swimming&&!this.cling);
   this.decals.prune(this.latest?.shots.map(s=>s.id)??[]);
   this.updateLightning(time);
 

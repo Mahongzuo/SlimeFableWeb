@@ -1,3 +1,4 @@
+import {dailyLocations,SHARD_SHELLS,SHARD_COUNT,GATE_SHELLS} from './home-rewards';
 import {seasonNames,weatherNames,weatherMode} from '../home/climate';
 import {SlimeCharacter} from '../slime/character';
 import type {SwingAreaEvent} from '../slime/combat';
@@ -14,7 +15,7 @@ import {HomeBuilder} from '../home/builder';
 import {ensureHome, type ExpandedTile} from '../life/state';
 import {Graphics, PRESET_NAMES} from './graphics';
 import type {Interactable, PlayerHandle} from '../zones/types';
-import {homeSpawn, plazaCenter, portalSlots, shardSpots, spawnYaw} from '../home/layout';
+import {homeSpawn, plazaCenter, portalSlots, spawnYaw} from '../home/layout';
 import {TimePortal} from '../home/portals';
 import {Lectern, Shards} from '../home/props';
 import {SeaFX} from '../home/sea-fx';
@@ -26,7 +27,7 @@ import {Showing, resolveShowing} from './schedule';
 import {DayId, dayLabel, realToday} from './calendar';
 import {days} from '../../content/registry';
 
-type State = 'loading' | 'title' | 'play' | 'pause' | 'book' | 'guide' | 'door' | 'build' | 'shop';
+type State = 'loading' | 'title' | 'play' | 'pause' | 'book' | 'guide' | 'door' | 'build' | 'shop' | 'sky';
 const TITLE_CAM = {pos: [-12, 10, 33] as Vec, target: [8, 1.25, 15] as Vec};
 
 function localDayKey(): string {
@@ -40,20 +41,23 @@ export class Game {
   private showing!: Showing; private portals: TimePortal[]; private lectern: Lectern; private shards: Shards; private fx: SeaFX;
   private zones!: BuiltZones; private graphics!: Graphics; private life: LifeUI; private buildUI!: BuildUI; readonly builder!: HomeBuilder; readonly farmRegistry!: FarmRegistry;
   private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | {kind: 'spot'; spot: Interactable} | null = null;
+  private shardLayoutDirty=false;
   private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
 
   constructor(private app: any) {
     const ctx = app.ctx; this.T = ctx.THREE;
     const climate=app.director;
     climate.mode=weatherMode(this.save.data.homeWeather);
+    climate.setTime(this.save.data.homeClockMinute);
     this.ui = new GameUI({
+      openSky:()=>this.openSky(),getTime:()=>climate.minute,
+      setTime:minute=>{climate.setTime(minute);this.save.data.homeClockMinute=climate.minute;this.save.write();},
       weather: mode => {climate.mode=mode; this.save.data.homeWeather=mode;this.save.write();},
       getWeather: () => climate.mode,
       start: () => this.start(), resume: () => this.resume(), pause: () => this.pauseGame(), openBook: () => this.openBook(), openGuide: () => this.openGuide(), closePanel: () => this.closePanel(true),
       showDay: id => this.showDay(id), showToday: () => this.showDay(null), respawn: () => this.respawn(), quality: q => { this.graphics.set(q); this.save.data.quality = q; this.save.write(); },
       toTitle: () => this.toTitle(), go: id => this.go(id),
       toggleBuild: () => this.toggleBuildMode(),
-      toggleShape: () => this.toggleBodyShape(),
     });
     ctx.camera.position.fromArray(TITLE_CAM.pos); ctx.controls.target.fromArray(TITLE_CAM.target); ctx.controls.update();
     // plaza pieces exist before the bake so their meshes become part of the height field
@@ -95,9 +99,10 @@ export class Game {
     }).attach();
     this.slime.arm=4.8;
     this.ui.bindCharacter(this.slime);
-    // Restore persisted UE body shape preference (default 'dome')
-    const savedHome = ensureHome(this.save.data.life);
-    this.slime.setBodyShape(savedHome.bodyShape ?? 'dome', true);
+    ctx.reflectActor=(renderer:any,camera:any,target:any)=>{
+      if(this.slime.running)this.slime.renderer.renderReflection(renderer,camera,target);
+    };
+    ctx.rainSurface=(x:number,z:number)=>Math.max(this.slime.world.support(x,z)??ctx.groundY(x,z),this.slime.world.fluid(x,z)??-Infinity);
 
     this.buildUI = new BuildUI({
       setTool: tool => this.builder.setTool(tool),
@@ -122,7 +127,7 @@ export class Game {
       dayKey: () => localDayKey(),
       ground: (x, z) => this.slime.world.terrain(x, z),
       fluid: (x, z) => this.slime.world.fluid(x, z),
-      syncCollision: boxes => this.slime.setDynamicBoxes(boxes),
+      syncCollision: boxes => {this.slime.setDynamicBoxes(boxes);this.shardLayoutDirty=true;},
       syncExpansions: exps => this.syncExpansions(exps),
       farmRegistry: this.farmRegistry,
       save: () => this.save.write(),
@@ -138,8 +143,12 @@ export class Game {
     this.graphics.onAutoChange = p => this.ui.toast(`画面有点吃力，已自动调到「${PRESET_NAMES[p]}」画质 · 暂停菜单里可以改`, 3600);
     (window as any).__graphics = this.graphics;
     window.__slime = this.slime; (window as any).__game = this;
-    this.shards = new Shards(ctx, this.save.data.shards);
-    this.shards.onCollect = (spot, n) => { this.save.add('shards', spot.id); this.slime.setMood('Happy', 1, 70); this.ui.toast(n === shardSpots.length ? `✦ 12 枚时光碎片全部找齐了！` : `✦ 时光碎片 ${n} / ${shardSpots.length} · ${spot.hint}`); };
+    this.shards=new Shards(ctx);this.refreshShards();
+    this.shards.onCollect=(spot,n)=>{
+      if(!this.save.collectShard(spot.id))return;
+      this.slime.setMood('Happy',1,70);this.life.refresh(this.save.data.life);
+      this.ui.toast(`✦ 今日碎片 ${n}/${SHARD_COUNT} · ${spot.hint} · 贝壳 +${SHARD_SHELLS}`);
+    };
     const query = new URLSearchParams(location.search);
     const linkedDay = query.get('date') ?? query.get('from')?.split('-')[0];
     this.applyShowing(linkedDay && days[linkedDay] ? linkedDay : this.save.data.selectedDay); this.titleScreen();
@@ -162,11 +171,15 @@ export class Game {
     this.ui.stampDay(String(Number(this.showing.today.slice(2))));
   }
 
-  private toggleBodyShape() {
-    this.slime.cycleBodyShape();
-    ensureHome(this.save.data.life).bodyShape = this.slime.bodyShape;
-    this.save.write();
-    this.refreshHud();
+  private openSky(){
+    if(this.state==='sky'){this.resume();return;}
+    if(this.state!=='play')return;
+    this.state='sky';this.slime.pause();this.ui.skyPanel();
+  }
+  private refreshShards(){
+    const daily=this.save.daily();
+    const spots=dailyLocations(daily,this.save.data.life.home?.expansions??[],this.slime.world);
+    daily.spots=spots;this.shards.arrange(spots,daily.shards);this.shardLayoutDirty=false;this.save.write();
   }
 
   private builderUIState() {
@@ -189,6 +202,7 @@ export class Game {
       if (s) surfaces.push(s);
     }
     this.slime.setDynamicSurfaces(surfaces, computeExpandedBounds(expansions));
+    this.shardLayoutDirty=true;
   }
 
   private handleElementAttack(ev: SwingAreaEvent) {
@@ -255,7 +269,10 @@ export class Game {
       const portal = this.portals.find(p => gateContains(p.gate, origin));
       if (portal) { const fx = Math.sin(portal.slot.yaw), fz = Math.cos(portal.slot.yaw); this.slime.teleport([portal.slot.position[0] + fx * 2.3, 0, portal.slot.position[2] + fz * 2.3]); this.slime.yaw = Math.atan2(-fx, -fz); this.doorLatch.add(portal.slot.slot); }
       const done = this.save.data.completed.includes(progressId(this.returnFrom));
-      setTimeout(() => this.ui.toast(done ? '回到凝露港 · 这扇门的故事已经写进史书' : '回到凝露港', 3600), 500);
+      const daily=this.save.daily(),won=daily.lastWin===progressId(origin);
+      if(won){delete daily.lastWin;this.save.write();}
+      const message=won?`今日首胜 · 贝壳 +${GATE_SHELLS} · 已通关 ${daily.gates.length}/6 扇门`:done?'回到凝露港 · 这扇门的故事已经写进史书':'回到凝露港';
+      setTimeout(()=>this.ui.toast(message,3600),500);
       const returnDay = this.showing.shown.day;
       this.returnFrom = null; history.replaceState(null, '', location.pathname);
       this.applyShowing(returnDay);
@@ -328,12 +345,10 @@ export class Game {
       this.toggleBuildMode();
       return;
     }
-    if (e.code === 'Digit8' && !e.repeat && this.state === 'play') {
-      ensureHome(this.save.data.life).bodyShape = this.slime.bodyShape;
-      this.save.write();
-      this.refreshHud();
-      return;
+    if((e.code==='Digit8'||e.code==='Numpad8')&&!e.repeat && !(e.target instanceof HTMLInputElement)){
+      if(this.state==='play'||this.state==='sky'){e.preventDefault();this.openSky();return;}
     }
+    if(e.code==='Escape' && this.state==='sky'){this.state='pause';this.ui.pause(this.save.data.quality,PRESET_NAMES[this.graphics.preset]);return;}
     if (e.code === 'KeyB' && !e.repeat && this.state === 'play') { this.life.dex(this.life.dexOpen ? null : this.save.data.life, localDayKey()); return; }
     if (e.code === 'Escape' && this.life.dexOpen) { this.life.dex(null); return; }
     if (e.code === 'Escape' && this.state === 'build') { this.toggleBuildMode(false); return; }
@@ -360,6 +375,7 @@ export class Game {
     if(this.builder.active)this.buildUI.setStatus(this.builder.currentGhostStatus.reason);
     for (const p of this.portals) { p.hover += ((this.focus?.kind === 'portal' && this.focus.portal === p ? 1 : 0) - p.hover) * (1 - Math.exp(-dt * 8)); p.update(t, dt); }
     if (this.state === 'play' && s.mode !== 'play') { this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
+    if(this.shardLayoutDirty || this.app.director.sky.date!==this.save.data.homeDaily?.date)this.refreshShards();
     this.shards.update(t, dt, this.state === 'play' ? s.position : [0, -99, 0]);
     for (const u of this.zones.updates) u(t, dt, this.player);
     this.farmRegistry.update(dt, this.player);
@@ -434,10 +450,10 @@ export class Game {
   private refreshHud() {
     this.life.refresh(this.save.data.life);
     const home = ensureHome(this.save.data.life);
-    const today = realToday(), sh = this.showing, n = this.shards.count, total = shardSpots.length;
+    const today = realToday(), sh = this.showing, n = this.shards.count, total = SHARD_COUNT;
     const visitedToday = sh.shown.chapters.some(c => this.save.data.visited.includes(c.id));
     const objective = home.placed.length === 0
-      ? '按 V 自由建造家园，或走进时光门体验今日历史故事'
+      ? `每门每日首胜 +${GATE_SHELLS} 贝壳 · 每枚时光碎片 +${SHARD_SHELLS} 贝壳`
       : !visitedToday
         ? '左侧历史故事，右侧固定玩法 · 按 B 查看今日家园手账与来客'
         : n < total
@@ -445,10 +461,10 @@ export class Game {
           : `家园 Lv.${home.level} · 碎片已集齐，继续扩建你的凝露家园`;
     this.ui.hud({
       day: `${dayLabel(today.id)} · ${today.weekday}`,
-      sub: `港口展出 ${dayLabel(sh.shown.day)} · 家园 Lv.${home.level}`,
+      sub: `展出 ${dayLabel(sh.shown.day)} · 家园 Lv.${home.level} · 今日首胜 ${this.save.data.homeDaily?.gates.length??0}/6`,
       objective, shards: n, total, element: this.slime.element,
       aiming: this.slime.aiming, aimReady: this.slime.aimReady, aimRecoil: this.slime.aimRecoil > 0.25,
-      bodyShape: this.slime.bodyShape, umbrella: this.slime.umbrellaOpen,
+      umbrella: this.slime.umbrellaOpen,
     });
   }
 }

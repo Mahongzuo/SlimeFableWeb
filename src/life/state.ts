@@ -119,6 +119,7 @@ export function ensureHome(life: LifeData): HomeBuildState {
     life.home = {
       ...base,
       ...life.home,
+      bodyShape: 'dome',
       placed: Array.isArray(life.home.placed) ? life.home.placed : [],
       paving: Array.isArray(life.home.paving) ? life.home.paving : [],
       expansions: Array.isArray(life.home.expansions) ? life.home.expansions : [],

@@ -52,6 +52,12 @@ export class HomeClimate {
   target: Preset;
   readonly weather: typeof profiles.clear & {time:number;sun:number;shaft:number;wet:number;cover:number};
   private skySecond: number;
+  private fixedMinute: number|null=null;
+  get minute(){return this.fixedMinute;}
+  setTime(minute:unknown){
+    this.fixedMinute=typeof minute==='number' && Number.isInteger(minute) && minute>=0 && minute<1440 ? minute : null;
+    this.skySecond=-1;
+  }
   private bow = 0;
   constructor(now = Date.now()) {
     this.sky = beijingSky(now);
@@ -64,7 +70,10 @@ export class HomeClimate {
   }
   update(time: number, now = Date.now()) {
     const second = Math.floor(now / 1000);
-    if (second !== this.skySecond) {this.sky = beijingSky(now); this.skySecond = second;}
+    if (second !== this.skySecond) {
+      const displayTime=this.fixedMinute===null ? now : Math.floor((now+beijingOffset)/dayMs)*dayMs-beijingOffset+this.fixedMinute*60000;
+      this.sky=beijingSky(displayTime);this.skySecond=second;
+    }
     const w = this.weather, dt = Math.max(0, time - w.time);
     w.time = time;
     this.target = this.mode === 'auto' ? naturalWeather(now, this.sky.season) : this.mode;

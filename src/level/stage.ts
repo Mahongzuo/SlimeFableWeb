@@ -5,14 +5,15 @@ export const LAYER = {OUTLINE: 0, NO_OUTLINE: 1};
 const vert = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 // Same grade as the harbour: one-sided depth edges + normal creases in ink, high-key watercolour lift, paper grain.
 const frag = `#include <packing>
-uniform sampler2D tColor, tNormal, tDepth; uniform vec2 uRes; uniform float uNear, uFar, uLine, uFade;
+uniform sampler2D tColor, tNormal, tDepth, tVisibleDepth; uniform vec2 uRes; uniform float uNear, uFar, uLine, uFade;
 uniform vec3 uInk, uWash; varying vec2 vUv;
 float lin(vec2 uv){ return -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, uNear, uFar); }
 vec3 nrm(vec2 uv){ return texture2D(tNormal, uv).xyz * 2.0 - 1.0; }
 float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
 void main(){
   vec2 px = uLine / uRes; vec3 col = texture2D(tColor, vUv).rgb; float d0 = lin(vUv), edge = 0.0;
-  if (d0 < uFar * 0.95) {
+  float visibleDepth = -perspectiveDepthToViewZ(texture2D(tVisibleDepth,vUv).r,uNear,uFar);
+  if (d0 < uFar * 0.95 && d0 <= visibleDepth + .012 + visibleDepth*.0002) {
     float dmax = max(max(lin(vUv - vec2(px.x,0.)), lin(vUv + vec2(px.x,0.))), max(lin(vUv - vec2(0.,px.y)), lin(vUv + vec2(0.,px.y))));
     float de = smoothstep(0.012 + d0*0.00012, 0.03 + d0*0.0002, (dmax - d0) / d0);
     vec3 n0 = nrm(vUv); float ne = max(1.0 - dot(n0, nrm(vUv + vec2(px.x,0.))), 1.0 - dot(n0, nrm(vUv + vec2(0.,px.y))));
@@ -53,7 +54,7 @@ export class Stage {
     this.normals = new THREE.WebGLRenderTarget(1, 1, {type: THREE.HalfFloatType}); this.normals.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
     this.normalMat = new THREE.MeshNormalMaterial();
     this.comp = new THREE.ShaderMaterial({depthTest: false, depthWrite: false, vertexShader: vert, fragmentShader: frag, uniforms: {
-      tColor: {value: this.opaque.texture}, tNormal: {value: this.normals.texture}, tDepth: {value: this.normals.depthTexture}, uRes: {value: new THREE.Vector2(1, 1)},
+      tVisibleDepth: {value:this.opaque.depthTexture}, tColor: {value: this.opaque.texture}, tNormal: {value: this.normals.texture}, tDepth: {value: this.normals.depthTexture}, uRes: {value: new THREE.Vector2(1, 1)},
       uNear: {value: this.camera.near}, uFar: {value: this.camera.far}, uLine: {value: 1}, uFade: {value: 0}, uInk: {value: new THREE.Color(look.ink)}, uWash: {value: new THREE.Color(look.wash)}}});
     this.compScene = new THREE.Scene(); const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.comp); quad.frustumCulled = false; this.compScene.add(quad);
     this.compCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -84,6 +85,6 @@ export class Stage {
     this.scene.overrideMaterial = null; this.scene.fog = fog;
     r.setClearColor(0xffffff, 1); r.setRenderTarget(this.opaque); r.clear(); r.render(this.scene, this.camera);
     r.setRenderTarget(null); r.render(this.compScene, this.compCam);
-    slime?.render({color: this.opaque.texture, depth: this.normals.depthTexture, time: this.time});
+    slime?.render({color: this.opaque.texture, depth: this.opaque.depthTexture, time: this.time});
   }
 }

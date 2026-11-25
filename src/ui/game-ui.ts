@@ -15,10 +15,10 @@ export interface UIHandlers {
   start(): void; resume(): void; pause(): void; openBook(): void; openGuide?(): void; closePanel(): void; showDay(id: DayId): void; showToday(): void;
   respawn(): void; quality(q: QualitySetting): void; toTitle(): void; go(id: string): void;
   weather(mode: WeatherMode): void; getWeather(): WeatherMode;
-  toggleBuild?: () => void; toggleShape?: () => void;
+  toggleBuild?: () => void; openSky():void; setTime(minute:number|null):void; getTime():number|null;
 }
 export interface TitleInfo {ready: boolean; todayId: DayId; year: number; weekday: string; shown: DayMeta; isToday: boolean; quality: QualitySetting; preset?: string}
-export interface HudInfo {day: string; sub: string; objective: string; shards: number; total: number; element: number; aiming: boolean; aimReady?: boolean; aimRecoil?: boolean; bodyShape?: 'dome' | 'ball'; umbrella?: boolean; building?: boolean}
+export interface HudInfo {day: string; sub: string; objective: string; shards: number; total: number; element: number; aiming: boolean; aimReady?: boolean; aimRecoil?: boolean; umbrella?: boolean; building?: boolean}
 export interface BookInfo {todayId: DayId; shownId: DayId; souvenirs: string[]; visited: string[]; completed: string[]; imprintOrder?:number}
 const slimeMark = `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M7 50C7 30 17 12 32 12s25 18 25 38c0 4-3 6-7 6H14c-4 0-7-2-7-6z" style="fill:var(--accent)" stroke="#2f2a24" stroke-width="3.5"/><ellipse cx="24" cy="38" rx="3.3" ry="4.3" fill="#2f2a24"/><ellipse cx="40" cy="38" rx="3.3" ry="4.3" fill="#2f2a24"/><path d="M27 45q5 4 10 0" stroke="#2f2a24" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M17 26c2-5 6-9 11-10" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" opacity=".85"/></svg>`;
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]!));
@@ -74,11 +74,11 @@ export class GameUI {
       <div class="hud-day"><div class="day-pill card"><div class="mini-stamp" id="stamp-day">4</div><div><strong id="hud-day"></strong><small id="hud-sub"></small></div></div>
         <div class="objective card"><span class="diamond">◆</span><span id="hud-objective"></span></div>
         <div class="shards card">✦ 时光碎片 <b id="hud-shards">0</b><span id="hud-total"></span></div></div>
-      <div class="hud-buttons"><button class="icon-btn" data-act="build"><span class="key">V</span>建造</button><button class="icon-btn" data-act="shape"><span class="key">8</span><span id="hud-shape">钟型</span></button><button class="icon-btn" data-act="book"><span class="key">J</span>史书</button><button class="icon-btn" data-act="pause"><span class="key">Esc</span>暂停</button></div>
+      <div class="hud-buttons"><button class="icon-btn" data-act="build"><span class="key">V</span>建造</button><button class="icon-btn" data-act="sky"><span class="key">8</span>天气时间</button><button class="icon-btn" data-act="book"><span class="key">J</span>史书</button><button class="icon-btn" data-act="pause"><span class="key">Esc</span>暂停</button></div>
       <div class="keys card"><span class="k"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></span><span>移动 · <span class="key">Shift</span> 冲刺</span>
         <span class="k"><span class="key">空格</span></span><span>两段跳 · 空中再按撑伞</span><span class="k"><span class="key">E</span><span class="key">R</span><span class="key">Q</span></span><span>属性战技 / 连携 / 元素爆发</span>
         <span class="k"><span class="key">F</span></span><span>互动 / 种植 · <span class="key">左键</span> 四段连击</span>
-        <span class="k"><span class="key">G</span>/<span class="key">右键</span></span><span>瞄准 + <span class="key">左键</span> 发射 · <span class="key">X</span> 收回</span><span class="k"><span class="key">8</span> / <span class="key">C</span> / <span class="key">V</span></span><span>钟型 / 摊开 / 建造扩建</span></div>
+        <span class="k"><span class="key">G</span>/<span class="key">右键</span></span><span>瞄准 + <span class="key">左键</span> 发射 · <span class="key">X</span> 收回</span><span class="k"><span class="key">8</span> / <span class="key">C</span> / <span class="key">V</span></span><span>天气时间 / 摊开 / 建造扩建</span></div>
       <div class="crosshair hidden"><i></i><i></i><i></i><i></i></div></div>
       <div class="prompt card hidden"></div><div class="toast card"></div><div class="layer-panel"></div>`;
     document.body.appendChild(root);
@@ -103,11 +103,13 @@ export class GameUI {
       const act = t.dataset.act;
       if (act === 'start') this.h.start(); else if (act === 'resume') this.h.resume(); else if (act === 'book') this.h.openBook();
       else if (act === 'guide') this.h.openGuide?.();
-      else if (act === 'build') this.h.toggleBuild?.(); else if (act === 'shape') this.h.toggleShape?.();
+      else if (act === 'build') this.h.toggleBuild?.(); else if (act === 'sky') this.h.openSky();
+      else if(act==='sync-clock'){this.h.setTime(null);this.skyPanel();}
       else if (act === 'pause') this.h.pause(); else if (act === 'close') this.h.closePanel(); else if (act === 'respawn') this.h.respawn(); else if (act === 'title') this.h.toTitle();
       else if (act === 'show') this.h.showDay(this.bookState.selected); else if (act === 'today') { this.h.showToday(); } else if (act === 'go' && t.dataset.id) this.h.go(t.dataset.id);
     });
-    root.addEventListener('change', e => { const t = e.target as HTMLSelectElement; if(t.dataset.weather!==undefined)this.h.weather(weatherMode(t.value)); else if (t.dataset.quality !== undefined) this.h.quality(t.value as QualitySetting); });
+    root.addEventListener('change', e => { const t = e.target as HTMLSelectElement; if(t.hasAttribute('data-clock') && /^\d{2}:\d{2}$/.test(t.value)){const [h,m]=t.value.split(':').map(Number);this.h.setTime(h*60+m);this.skyPanel();}
+      else if(t.dataset.weather!==undefined)this.h.weather(weatherMode(t.value)); else if (t.dataset.quality !== undefined) this.h.quality(t.value as QualitySetting); });
   }
   private $(s: string) { return this.root.querySelector(s) as HTMLElement; }
   title(info: TitleInfo | null) {
@@ -130,7 +132,6 @@ export class GameUI {
     this.$('#hud-day').textContent = s.day; this.$('#hud-sub').textContent = s.sub; this.$('#hud-objective').textContent = s.objective;
     this.$('#hud-shards').textContent = String(s.shards); this.$('#hud-total').textContent = ' / ' + s.total;
     this.root.style.setProperty('--accent', elements[s.element].color);
-    if (s.bodyShape) this.$('#hud-shape').textContent = s.bodyShape === 'dome' ? '钟型' : '圆球';
     this.setCrosshair(s.aiming, s.aimReady !== false, !!s.aimRecoil);
   }
   setCrosshair(aiming: boolean, ready: boolean, recoil: boolean) {
@@ -153,6 +154,18 @@ export class GameUI {
   panel(html: string | null) {
     this.$('.layer-panel').innerHTML = html ?? '';
     if (html) this.showHud(false);
+  }
+  skyPanel(){
+    const minute=this.h.getTime();
+    const now=new Date(Date.now()+8*3600000);
+    const display=minute??now.getUTCHours()*60+now.getUTCMinutes();
+    const value=[Math.floor(display/60),display%60].map(x=>String(x).padStart(2,'0')).join(':');
+    this.panel(`<div class="overlay"><section class="pause card grain"><h2>天气与时间</h2>
+      <p data-sky-status>${this.skyStatus}</p><div class="stack">${this.weatherSelect()}
+      <label>家园时刻 <input type="time" data-clock value="${value}"></label>
+      <span>${minute===null?'正在跟随北京时间':'已固定家园时刻'}</span>
+      <button class="btn" data-act="sync-clock">跟随北京时间</button>
+      <button class="btn primary" data-act="resume">回到家园</button></div></section></div>`);
   }
   pause(quality: QualitySetting, preset = '') {
     this.panel(`<div class="overlay"><div class="pause card grain"><h2>暂停一下</h2><p data-sky-status>${this.skyStatus}</p><div class="stack">
@@ -263,7 +276,7 @@ export class GameUI {
         }).join('')}
         <div class="souvenirs">${all.map(c => { const got = info.souvenirs.includes(c.id); return `<div class="souvenir ${got ? 'got' : ''}"><div class="seal">${got ? '✦' : '?'}</div><b>${got ? esc(c.souvenir) : '尚未获得'}</b><small>${dayLabel(c.day)} · ${c.year}</small></div>`; }).join('')}</div></div>`;
     } else {
-      const rows: [string, string][] = [['<span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>', '移动；按住 <span class="key">Shift</span> 冲刺'], ['<span class="key">空格</span>', '两段跳；二段跳后在空中再按展开/收起滑翔伞'], ['<span class="key">8</span>', '切换史莱姆形态：UE 钟型果冻 / 经典圆球'], ['朝墙走', '贴住墙面：推向墙往上爬，拉开往下滑，左右横移；爬到顶自动翻上去'], ['<span class="key">空格</span> / <span class="key">T</span>', '贴墙时：蹬墙跳 / 松手落下'], ['<span class="key">F</span>', '互动：翻开史书、进入时光门、种田、观察/投喂来访小动物'], ['<span class="key">V</span>', '开启 / 退出家园自由建造模式（Q/E 旋转，R 缩放，左键摆放，右键拆除）'], ['<span class="key">J</span>', '打开 / 合上史书'], ['<span class="key">B</span>', '图鉴、背包、栖地来客与家园成长手账'], ['公园门口', '凝露小厨：切火属性（3）用收成做料理；委托板：每天三个委托，交货换贝壳'], ['<span class="key">F</span>（地块 / 码头）', '种田：水属性浇水翻倍、火属性烧草催暖、风属性授粉变异、雷属性充能洒水泉；钓鱼：甩竿收线'], ['<span class="key">1</span>–<span class="key">6</span>', '切换水、风、火、雷、暗、物（同步切换滑翔伞造型与培育效果）'], ['<span class="key">G</span> / <span class="key">右键</span> + <span class="key">左键</span>', '过肩瞄准并炮弹发射分身（40m 射程，最多 5 团）'], ['<span class="key">X</span>', '按住收回分身（高空回程自动撑小伞）'], ['<span class="key">C</span>', '按住摊开身体，钻低矮缝隙'], ['<span class="key">左键</span>', '四段连击'], ['<span class="key">滚轮</span>', '镜头远近'], ['<span class="key">T</span>', '卡住时回到出生点'], ['<span class="key">Esc</span>', '暂停']];
+      const rows: [string, string][] = [['<span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>', '移动；按住 <span class="key">Shift</span> 冲刺'], ['<span class="key">空格</span>', '两段跳；二段跳后在空中再按展开/收起滑翔伞'], ['<span class="key">8</span>', '家园天气与时间'], ['朝墙走', '贴住墙面：推向墙往上爬，拉开往下滑，左右横移；爬到顶自动翻上去'], ['<span class="key">空格</span> / <span class="key">T</span>', '贴墙时：蹬墙跳 / 松手落下'], ['<span class="key">F</span>', '互动：翻开史书、进入时光门、种田、观察/投喂来访小动物'], ['<span class="key">V</span>', '开启 / 退出家园自由建造模式（Q/E 旋转，R 缩放，左键摆放，右键拆除）'], ['<span class="key">J</span>', '打开 / 合上史书'], ['<span class="key">B</span>', '图鉴、背包、栖地来客与家园成长手账'], ['公园门口', '凝露小厨：切火属性（3）用收成做料理；委托板：每天三个委托，交货换贝壳'], ['<span class="key">F</span>（地块 / 码头）', '种田：水属性浇水翻倍、火属性烧草催暖、风属性授粉变异、雷属性充能洒水泉；钓鱼：甩竿收线'], ['<span class="key">1</span>–<span class="key">6</span>', '切换水、风、火、雷、暗、物（同步切换滑翔伞造型与培育效果）'], ['<span class="key">G</span> / <span class="key">右键</span> + <span class="key">左键</span>', '过肩瞄准并炮弹发射分身（40m 射程，最多 5 团）'], ['<span class="key">X</span>', '按住收回分身（高空回程自动撑小伞）'], ['<span class="key">C</span>', '按住摊开身体，钻低矮缝隙'], ['<span class="key">左键</span>', '四段连击'], ['<span class="key">滚轮</span>', '镜头远近'], ['<span class="key">T</span>', '卡住时回到出生点'], ['<span class="key">Esc</span>', '暂停']];
       left = `<div class="page" style="grid-column:1/3"><h2>操作</h2><p class="sub">鼠标转动镜头；港口里可按住右键拖动。10 月 21 日战斗中点右键闪避，无鼠标锁定时按住中键转动视角。</p><div class="controls-list">${rows.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div></div>`;
     }
     this.panel(`<div class="overlay"><div class="book grain">${tabs}${left}${right}</div></div>`);

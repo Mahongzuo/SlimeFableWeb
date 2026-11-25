@@ -1,3 +1,4 @@
+import {gardenRain} from './rain-contact';
 import {HomeClimate} from './climate';
 import {surfaceClimate} from './climate-material';
 import * as T from 'three';
@@ -55,6 +56,7 @@ export function createGardenStage(){
   const U={uTime:{value:0},uSun:{value:1},uWind:{value:.5},uRain:{value:0},uShaft:{value:.5}};
   const hooks:((t:number,dt:number)=>void)[]=[];
   const ctx={THREE:T,renderer,scene,camera,controls,sun,P:palette,U,weather,puddles:[{x:6.1,z:15.4,rx:1.25,rz:.55,rot:.3},{x:12.6,z:19.2,rx:1.45,rz:.57,rot:-.5},{x:3.2,z:18.8,rx:.7,rz:.34,rot:.1}],renderSlime:null as any,
+    rainSurface:null as null|((x:number,z:number)=>number),reflectActor:null as any,
     groundY:(x:number,z:number)=>lakeEdge(x,z)<1?Math.max(inland(x,z),LAKE.level):Math.abs(x-riverCenter(z))<4&&z<30?Math.max(inland(x,z),riverLevel):inland(x,z),
     onUpdate:(fn:(t:number,dt:number)=>void)=>hooks.push(fn),
     mats:{toon:(color:any,options:any={})=>{
@@ -65,15 +67,8 @@ export function createGardenStage(){
       if('depthWrite' in opts)mat.depthWrite=opts.depthWrite;
       return mat;
     },flat:(color:any,opts:any={})=>new T.MeshBasicMaterial({color,...opts}),glowSprite:stage.glow.bind(stage)}};
-  // Reuse each raindrop in a camera-centred volume; the shader advances both ends together.
-  const positions:number[]=[];
+  const updateRain=gardenRain(scene,camera,U,(x,z)=>ctx.rainSurface?.(x,z)??ctx.groundY(x,z));
   let seed=379;const random=()=>(seed=seed*16807%2147483647)/2147483647;
-  for(let i=0;i<850;i++){const x=random()*48-24,y=random()*21,z=random()*48-24;positions.push(x,y,z,x+.045,y-.42,z+.015);}
-  const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));
-  const rainMat=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:U,
-    vertexShader:`uniform float uTime;void main(){vec3 p=position;float head=position.y+(mod(float(gl_VertexID),2.)>.5?.42:0.);p.y-=floor((head-uTime*9.)/21.)*21.+uTime*9.;p.y-=8.;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
-    fragmentShader:'uniform float uRain;void main(){gl_FragColor=vec4(.73,.85,.85,.36*uRain);}'});
-  const rain=new T.LineSegments(geo,rainMat);rain.layers.set(1);rain.frustumCulled=false;scene.add(rain);
   const flakePos=new Float32Array(720*3);
   for(let i=0;i<flakePos.length;i+=3){
     flakePos[i]=random()*30-15;flakePos[i+1]=random()*18;flakePos[i+2]=random()*30-15;
@@ -129,7 +124,7 @@ export function createGardenStage(){
     for(const fn of hooks)fn(time,dt);
     sky.position.copy(camera.position);
     snow.position.copy(camera.position);snow.visible=weather.snow>.012;flakeMat.uniforms.amount.value=weather.snow;
-    rain.position.copy(camera.position);rain.visible=weather.rain>.012;
+    updateRain(time);
     bow.visible=weather.rainbow>.01;for(const band of bow.children)(band as any).material.opacity=.24*weather.rainbow;
     stage.render(dt,{render:(pass:any)=>ctx.renderSlime?.(pass)});
   }

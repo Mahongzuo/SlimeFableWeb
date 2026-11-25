@@ -19,12 +19,19 @@ export function valleyWater(ctx:any,geometry:any,x:number,y:number,z:number){
     float bodyDist=distance(p,uBody);wave+=sin(bodyDist*18.-uTime*5.)*max(0.,1.-bodyDist/1.5);
     vec2 uv=vUv.xy/vUv.w+vec2(wave*.0017,cos(p.x*4.+uTime)*.001);
     vec4 base=texture2D(tDiffuse,uv);`).replace('blendOverlay( base.rgb, color )',`
-    mix(vec3(.07,.235,.205),base.rgb,.32)+vec3(.08,.11,.08)*smoothstep(1.78,1.99,wave)
+    mix(vec3(.07,.235,.205),base.rgb,.52)+vec3(.08,.11,.08)*smoothstep(1.78,1.99,wave)
     +uRain*.07*(1.-smoothstep(.014,.05,abs(length(fract(p*1.4)-.5)-fract(uTime*.85+sin(dot(floor(p*1.4),vec2(5.3,1.9))))*.48)))`);
   const render=water.onBeforeRender.bind(water);
   water.onBeforeRender=(...args:any[])=>{
     if(reflecting || ctx.scene.overrideMaterial)return;
-    reflecting=true;try{render(...args);}finally{reflecting=false;}
+    const [renderer,,camera]=args, previous=renderer.getRenderTarget();
+    reflecting=true;
+    try {
+      render(...args);
+      if(camera.position.y>water.position.y && ctx.reflectActor){
+        ctx.reflectActor(renderer,water.camera,water.getRenderTarget());
+      }
+    } finally {renderer.setRenderTarget(previous);reflecting=false;}
   };
   return water;
 }

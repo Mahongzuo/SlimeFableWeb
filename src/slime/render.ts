@@ -75,12 +75,14 @@ void main(){
   // ---- 2. Ultra-Clear Liquid Glass Beer-Lambert Absorption (No Milky Wash!) ----
   // Water is crystal-transparent: centre transmits ~90% of the refracted scene; thick rim & meniscus tint cool emerald-aqua.
   vec3 absorbCoeff=uElement<.5
-    ? vec3(.34,.06,.09)
+    ? vec3(.97,.46,.025)
+    : uElement<1.5 ? vec3(.34,.06,.09)
     : (vec3(1.)-uColor)*1.30;
   float pathLen=(.32+thickness*.65+pow(grazing,2.0)*1.15+(1.-relH)*.55);
   vec3 transmittance=exp(-pathLen*absorbCoeff);
   // Slight contrast deepening gives real wet-glass depth rather than flat paste
   vec3 body=pow(max(scene,vec3(.001)),vec3(1.08))*transmittance;
+  if(uElement<.5)body+=vec3(.012,.085,.25)*(1.-transmittance.r);
 
   // Crisp dark glass refraction band right along the silhouette & base contact meniscus (critical for "liquid volume"!)
   float rimDepth=pow(grazing,2.6);
@@ -89,7 +91,7 @@ void main(){
   body*=mix(.52,1.,baseShadow);
   // Subtle emerald-teal caustic light trapped along the lower contact skirt (pure tint, no chalkiness)
   float skirtBand=smoothstep(.20,.025,relH)*smoothstep(.0,.045,relH);
-  body*=mix(vec3(1.),uElement<.5?vec3(.72,1.08,.96):mix(vec3(1.),uColor*1.35,.55),skirtBand*.75);
+  body*=mix(vec3(1.),uElement<.5?vec3(.57,.85,1.25):uElement<1.5?vec3(.72,1.08,.96):mix(vec3(1.),uColor*1.35,.55),skirtBand*.75);
 
   // ---- 3. Real SSR Environment Reflection + Delicate Thin-Film Iridescence ----
   float f0=.028;
@@ -233,7 +235,7 @@ export class SlimeRenderer {
  private offset:Vec=[0,0,0];
  render(pass:any,forward:Vec,element:number,quality:Quality,underlay?:(actor:{color:any;depth:any})=>void){
   if(!this.frame)return;const u=this.material.uniforms,T=this.ctx.THREE;
-  {const o=this.offset;u.uOffset.value.set(o[0],o[1],o[2]);for(let i=0;i<6;i++){const c=this.frame.centers[i];if(c)u.uCenters.value[i].set(c[0]+o[0],c[1]+o[1],c[2]+o[2]);const sh=this.shadows[i],b=sh.userData.base;if(b)sh.position.set(b[0]+o[0],b[1],b[2]+o[2]);sh.material.uniforms.uTint.value.set(element===0?0x22a88c:elements[element].color);}this.proxy.position.set(o[0],o[1],o[2]);}
+  {const o=this.offset;u.uOffset.value.set(o[0],o[1],o[2]);for(let i=0;i<6;i++){const c=this.frame.centers[i];if(c)u.uCenters.value[i].set(c[0]+o[0],c[1]+o[1],c[2]+o[2]);const sh=this.shadows[i],b=sh.userData.base;if(b)sh.position.set(b[0]+o[0],b[1],b[2]+o[2]);sh.material.uniforms.uTint.value.set(element===1?0x22a88c:elements[element].color);}this.proxy.position.set(o[0],o[1],o[2]);}
   u.uBackground.value=pass.color;u.uDepth.value=pass.depth;this.ctx.renderer.getDrawingBufferSize(this.drawingSize);u.uResolution.value.copy(this.drawingSize);u.uForward.value.fromArray(forward);u.uColor.value.set(elements[element].color);u.uRim.value.set(elements[element].rim);u.uTime.value=pass.time;u.uNear.value=this.ctx.camera.near;u.uFar.value=this.ctx.camera.far;u.uQuality.value=quality==='high'?1:0;u.uElement.value=element;u.uSpread.value=this.frame.spread;u.uDome.value=this.frame.shapeBlend??1;
   this.bubbles.update(pass.time,this.frame.spread,forward);
   const renderer=this.ctx.renderer,auto=renderer.autoClear,clear=renderer.getClearColor(new T.Color()),alpha=renderer.getClearAlpha();
