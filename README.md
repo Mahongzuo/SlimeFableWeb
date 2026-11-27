@@ -45,8 +45,9 @@ tests/              单元测试
 
 ## 协作与贡献
 - **Mahongzuo**：游戏策划、UE 原项目 SlimeFable、关卡设计、试玩与视觉验收。
-- **Claude（Anthropic，Opus 系列）**：凝露港场景与史莱姆 Web 角色模块（SunHarbor 原型），本仓库的架构、Home 关、高度场碰撞、水面交互、游戏 UI 和测试。
-- **Grok 4.7 / Codex** 参与早期试点的关卡逻辑和程序化场景制作。当前每日关卡由 Codex 全权负责，协作方式见 [Agent 规则](AGENTS.md)。
+- **Antigravity / Gemini（Google DeepMind）**：凝露港场景与画面持续升级、精确 3D OBB 与海浪/潜水/秋千物理、SimPond 生物骨骼动画与多物种 AI、Meadow 风格草花树冠与夜间光照、四段连击二次元刀光及场景体验精修。
+- **Codex（OpenAI）**：统筹每日六门关卡、史料核实、远海航次、F1 关内帮助与自动化验收，协作方式见 [Agent 规则](AGENTS.md)。
+- **Claude（Anthropic，Opus 系列）**：早期 SunHarbor 史莱姆 Web 原型、初始架构骨架、基础高度场碰撞与界面搭建（Grok 4.7 参与早期试点关卡逻辑）。
 
 ## 第三方
-当前家园的河谷、天气、建筑摆放和活动区由本项目与《林栖》自制内容构成。渲染引擎 Three.js（MIT）的许可详见 `THIRD_PARTY_NOTICES.txt`。UE 商城素材没有放进本仓库。
+当前家园的河谷、天气、建筑摆放和活动区由本项目与《林栖》自制内容构成。渲染引擎 Three.js（MIT）的许可详见 `THIRD_PARTY_NOTICES.txt`，SimPond 生物模型与贴图许可详见 `public/models/simpond/NOTICE.txt`。UE 商城素材没有放进本仓库。
