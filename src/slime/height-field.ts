@@ -4,12 +4,20 @@ import type {FluidVolume} from './world';
  * 2.5D collision: one walkable top height per XZ cell, baked once from scene triangles.
  * Queries are O(1) array reads, so the particle solver cost no longer depends on scene complexity.
  */
-export interface HeightFieldData {x0: number; z0: number; cell: number; w: number; h: number; data: Float32Array}
+export interface HeightFieldData {x0: number; z0: number; cell: number; w: number; h: number; data: Float32Array; noCling?: Uint8Array}
 export const NO_FLOOR = -1e4;
 const empty = (v: number) => v <= NO_FLOOR / 2;
 export class HeightField {
   constructor(readonly d: HeightFieldData) {}
   cell(i: number, j: number) { const d = this.d; return i < 0 || j < 0 || i >= d.w || j >= d.h ? NO_FLOOR : d.data[i + j * d.w]; }
+  /** True when the cell belongs to a solid non-climbable obstacle (e.g. a tree trunk). */
+  isNoCling(x: number, z: number) {
+    const d = this.d;
+    if (!d.noCling) return false;
+    const i = Math.floor((x - d.x0) / d.cell), j = Math.floor((z - d.z0) / d.cell);
+    if (i < 0 || j < 0 || i >= d.w || j >= d.h) return false;
+    return d.noCling[i + j * d.w] !== 0;
+  }
   /**
    * Keep a particle `skin` metres clear of wall columns (like UE's collider skin = particle spacing), so the
    * reconstructed surface, which grows past the particles, rests against walls instead of sinking into them.
@@ -19,9 +27,9 @@ export class HeightField {
     const d = this.d, c = d.cell, fx = (p[0] - d.x0) / c, fz = (p[2] - d.z0) / c, i = Math.floor(fx), j = Math.floor(fz);
     if (i < 1 || j < 1 || i >= d.w - 1 || j >= d.h - 1) return;
     const own = this.cell(i, j);
-    if (own > p[1] + .45) { // deep inside a column: leave through the nearest free cell
+    if (own > p[1] + .36) { // inside a column: leave through the nearest free cell (no deadzone vs support 0.38)
       let best = Infinity, bx = 0, bz = 0;
-      for (let r = 1; r <= 2 && best === Infinity; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+      for (let r = 1; r <= 5 && best === Infinity; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
         if (Math.max(Math.abs(di), Math.abs(dj)) !== r || this.cell(i + di, j + dj) > p[1] + .03) continue;
         const nx = Math.min(Math.max(fx, i + di + skin / c), i + di + 1 - skin / c), nz = Math.min(Math.max(fz, j + dj + skin / c), j + dj + 1 - skin / c);
         const dist = Math.hypot(nx - fx, nz - fz); if (dist < best) { best = dist; bx = nx; bz = nz; }
@@ -63,7 +71,9 @@ export interface HeightBakeOptions {x0: number; z0: number; size: number; /** De
   /** Triangles of hollow shells (hulls, tetrapod piles) whose columns count as solid up to their highest surface. */
   filled?: ArrayLike<number>;
   /** Per triangle: 1 = double-sided sheet (counts as both a top and an underside). */
-  sheets?: ArrayLike<number>}
+  sheets?: ArrayLike<number>;
+  /** Per triangle: 1 = solid obstacle that cannot be wall-climbed (e.g. tree trunks). */
+  noCling?: ArrayLike<number>}
 const Y0 = -8, BIN = .25, NB = 88, WORDS = 3;
 /**
  * Several baked tiles (the harbour plus each Home zone that has solid props). Queries go to the tile that contains
@@ -76,11 +86,12 @@ export class HeightAtlas {
   pushOut(p: [number, number, number], skin: number) { this.tile(p[0], p[2])?.pushOut(p, skin); }
   raw(x: number, z: number) { return this.tile(x, z)?.raw(x, z) ?? NO_FLOOR; }
   at(x: number, z: number) { const t = this.tile(x, z); return t ? t.at(x, z) : null; }
+  isNoCling(x: number, z: number) { return this.tile(x, z)?.isNoCling(x, z) ?? false; }
 }
 export function bakeHeightField(tris: ArrayLike<number>, o: HeightBakeOptions): HeightFieldData {
   const base = bakeStack(tris, o);
   if (!o.filled?.length) return base;
-  const top = bakeStack(o.filled, {...o, fluids: undefined, ground: undefined, sheets: undefined, clearance: 1e3});
+  const top = bakeStack(o.filled, {...o, fluids: undefined, ground: undefined, sheets: undefined, noCling: undefined, clearance: 1e3});
   for (let k = 0; k < base.data.length; k++) if (top.data[k] > base.data[k]) base.data[k] = top.data[k];
   return base;
 }
@@ -96,6 +107,8 @@ function bakeStack(tris: ArrayLike<number>, o: HeightBakeOptions): HeightFieldDa
   const binOf = (y: number) => clamp(Math.floor((y - Y0) / BIN), 0, NB - 1);
   const cellOf = (x: number, z: number) => { const i = Math.floor((x - o.x0) / cell), j = Math.floor((z - o.z0) / cell); return i < 0 || j < 0 || i >= w || j >= h ? -1 : i + j * w; };
   const side = new Uint32Array(N * WORDS), sideTop = new Float32Array(N).fill(NO_FLOOR);
+  let noClingCells: Uint8Array | null = null;
+  const markNoCling = (k: number) => { (noClingCells ??= new Uint8Array(N))[k] = 1; };
   let cap = 1 << 20, count = 0, hy = new Float32Array(cap), hs = new Int8Array(cap), hn = new Int32Array(cap);
   const head = new Int32Array(N).fill(-1);
   const hit = (k: number, y: number, s: number) => {
@@ -104,12 +117,14 @@ function bakeStack(tris: ArrayLike<number>, o: HeightBakeOptions): HeightFieldDa
   };
   const mark = (k: number, y: number) => { const b = binOf(y); side[k * WORDS + (b >> 5)] |= 1 << (b & 31); if (y > sideTop[k]) sideTop[k] = y; };
   for (let t = 0; t + 8 < tris.length; t += 9) {
-    const sheet = o.sheets?.[t / 9] === 1;
+    const triIdx = t / 9;
+    const sheet = o.sheets?.[triIdx] === 1;
+    const noCling = o.noCling?.[triIdx] === 1;
     const ax = tris[t], ay = tris[t + 1], az = tris[t + 2], bx = tris[t + 3], by = tris[t + 4], bz = tris[t + 5], cx = tris[t + 6], cy = tris[t + 7], cz = tris[t + 8];
     const ux = bx - ax, uy = by - ay, uz = bz - az, vx = cx - ax, vy = cy - ay, vz = cz - az;
     const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, len = Math.hypot(nx, ny, nz);
     if (len < 1e-9) continue;
-    for (const [x, y, z] of [[ax, ay, az], [bx, by, bz], [cx, cy, cz]]) { const k = cellOf(x, z); if (k >= 0) mark(k, y); }
+    for (const [x, y, z] of [[ax, ay, az], [bx, by, bz], [cx, cy, cz]]) { const k = cellOf(x, z); if (k >= 0) { mark(k, y); if (noCling) markNoCling(k); } }
     if (Math.abs(ny) / len > .35) {
       const den = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz); if (Math.abs(den) < 1e-12) continue;
       const i0 = Math.max(0, Math.floor((Math.min(ax, bx, cx) - o.x0) / cell)), i1 = Math.min(w - 1, Math.floor((Math.max(ax, bx, cx) - o.x0) / cell));
@@ -120,12 +135,13 @@ function bakeStack(tris: ArrayLike<number>, o: HeightBakeOptions): HeightFieldDa
         if (u < -1e-4 || v < -1e-4 || u + v > 1.0001) continue;
         const y = ay * u + by * v + cy * (1 - u - v), k = i + j * w;
         if (sheet) { hit(k, y - 1e-4, 1); hit(k, y, -1); } else hit(k, y, ny > 0 ? -1 : 1);
+        if (noCling) markNoCling(k);
       }
     } else {
       const n = Math.min(400, Math.ceil(Math.max(Math.hypot(ux, uy, uz), Math.hypot(vx, vy, vz), Math.hypot(cx - bx, cy - by, cz - bz)) / (cell * .85)));
       for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
         const a = i / n, q = j / n, k = cellOf(ax + ux * a + vx * q, az + uz * a + vz * q);
-        if (k >= 0) mark(k, ay + uy * a + vy * q);
+        if (k >= 0) { mark(k, ay + uy * a + vy * q); if (noCling) markNoCling(k); }
       }
     }
   }
@@ -157,5 +173,5 @@ function bakeStack(tris: ArrayLike<number>, o: HeightBakeOptions): HeightFieldDa
     const wallTop = last > binOf(top > NO_FLOOR / 2 ? top : Y0) ? Math.min(sideTop[k], Y0 + (last + 1) * BIN) : NO_FLOOR;
     data[k] = Math.max(top, wallTop);
   }
-  return {x0: o.x0, z0: o.z0, cell, w, h, data};
+  return noClingCells ? {x0: o.x0, z0: o.z0, cell, w, h, data, noCling: noClingCells} : {x0: o.x0, z0: o.z0, cell, w, h, data};
 }

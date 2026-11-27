@@ -1,12 +1,246 @@
 import {inland, pathDistance, TERRACE} from '../world/map';
 import {fence, signpost, trees, tufts} from './kit';
-import type {ZoneBuilder} from './types';
+import {climateMaterial} from '../home/climate-material';
+import type {Box} from '../slime/types';
+import type {ZoneBuilder, ZoneContext} from './types';
 import {farmLoop, type PlotSpot} from './farm-loop';
 import {critterField} from './critter-field';
 
+/**
+ * Builds an articulated 3-stalk wheat/rice clump geometry (curved stems + drooping narrow leaves + golden grain ears).
+ * UV.y encodes height fraction (0 = rooted in soil, 1 = heavy grain tip) for GPU wind waves & slime parting interaction.
+ */
+function buildInteractiveWheatGeometry(T: any) {
+  const pos: number[] = [];
+  const norm: number[] = [];
+  const col: number[] = [];
+  const uv: number[] = [];
+
+  const pushTri = (
+    a: [number, number, number], b: [number, number, number], c: [number, number, number],
+    ua: number, ub: number, uc: number,
+    ca: [number, number, number], cb: [number, number, number], cc: [number, number, number],
+  ) => {
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    // Blend geometric face normal softly upward so wheat stays luminous and never turns black on backfaces
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const l = Math.hypot(nx, ny, nz) || 1;
+    nx = nx / l * 0.45; ny = ny / l * 0.45 + 0.85; nz = nz / l * 0.45;
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    nx /= nl; ny /= nl; nz /= nl;
+    for (const [p, v, cl] of [[a, ua, ca], [b, ub, cb], [c, uc, cc]] as const) {
+      pos.push(p[0], p[1], p[2]);
+      norm.push(nx, ny, nz);
+      uv.push(0.5, v);
+      col.push(cl[0], cl[1], cl[2]);
+    }
+  };
+
+  const cRoot: [number, number, number] = [0.34, 0.48, 0.22];
+  const cMid: [number, number, number] = [0.56, 0.66, 0.30];
+  const cLeaf: [number, number, number] = [0.46, 0.62, 0.26];
+  const cEarBase: [number, number, number] = [0.80, 0.68, 0.28];
+  const cEarTip: [number, number, number] = [0.96, 0.82, 0.36];
+
+  const stalks = [
+    {ox: -0.10, oz: -0.05, ang: 2.4, h: 0.66, lean: 0.14},
+    {ox: 0.00, oz: 0.06, ang: 0.6, h: 0.76, lean: 0.16},
+    {ox: 0.10, oz: -0.04, ang: -1.1, h: 0.69, lean: 0.15},
+  ];
+
+  for (const st of stalks) {
+    const dx = Math.cos(st.ang), dz = Math.sin(st.ang);
+    const px = -dz, pz = dx;
+    const w0 = 0.022;
+    // 3-segment curved stalk (cross-fin quads so visible from every azimuth)
+    const rings = [0, 0.32, 0.64, 0.84].map(t => {
+      const l = st.lean * t * t;
+      return {x: st.ox + dx * l, y: st.h * t, z: st.oz + dz * l, w: w0 * (1 - t * 0.35), t};
+    });
+    for (let i = 0; i < rings.length - 1; i++) {
+      const r0 = rings[i], r1 = rings[i + 1];
+      const ca: [number, number, number] = i === 0 ? cRoot : cMid;
+      const cb: [number, number, number] = i === 2 ? cEarBase : cMid;
+      for (const [ax, az] of [[px, pz], [dx, dz]] as const) {
+        const a0: [number, number, number] = [r0.x - ax * r0.w, r0.y, r0.z - az * r0.w];
+        const b0: [number, number, number] = [r0.x + ax * r0.w, r0.y, r0.z + az * r0.w];
+        const a1: [number, number, number] = [r1.x - ax * r1.w, r1.y, r1.z - az * r1.w];
+        const b1: [number, number, number] = [r1.x + ax * r1.w, r1.y, r1.z + az * r1.w];
+        pushTri(a0, b0, b1, r0.t, r0.t, r1.t, ca, ca, cb);
+        pushTri(a0, b1, a1, r0.t, r1.t, r1.t, ca, cb, cb);
+      }
+    }
+
+    // 2 graceful arching wheat leaves sprouting mid-stalk
+    for (const side of [-1, 1]) {
+      const base = rings[1];
+      const lx = dx * 0.4 + px * side * 0.9, lz = dz * 0.4 + pz * side * 0.9;
+      const ll = Math.hypot(lx, lz) || 1;
+      const nx = lx / ll, nz = lz / ll, tx = -nz, tz = nx;
+      const lBaseL: [number, number, number] = [base.x - tx * 0.018, base.y, base.z - tz * 0.018];
+      const lBaseR: [number, number, number] = [base.x + tx * 0.018, base.y, base.z + tz * 0.018];
+      const lMidL: [number, number, number] = [base.x + nx * 0.11 - tx * 0.014, base.y + 0.08, base.z + nz * 0.11 - tz * 0.014];
+      const lMidR: [number, number, number] = [base.x + nx * 0.11 + tx * 0.014, base.y + 0.08, base.z + nz * 0.11 + tz * 0.014];
+      const lTip: [number, number, number] = [base.x + nx * 0.22, base.y + 0.03, base.z + nz * 0.22];
+      pushTri(lBaseL, lBaseR, lMidR, 0.32, 0.32, 0.52, cRoot, cRoot, cLeaf);
+      pushTri(lBaseL, lMidR, lMidL, 0.32, 0.52, 0.52, cRoot, cLeaf, cLeaf);
+      pushTri(lMidL, lMidR, lTip, 0.52, 0.52, 0.62, cLeaf, cLeaf, cMid);
+    }
+
+    // Plump drooping golden wheat ear (6-sided bipyramid cluster at top of stalk)
+    const neck = rings[3];
+    const earMidX = neck.x + dx * 0.075, earMidY = neck.y + 0.095, earMidZ = neck.z + dz * 0.075;
+    const earTipX = neck.x + dx * 0.155, earTipY = neck.y + 0.135, earTipZ = neck.z + dz * 0.155;
+    const earR = 0.044;
+    const sides = 6;
+    const midPts: [number, number, number][] = [];
+    for (let k = 0; k < sides; k++) {
+      const a = (k / sides) * Math.PI * 2;
+      const ca = Math.cos(a) * earR, sa = Math.sin(a) * earR;
+      midPts.push([earMidX + px * ca + dx * sa * 0.45, earMidY + sa * 0.55, earMidZ + pz * ca + dz * sa * 0.45]);
+    }
+    const basePt: [number, number, number] = [neck.x, neck.y, neck.z];
+    const tipPt: [number, number, number] = [earTipX, earTipY, earTipZ];
+    for (let k = 0; k < sides; k++) {
+      const p0 = midPts[k], p1 = midPts[(k + 1) % sides];
+      pushTri(basePt, p0, p1, 0.84, 0.94, 0.94, cEarBase, cEarTip, cEarTip);
+      pushTri(p0, tipPt, p1, 0.94, 1.0, 0.94, cEarTip, cEarTip, cEarTip);
+    }
+  }
+
+  const geo = new T.BufferGeometry();
+  geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new T.Float32BufferAttribute(norm, 3));
+  geo.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+  geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+  return geo;
+}
+
+function buildInteractiveWheatField(z: ZoneContext) {
+  const {T} = z;
+  const U = z.ctx.U;
+  const spots: [number, number, number, number, number][] = [];
+  for (const [cx, cz] of [[-46, -13], [-57, -15], [-68, -16], [-79, -19]]) {
+    for (let row = 0; row < 8; row++) {
+      for (let hill = 0; hill < 15; hill++) {
+        const x = cx + (row - 3.5) * .74 + .13 * Math.sin(hill * .34);
+        const zz = cz + (hill - 7) * .54;
+        const y = inland(x, zz);
+        const yaw = Math.sin(row * 1.7 + hill * 2.3) * Math.PI;
+        const scale = 0.92 + 0.18 * Math.sin(hill * 0.9 + row * 1.3);
+        spots.push([x, y, zz, yaw, scale]);
+      }
+    }
+  }
+
+  const geo = buildInteractiveWheatGeometry(T);
+  const mat = new T.MeshStandardMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+    roughness: 0.80,
+    metalness: 0.0,
+    side: T.DoubleSide,
+  });
+
+  mat.onBeforeCompile = (shader: any) => {
+    shader.uniforms.uTime = U.uTime;
+    shader.uniforms.uWind = U.uWind ?? {value: 0.5};
+    shader.uniforms.uSlimePos = U.uSlimePos ?? {value: new T.Vector4(0, -99, 0, 0.6)};
+    shader.uniforms.uSunDir = U.uSunDir ?? {value: new T.Vector3(0.4, 0.7, 0.5)};
+    shader.uniforms.uSunColor = U.uSunColor ?? {value: new T.Color(0xfff1d5)};
+
+    shader.vertexShader =
+      `uniform float uTime, uWind;
+       uniform vec4 uSlimePos;
+       varying float vWheatTip;
+       varying float vWheatWave;
+       varying vec3 vWheatWorld;\n` +
+      shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vWheatTip = uv.y;
+        #ifdef USE_INSTANCING
+          vec3 instPos = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        #else
+          vec3 instPos = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        #endif
+        float bend = vWheatTip * vWheatTip;
+        float wCoord = dot(instPos.xz, vec2(0.16, 0.11)) - uTime * (1.45 + uWind * 1.2);
+        float wave = sin(wCoord) * 0.5 + 0.5;
+        vWheatWave = smoothstep(0.35, 0.92, wave);
+        float sway = (wave - 0.35) * (0.14 + 0.24 * uWind) * bend;
+        transformed.x += sway * 0.85;
+        transformed.z += sway * 0.48;
+        transformed.y -= abs(sway) * 0.22;
+
+        // Real-time parting & bowing around the slime (zero clipping through slime body!)
+        vec2 toStalk = instPos.xz - uSlimePos.xz;
+        float dSlime = length(toStalk);
+        float pushRad = uSlimePos.w + 0.82;
+        if (dSlime < pushRad && abs(instPos.y - uSlimePos.y) < 1.6) {
+          float push = 1.0 - dSlime / pushRad;
+          float push2 = push * push;
+          vec2 pushDir = dSlime > 0.01 ? toStalk / dSlime : vec2(1.0, 0.0);
+          // Transform world push direction into instance-local XZ so rotated clumps part outward accurately
+          #ifdef USE_INSTANCING
+            vec2 localPush = vec2(
+              dot(pushDir, normalize(instanceMatrix[0].xz)),
+              dot(pushDir, normalize(instanceMatrix[2].xz))
+            );
+          #else
+            vec2 localPush = pushDir;
+          #endif
+          transformed.xz += localPush * push2 * 0.82 * vWheatTip;
+          transformed.y *= 1.0 - push2 * 0.62 * vWheatTip;
+        }
+        #ifdef USE_INSTANCING
+          vWheatWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+        #else
+          vWheatWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        #endif`,
+      );
+
+    shader.fragmentShader =
+      `uniform vec3 uSunDir, uSunColor;
+       varying float vWheatTip;
+       varying float vWheatWave;
+       varying vec3 vWheatWorld;\n` +
+      shader.fragmentShader.replace(
+        '#include <lights_fragment_end>',
+        `#include <lights_fragment_end>
+        vec3 wV = normalize(cameraPosition - vWheatWorld);
+        vec3 wL = normalize(uSunDir);
+        float sunUp = smoothstep(-0.04, 0.12, wL.y);
+        float back = pow(max(dot(wV, -wL), 0.0), 2.2);
+        vec3 goldGlow = vec3(1.0, 0.84, 0.34);
+        reflectedLight.directDiffuse += goldGlow * (back * 0.42 + vWheatWave * 0.28) * smoothstep(0.45, 1.0, vWheatTip) * uSunColor * sunUp;`,
+      );
+  };
+  mat.customProgramCacheKey = () => 'interactive-wheat-field-v1';
+  climateMaterial(mat, 'terrain');
+
+  const mesh = new T.InstancedMesh(geo, mat, spots.length);
+  mesh.name = 'rice-wheat-field-fx';
+  mesh.userData.walkThrough = true;
+  mesh.userData.skipHeightBake = true;
+  const dummy = new T.Object3D(), tint = new T.Color();
+  spots.forEach(([x, y, zz, yaw, sc], i) => {
+    dummy.position.set(x, y - 0.02, zz);
+    dummy.rotation.set(0, yaw, 0);
+    dummy.scale.set(sc, sc, sc);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+    mesh.setColorAt(i, tint.setHSL(0.11 + (i % 7) * 0.004, 0.18, 0.94 + (i % 5) * 0.02));
+  });
+  mesh.castShadow = mesh.receiveShadow = true;
+  mesh.layers.set(1);
+  return mesh;
+}
+
 /** farm zone (starter content; see tasks/cards). */
 export const farm: ZoneBuilder = z => {
-  const {T} = z, root = new T.Group();
+  const {T} = z, root = new T.Group(), zoneBoxes: Box[] = [];
   // Repeated solid details share a draw call; all dimensions are in metres.
   type Block = {position: number[]; size: number[]; color: number; rz: number; rx: number; ry: number};
   const batches = new Map<string, Block[]>();
@@ -68,19 +302,7 @@ export const farm: ZoneBuilder = z => {
     const x = TERRACE.first - (k - .5) * TERRACE.width, zz = 8 + r * 6, plot = new T.Mesh(new T.BoxGeometry(7, .16, 4), soil); plot.name = 'farm-plot';
     const y = inland(x, zz) + .02; plot.position.set(x, y, zz); plot.receiveShadow = true; root.add(plot); plots.push({id: `farm-${k}-${r}`, x, z: zz, y: y + .08});
   }
-  // The standing rice sits on its own southern terraces, clear of all nine playable beds.
-  // Loose rows follow the contour and reveal the narrow paths between the fields.
-  for (const [cx, cz] of [[-46, -13], [-57, -15], [-68, -16], [-79, -19]]) {
-    for (let row = 0; row < 8; row++) for (let hill = 0; hill < 15; hill++) {
-      const x = cx + (row - 3.5) * .74 + .13 * Math.sin(hill * .34);
-      const zz = cz + (hill - 7) * .54, y = inland(x, zz);
-      for (let stem = 0; stem < 3; stem++) {
-        const offset = (stem - 1) * .1, height = .55 + .13 * Math.sin(hill + row * .6 + stem);
-        block('rice-stalks-fx', 0x87945d, x + offset, y + height / 2, zz, .04, height, .035, -offset);
-        round('round', stem === 1 ? 0xcbb46b : 0xb7a456, x + offset + .03, y + height, zz, .06, .14, .055, 0, -.46);
-      }
-    }
-  }
+  // Standing wheat/rice fields are built as live interactive InstancedMesh below (post-consolidate) so they sway & part around the slime!
   // Low bed frames leave the original crop coordinates and heights intact.
   for (const p of plots) {
     for (const side of [-1, 1]) {
@@ -103,6 +325,17 @@ export const farm: ZoneBuilder = z => {
   }
   // Rammed-earth courses, granite footings, timber lattice and a thick blue-tile roof.
   const bx = -77, bz = 15, by = inland(bx, bz);
+  zoneBoxes.push(
+    {name: 'farm-barn-wl', min: [bx - 2.86, by, bz - 3.15], max: [bx - 2.54, by + 3.05, bz + 3.15], camera: true},
+    {name: 'farm-barn-wr', min: [bx + 2.54, by, bz - 3.15], max: [bx + 2.86, by + 3.05, bz + 3.15], camera: true},
+    {name: 'farm-barn-wb', min: [bx - 2.85, by, bz - 3.16], max: [bx + 2.85, by + 3.05, bz - 2.84], camera: true},
+    {name: 'farm-barn-wfl', min: [bx - 2.85, by, bz + 2.84], max: [bx - 1.12, by + 3.05, bz + 3.16], camera: true},
+    {name: 'farm-barn-wfr', min: [bx + 1.12, by, bz + 2.84], max: [bx + 2.85, by + 3.05, bz + 3.16], camera: true},
+    {name: 'farm-barn-lintel', min: [bx - 1.15, by + 2.70, bz + 2.84], max: [bx + 1.15, by + 3.05, bz + 3.16], camera: true},
+    // Lightweight 2-tier gable roof matching actual eave-to-ridge slope (prevents hovering over eaves)
+    {name: 'farm-barn-roof-eave', min: [bx - 3.15, by + 3.02, bz - 3.60], max: [bx + 3.15, by + 3.70, bz + 3.60], camera: true},
+    {name: 'farm-barn-roof-ridge', min: [bx - 1.55, by + 3.68, bz - 3.60], max: [bx + 1.55, by + 4.46, bz + 3.60], camera: true},
+  );
   for (let row = 0; row < 10; row++) {
     const y = by + .15 + row * .3, color = row < 2 ? P.gravel : clay;
     for (let i = 0; i < 12; i++) for (const side of [-1, 1])
@@ -204,6 +437,10 @@ export const farm: ZoneBuilder = z => {
   const stall = {x: -35, z: -8};
   for (const dx of [0, 3]) {
     const x = stall.x + dx, y = inland(x, stall.z);
+    zoneBoxes.push(
+      {name: `farm-stall-counter-${dx}`, min: [x - 1.1, y, stall.z - .45], max: [x + 1.1, y + .98, stall.z + .45], camera: true},
+      {name: `farm-stall-roof-${dx}`, min: [x - 1.35, y + 2.10, stall.z - .72], max: [x + 1.35, y + 2.42, stall.z + 1.12], camera: true},
+    );
     block('stall-counter', wood, x, y + .9, stall.z, 2.2, .16, .9);
     for (const sx of [-.95, .95]) for (const dz of [-.35, .65]) block('stall-post', wood, x + sx, y + 1.1, stall.z + dz, .12, 2.2, .12);
     for (let i = 0; i < 8; i++) block('stall-front', wood, x - .96 + i * .275, y + .45, stall.z + .43, .24, .75, .08);
@@ -346,12 +583,16 @@ export const farm: ZoneBuilder = z => {
   consolidate(rooster, false);
   consolidate(root, true);
   atlasTexture.needsUpdate = true;
+  root.add(buildInteractiveWheatField(z));
   // Eight scenery submissions: solid, detail, signs, rooster, canopy and three grass batches.
   // farmLoop + critterField add at most 36 + 36, keeping the colour pass at 80 calls.
   const update = farmLoop(z, root, plots, {x: stall.x, z: stall.z + 1.4});
+  const farmNativeTrees = [[-76, 20, 1.05], [-51, 28.1, 1.05], [-86, -19, 1.05]] as const;
   root.add(tufts(z, 4500, {min: [-105, -30], max: [-31, 29]}, (x, zz) => pathDistance(x, zz) < 2.4 ||
-    plots.some(p => Math.abs(x - p.x) < 3.8 && Math.abs(zz - p.z) < 2.3) ||
+    plots.some(p => Math.abs(x - p.x) < 4.18 && Math.abs(zz - p.z) < 2.62) ||
+    treeSpots.some(([tx, tz, ts]) => Math.hypot(x - tx, zz - tz) < Math.max(0.82, ts * 0.58 + 0.38)) ||
+    farmNativeTrees.some(([tx, tz, r]) => Math.hypot(x - tx, zz - tz) < r) ||
     (Math.abs(x - bx) < 3.7 && zz > bz - 3.4 && zz < bz + 8.3)));
   const bugs = critterField(z, root, 'farm', plots.map(p => [p.x + 2, p.z - 1.4] as [number, number]));
-  return {root, update: (t, dt, p) => { update(t, dt, p); bugs(t, dt, p); rooster.rotation.y = .35 + Math.sin(t * .22) * .6; }};
+  return {root, boxes: zoneBoxes, update: (t, dt, p) => { update(t, dt, p); bugs(t, dt, p); rooster.rotation.y = .35 + Math.sin(t * .22) * .6; }};
 };

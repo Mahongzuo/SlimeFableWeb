@@ -52,14 +52,11 @@ const ui = new LevelUI({
   start: () => start(), resume: () => resume(), restart: () => location.reload(), home: () => goHome(),
 }, `${dayLabel(day)} · ${year}`);
 const ctx = {THREE, renderer: stage.renderer, scene: stage.scene, camera: stage.camera, sun: stage.sun, controls: stage.controls};
-const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, ui: false, trainingTargets: [], title: spec.title, onToast: () => {}, onReady: () => { if (state === 'intro') showIntro(); }}).attach();
+const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, ui: false, trainingTargets: [], title: spec.title, onToast: () => {}, onReady: () => { if (state === 'intro') start(); }}).attach();
 ui.bindCharacter(slime);
 applyLevelQuality(stage, slime, save.data.quality);
 (window as any).__slime = slime; (window as any).__level = {spec, layout, quest, check};
 stage.camera.position.set(-27.5, 8.5, 8); stage.camera.lookAt(-15, 1, 0);
-const steps = spec.quest.main.branches.map(b => b.label + (b.targets.length > 1 ? ` 0/${b.targets.length}` : ''));
-const showIntro = () => ui.intro(spec.title, spec.intro, steps, slime.ready);
-showIntro();
 ui.quest(quest.view());
 quest.onChange = (v, e) => {
   ui.quest(v);

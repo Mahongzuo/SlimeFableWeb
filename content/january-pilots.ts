@@ -12,26 +12,26 @@ export const januaryPilots: JanuaryStory[] = [
     "kind": "defense",
     "storyId": "rose-parade",
     "year": 1890,
-    "title": "让第一辆花车通过",
+    "title": "花车过弯",
     "fact": "1890 年 1 月 1 日，帕萨迪纳举行首届玫瑰游行。",
     "source": "https://tournamentofroses.com/about/about-rose-parade/",
     "layout": "温室→装花棚↱花街↰拱门",
-    "goal": "护送花车到达花拱门",
-    "choice": "水塔集中冲散近处的花粉，风塔沿街覆盖更长；马车前进后将塔迁到下个弯道。",
+    "goal": "护住过弯的车尾，与分身一同拉开花拱门",
+    "choice": "看缎带预判来风，守住车尾后再把塔迁到前街。",
     "souvenir": "首届花车花签",
-    "memory": "打开双扇花拱，让马车完整通过。"
+    "memory": "你和分身拉住两侧绳轮，花拱在马车前缓缓打开。"
   },
   {
     "day": "0101",
     "kind": "skirmish",
     "storyId": "tampa-flight",
     "year": 1914,
-    "title": "坦帕湾的第一班",
+    "title": "离水之前",
     "fact": "1914 年 1 月 1 日，圣彼得堡至坦帕的定期客运航线开航。",
-    "source": "https://airandspace.si.edu/stories/editorial/early-airlines-you-might-not-have-heard",
+    "source": "https://airandspace.si.edu/stories/editorial/Benoist_no43_model_conservation",
     "layout": "栈桥→浮台／船棚高廊→放行铃",
     "goal": "打通湾岸风标后放行飞机",
-    "choice": "近岸通道的浮标便于回收，高廊把三处移动风向靶纳入同一视线。",
+    "choice": "在浮台就近回收分身，或从船棚高廊躲过信号球，锁住下一座风标。",
     "souvenir": "首航空邮签",
     "memory": "激活最后一座放行铃，双翼机沿水面滑行、抬头离水。"
   },
@@ -40,14 +40,14 @@ export const januaryPilots: JanuaryStory[] = [
     "kind": "rpg",
     "storyId": "winter-classic",
     "year": 2008,
-    "title": "冰场最后一轮",
+    "title": "门将先动了",
     "fact": "2008 年 1 月 1 日，冬季经典赛中，匹兹堡队在决胜射门后以 2 比 1 获胜。",
     "source": "https://records.nhl.com/events/outdoor-games",
     "layout": "球员通道→热身圈→左翼滑行／右翼格挡→门前→庆祝灯",
     "goal": "热身、选择球路并完成决胜射门",
-    "choice": "滑过蓝线热身；选风步缩短换位时间或格挡延长出手窗口；观察门将预移，避开扑救并射向空侧。",
+    "choice": "用风步换侧，或以格挡稳球。看门将转肩、移刃，在扑救前把球送向空侧。",
     "souvenir": "冰纹决胜球票",
-    "memory": "压亮终场球灯。"
+    "memory": "冰球兜进球网，门后的球灯随即亮起。"
   },
   {
     "day": "0102",
@@ -57,11 +57,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "两片海面同时开航",
     "fact": "2001 年 1 月 2 日，马祖至马尾、金门至厦门的客轮分别直航。",
     "source": "https://www.fjtb.gov.cn/history/201308/t20130814_4617724_3.htm",
-    "layout": "马祖→马尾 ∥ 金门→厦门",
-    "goal": "以两侧抵港灯同时亮起合成对开船票",
-    "choice": "把雾灯部署在同一港的连续浮标上可连成导航带，分开放可同时照应两船；水属性移开绕港潮纹。",
+    "layout": "马祖航道 → 金门航道 → 双港灯口",
+    "goal": "点亮双港灯",
+    "choice": "蓝角票和铜角票来自不同码头。按一次会收下当前一船的票，再等另一色的队伍出现，第二次按键才能让两艘船会航。同色仍会在原码头排队。",
     "souvenir": "双线船票",
-    "memory": "以两侧抵港灯同时亮起合成对开船票。"
+    "memory": "双岸放下舷桥，两张船票成了一对。"
   },
   {
     "day": "0102",
@@ -71,11 +71,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "海地展馆的回声",
     "fact": "1893 年 1 月 2 日，道格拉斯在芝加哥世界博览会海地展馆的落成典礼上致辞。",
     "source": "https://www.loc.gov/item/today-in-history/january-02/",
-    "layout": "讲台◎→扇形座区→远廊",
-    "goal": "合上最后一个句点，镜头从讲台摇到听众席",
-    "choice": "在讲台旁连起三枚字粒，让首排泛起波纹。横消把语句传遍一排，竖消越过空席把话送到后排。",
+    "layout": "讲台、扇形座区、远廊木百叶",
+    "goal": "让回声越过空席，传到高廊最后一排木叶",
+    "choice": "先让讲台金框泛起第一道回声。在空席两侧，近席的横纹要横消，远席的竖纹要竖消；末段先转近侧木叶，再将余声送进远廊。",
     "souvenir": "回声节目页",
-    "memory": "合上最后一个句点，镜头从讲台摇到听众席。"
+    "memory": "你翻开远廊的最后一片木叶。"
   },
   {
     "day": "0102",
@@ -85,11 +85,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "把彗尘接进网格",
     "fact": "2004 年 1 月 2 日，星尘号近距离飞过维尔德二号彗星。",
     "source": "https://www.jpl.nasa.gov/news/nasa-spacecraft-makes-great-catchheads-for-touchdown/",
-    "layout": "采样格背面→折叠支架→彗核剪影前",
-    "goal": "手动合拢采样板，显示自己的颗粒轨迹",
-    "choice": "搭外框打分散的稀尘靶，或在中央等高速密集尘束穿窗。",
+    "layout": "试样格 → 外框稀尘格 → 密尘窗 → 闭合闩",
+    "goal": "手动闭合采样框，网格留住了两条颗粒轨迹",
+    "choice": "从左格起手，留着分身沿两处金环收稀尘；或先投右格，把分身留在密尘窗，等金区亮起按 X 带回颗粒。再投对侧格。",
     "souvenir": "彗尘格窗",
-    "memory": "手动合拢采样板，显示自己的颗粒轨迹。"
+    "memory": "手动闭合采样框，网格留住了两条颗粒轨迹。"
   },
   {
     "day": "0102",
@@ -99,11 +99,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "时间归零前的三分",
     "fact": "2017 年 1 月 2 日，玫瑰碗，南加州大学以 52 比 49 胜宾州州立大学。",
     "source": "https://usctrojans.com/game-center/3538",
-    "layout": "隧道→散列线→长踢台／传接道→门柱",
-    "goal": "让终场球飞过横梁",
-    "choice": "先弹跳压住球座；选择提前远踢或承担丢球风险推进。守靶挥臂后有短暂空档。",
+    "layout": "近侧摆球 → 斜线摆球 → 终场摆球",
+    "goal": "翻起终场三分的记分牌",
+    "choice": "在球架金环按 J 摆球。推进路线先带球走过接应线的金环；远踢可直接去踢球点。到球点看门柱和风带，指针接近中央、投影落进双柱时按 J 踢。",
     "souvenir": "双叉门柱徽针",
-    "memory": "让终场球飞过横梁。"
+    "memory": "翻起终场三分的记分牌。"
   },
   {
     "day": "0103",
@@ -113,11 +113,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "守住月背着陆窗",
     "fact": "2019 年 1 月 3 日，嫦娥四号在月背冯·卡门撞击坑软着陆。",
     "source": "https://www.cnsa.gov.cn/n6758823/n6758838/c6807583/content.html",
-    "layout": "坑缘↘三处悬停点↙着陆椭圆",
-    "goal": "在最后一个平坦候选区点下着陆",
-    "choice": "留分身持续照亮边缘或回收后补盲区；低处短距回波与高处扇扫覆盖随悬停段切换。",
+    "layout": "坑缘测区 → 悬停中段 → 着陆椭圆",
+    "goal": "点下软着陆",
+    "choice": "远距风塔先标出带金环的中继回音。把塔移到途经的坑缘；等金环进入路上两道铜标之间，再开着陆窗接收。过窗可改接随后回音。",
     "souvenir": "坑底测距片",
-    "memory": "在最后一个平坦候选区点下着陆。"
+    "memory": "最后一声回波进入接收窗，着陆器在沙盘落稳。"
   },
   {
     "day": "0103",
@@ -127,11 +127,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "把极光接成翅膀",
     "fact": "2021 年 1 月 3 日，NASA 的每日天文图刊出冰岛上空形似凤凰的极光影像。日期为刊出日。",
     "source": "https://science.nasa.gov/image-article/apod-2021-january-3-a-phoenix-aurora-over-iceland/",
-    "layout": "左翼↙中轴◎右翼↘",
-    "goal": "交换最后一对让光帘与水中倒影相接",
-    "choice": "在中央轴做一次横消，湖面映出半条光带。在左翼蓄纵纹，或跨中轴同回合接亮两翼。",
+    "layout": "极光穹顶、湖岸双翼、倒影取景器",
+    "goal": "把西翼和东翼的光接进湖中，再对齐倒影曝光",
+    "choice": "西翼收绿色风凝露，东翼收紫色雷凝露。中段任选一翼先亮，湖面最后一对倒影的左右配色随起手镜像。虹彩棋与条纹棋仍可帮助连通。",
     "souvenir": "双翼极光片",
-    "memory": "交换最后一对让光帘与水中倒影相接。"
+    "memory": "倒影与光带相接，湖心留下双色极光。"
   },
   {
     "day": "0103",
@@ -141,11 +141,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "海湾上缺的一角",
     "fact": "1959 年 1 月 3 日，阿拉斯加成为美国一个州。",
     "source": "https://www.nps.gov/people/first-territorial-legislature-of-alaska.htm",
-    "layout": "印图棚→海湾两岸→长条群岛桌",
-    "goal": "转动版辊，印出群岛轮廓",
-    "choice": "近岛能够连续回收，远岛打亮后可截住逆行的墨滴。",
+    "layout": "试墨木版 → 近岛墨台 → 远岛版架 → 拓印版辊",
+    "goal": "压辊滚过纸面，补齐海湾的群岛轮廓",
+    "choice": "先投左岛，按 X 收回蘸墨的分身，走入海湾的缺口金环等墨色压实，再投右岛。先投右岛则要穿过两处小岛的金环，用留守分身挡住逆行的墨滴。",
     "souvenir": "群岛压纹片",
-    "memory": "转动版辊，印出群岛轮廓。"
+    "memory": "压辊滚过纸面，补齐海湾的群岛轮廓。"
   },
   {
     "day": "0103",
@@ -155,11 +155,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "纸带螺旋工场",
     "fact": "1888 年 1 月 3 日，马文·斯通取得人造吸管专利。",
     "source": "https://patents.google.com/patent/US375962A/en",
-    "layout": "纸库→卷轴心→内螺线／外涂层→定形轮",
-    "goal": "压合成品纸管",
-    "choice": "贴圆壁绕一圈上手；内线以摊开穿轴心、外线用分身拖紧张力。对付进退反转的卷纸机关。",
+    "layout": "第一道起缝 → 中段接缝 → 收口纸边",
+    "goal": "拉出模芯，让螺旋纸管脱模",
+    "choice": "到纸架按 J 夹住纸头。内线在模芯的三处金环摊开滚过；外线按 J 留一团真分身拉住纸头，再沿三处金环绕模。走完这一圈到终端按 J 合缝。",
     "souvenir": "螺纹纸样",
-    "memory": "压合成品纸管。"
+    "memory": "拉出模芯，让螺旋纸管脱模。"
   },
   {
     "day": "0104",
@@ -169,11 +169,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "六点的阅读室",
     "fact": "2019 年，联合国首次正式纪念 1 月 4 日世界盲文日。",
     "source": "https://www.un.org/development/desa/disabilities/news/news/first-ever-world-braille-day.html",
-    "layout": "排字台→两列三行点阵→装订口",
-    "goal": "手推压印滚筒，在纸卡留下可见的凸点",
-    "choice": "用分身守住高频点列或把凝露摊开覆盖相邻两点，按送页先后切换压印台。",
+    "layout": "排字台 → 六点阵区 → 装订压口",
+    "goal": "手推压印辊",
+    "choice": "近台接下一页时给它压出凸点。等一张带点的页盘和一张空盘同时在场，按键便把两盘按左右列拼成一张触读卡。只剩同类页盘时等下一盘。",
     "souvenir": "凸点阅读卡",
-    "memory": "手推压印滚筒，在纸卡留下可见的凸点。"
+    "memory": "左右两列字模压上纸面，触读卡从辊下出来。"
   },
   {
     "day": "0104",
@@ -183,11 +183,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "让藤尖找到藤架",
     "fact": "1973 年 1 月 4 日，MoMA 记录玛丽亚·马丁斯《Like a Vine》入藏。",
     "source": "https://www.moma.org/collection/works/9559",
-    "layout": "根座↑左叉↗上棚↘右叉",
-    "goal": "藤尖碰到上棚，抬起压毡揭出枝纹",
-    "choice": "从根座起消一次，看藤尖选择相邻空格。沿短叉快速到顶，或让两侧藤尖先缠过横杆。",
+    "layout": "木棚根节、左右藤叉、上棚拓纸夹",
+    "goal": "接通两支藤叉，从根节到藤尖拓下枝纹",
+    "choice": "中段任选藤叉先接，先开的叉会改变上棚的纹路。左叉先行时，末段先横消再竖消；右叉先行则方向相反。两枝都抵顶，才可揭下枝纹。",
     "souvenir": "藤尖压印",
-    "memory": "藤尖碰到上棚，抬起压毡揭出枝纹。"
+    "memory": "藤尖抵住木棚，你将分叉枝纹收在纸上。"
   },
   {
     "day": "0104",
@@ -197,11 +197,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "气囊松开以后",
     "fact": "2004 年 1 月 4 日（UTC），勇气号火星车在古瑟夫撞击坑平原着陆。",
     "source": "https://ntrs.nasa.gov/api/citations/20080026038/downloads/20080026038.pdf",
-    "layout": "折起的花瓣板→岩垄两侧→坡底车辙站",
-    "goal": "按下展开柄，六轮模型沿坡道驶下",
-    "choice": "走岩脊能隔石命中远标，沿岩缝摊开可回收被挡住的分身。",
+    "layout": "花瓣试扣 → 岩缝气囊扣 → 岩脊模型标 → 坡板拉柄",
+    "goal": "坡板放下，六轮展车慢慢滚出外罩",
+    "choice": "先投左侧气囊扣，走进两处岩缝的金环，把外罩松开；或先投右侧岩脊标，在中央托架的金环停稳。投另一侧解开坡板。",
     "souvenir": "展开花瓣销",
-    "memory": "按下展开柄，六轮模型沿坡道驶下。"
+    "memory": "坡板放下，六轮展车慢慢滚出外罩。"
   },
   {
     "day": "0104",
@@ -211,11 +211,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "奔星前的弧浪",
     "fact": "2024 年 1 月 4 日，NASA 每日天文图刊出蛇夫座ζ星图像。",
     "source": "https://apod.nasa.gov/apod/ap240104.html",
-    "layout": "星点→弧面→背风凹口／迎风坡→观测环",
-    "goal": "闭合弧形发光轮廓",
-    "choice": "用弹跳试过第一道弧；蓄力贴壁绕波或用盾穿过亮边，击中只在波谷现身的光核。",
+    "layout": "迎风弧头 → 转侧弧肩 → 渐隐弧尾",
+    "goal": "合上星图夹，把三段亮弧拓在一起",
+    "choice": "在光核座按 J 取片。绕波路线经过弧边两个金环；护盾路线在中央亮边摊开，挡住光流直到槽满。走到末端，在风带回落、游标处于低谷时按 J 拓印。",
     "souvenir": "弧浪描图",
-    "memory": "闭合弧形发光轮廓。"
+    "memory": "合上星图夹，把三段亮弧拓在一起。"
   },
   {
     "day": "0105",
@@ -225,11 +225,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "冰灯亮起的那条巷",
     "fact": "1985 年，哈尔滨把 1 月 5 日定为冰雪节。",
     "source": "https://www.hrbdag.org.cn/hbfm/hbsh/2013/04/11053.html",
-    "layout": "采冰口→锯冰棚↙冰灯巷↗冰门",
-    "goal": "沿玩家保住的冰灯逐盏送光，点亮冰门",
-    "choice": "风塔引导冷风穿长巷，短距结冰塔能守住近处薄壁；根据日照面的变化移动塔位。",
+    "layout": "采冰口 → 锯冰棚 → 透光冰门",
+    "goal": "点亮透光冰门",
+    "choice": "最后选择的单号塔位守蓝色冷罩，双号守金色暖罩。趁同色灯罩进巷时按键。下一次换岸可把另一色接到对面的灯座。",
     "souvenir": "透光冰灯片",
-    "memory": "沿玩家保住的冰灯逐盏送光，点亮冰门。"
+    "memory": "蓝罩和金罩装稳后，街口灯绳点亮整条冰巷。"
   },
   {
     "day": "0105",
@@ -239,11 +239,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "转角长窗",
     "fact": "1971 年 1 月 5 日，MoMA 记录贝伦尼斯·阿博特拍摄史达列特–利哈伊大楼的照片入藏。",
     "source": "https://www.moma.org/collection/works/44058",
-    "layout": "窗格带→转角↱下一层窗带",
-    "goal": "合拢底片夹，看长窗在两面立面接成一条线",
-    "choice": "消去一组亮窗，把底片推进到转角。在转角生成横纹以跨面，或用纵纹叠出更深的楼层。",
+    "layout": "街角模型、正面横窗、侧面竖窗、暗房",
+    "goal": "跨过转角把玻璃长窗拼进同一张照片",
+    "choice": "中段长窗正面接横向连消，折到侧面的窗带接竖向连消，两面均可先行。一手产生两向连消同样能跨过转角。最后通过两只取景框把四层窗拼齐。",
     "souvenir": "转角接触印相",
-    "memory": "合拢底片夹，看长窗在两面立面接成一条线。"
+    "memory": "两面窗框在墙角接合，照片上出现完整的街角。"
   },
   {
     "day": "0105",
@@ -253,11 +253,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "在星图间眨一次眼",
     "fact": "2005 年，布朗团队重新分析早先的图像，在 1 月 5 日辨认出后来命名为阋神星的天体。",
     "source": "https://web.gps.caltech.edu/~mbrown/planetlila/",
-    "layout": "三张星图夹→交替灯窗→坐标印台",
-    "goal": "锁上坐标格，三次位置在灯箱连成短弧",
-    "choice": "切换底片追踪小位移，或留下分身守住参考星后自己跑到另一片。",
+    "layout": "参考星 → 左底片夹 → 右叠片窗 → 坐标锁",
+    "goal": "三次星位连成短弧，坐标窗锁住了差异",
+    "choice": "先投左底片夹，留住参考星，依次走过两处观测金环，再投右片；或先投右片，走进中央观察孔，等明暗交替到金区按 X 带回位移，再投左片。",
     "souvenir": "星点刻度窗",
-    "memory": "锁上坐标格，三次位置在灯箱连成短弧。"
+    "memory": "三次星位连成短弧，坐标窗锁住了差异。"
   },
   {
     "day": "0105",
@@ -267,11 +267,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "雪原上的仪器舱",
     "fact": "2024 年中国南极科考队员以 1 月 5 日署期在昆仑站写下《天然试验场》日记。",
     "source": "https://niaot.cas.cn/kxcb/njkk/40kk_203007/202405/t20240513_7158712.html",
-    "layout": "雪门→杆标→仪器舱／背风坡→天文台",
-    "goal": "升起寻星镜罩",
-    "choice": "在标杆旁摊开避风；走屋顶校风或沿雪槽修舱，最后与虚构的旋风机关较量，攻其每次停转时暴露的轴心。",
+    "layout": "西侧舱脚 → 迎风舱脚 → 观测窗底座",
+    "goal": "亲手升起寻星罩，在日记上留下一排水平记号",
+    "choice": "在舱脚按 J 展开水平仪。走入金环后左右微移，看气泡向中央退回。雪槽路线摊开稳住，屋顶路线等阵风变弱；气泡居中且稳定槽满后按 J 锁脚，再到终端按 J 登记。",
     "souvenir": "昆仑观测札",
-    "memory": "升起寻星镜罩。"
+    "memory": "亲手升起寻星罩，在日记上留下一排水平记号。"
   },
   {
     "day": "0106",
@@ -281,11 +281,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "给第四十七颗星留一格",
     "fact": "1912 年 1 月 6 日，新墨西哥成为美国第 47 个州。",
     "source": "https://guides.loc.gov/chronicling-america-southwest-territories",
-    "layout": "印报房→装袋口⇄两路邮驿→公告栏",
-    "goal": "压出第 47 枚星印，贴上发行号",
-    "choice": "窄道快车只能收一袋，主道慢车可收整批；用风塔把卷起的地图送进正确邮格。",
+    "layout": "印报房 → 双路邮驿 → 公告栏",
+    "goal": "压出第四十七星",
+    "choice": "红角是快车带来的版片，要在前半段盖戳；青角的是慢车，要等过中心线才接。两色同时合时可一起送入公告栏。",
     "souvenir": "邮驿星印",
-    "memory": "压出第 47 枚星印，贴上发行号。"
+    "memory": "公告板上的第四十七格。"
   },
   {
     "day": "0106",
@@ -295,11 +295,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "拼回海岸线",
     "fact": "1912 年 1 月 6 日，魏格纳在法兰克福地质协会会议上讲述海洋和大陆的形成。",
     "source": "https://www.awi.de/en/about-us/organisation/alfred-wegener.html",
-    "layout": "西岸）⇄（东岸；中间留海槽",
-    "goal": "将最后一对缺口对上，举起拼合示意板",
-    "choice": "消去两岸间一条水带，观看轮廓靠近。多消一列能缩短距离，也可能挤走尚未对齐的海湾。",
+    "layout": "左半球 → 纵向校正 → 拼板锁",
+    "goal": "让海岸线对到同一条参照上",
+    "choice": "中段先横移西岸，再纵向校正东岸。末段的拼口按相同次序合拢，错方向只消棋子，海岸会保留。",
     "souvenir": "海岸拼片",
-    "memory": "将最后一对缺口对上，举起拼合示意板。"
+    "memory": "右半片拼上后，两侧海湾咬合在同一条轮廓上。"
   },
   {
     "day": "0106",
@@ -309,11 +309,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "红沙的斑马纹",
     "fact": "2021 年，NASA 的每日天文图于 1 月 6 日刊出火星条纹沙丘照片。",
     "source": "https://apod.nasa.gov/apod/ap210106.html",
-    "layout": "沙纹投影台→脊顶／沟槽→俯拍框",
-    "goal": "拉开俯拍框，刚才走过的地形还原为俯视纹理",
-    "choice": "越脊可截住长条移动影靶，留在沟槽能回收阴影内的分身。",
+    "layout": "试砂圆盘 → 亮面砂槽 → 阴面砂槽 → 压尺闩",
+    "goal": "纹理尺降到砂槽上，亮脊和暗沟一起显出来",
+    "choice": "左边先取亮砂时，留分身守尺，依次绕过坡脚和背坡两只金环。右边先取暗砂时，站到中央窥砂窗，等游标进入金区再按 X 取回样光。再投另一侧。",
     "souvenir": "斑纹底片",
-    "memory": "拉开俯拍框，刚才走过的地形还原为俯视纹理。"
+    "memory": "纹理尺降到砂槽上，亮脊和暗沟一起显出来。"
   },
   {
     "day": "0106",
@@ -323,11 +323,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "彗核上的雪影",
     "fact": "2024 年 1 月 6 日，NASA 每日天文图刊出以丘留莫夫－格拉西缅科彗星为题的影像。",
     "source": "https://apod.nasa.gov/apod/ap240106.html",
-    "layout": "镜框→双叶谷→低重力脊／阴影沟→镜筒",
-    "goal": "把运动帧接回放映轮",
-    "choice": "练低重力弹跳；暗沟用分身标落点，山脊依轨迹闪避粒子灵。瞄准后它会滑离原位。",
+    "layout": "迎光岩肩 → 暗侧凹面 → 尘束末梢",
+    "goal": "翻起底片，让彗核与浮尘现出剪影",
+    "choice": "到每段片架按 J 取一张底片。背光路绕过两枚遮光环；压台路在取景环摊开 C，把读数槽稳到满。到终端，等游标进入蓝色低光区按 J 曝光。",
     "souvenir": "彗核动影带",
-    "memory": "把运动帧接回放映轮。"
+    "memory": "翻起底片，让彗核与浮尘现出剪影。"
   },
   {
     "day": "0107",
@@ -337,11 +337,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "海峡上空的风袋",
     "fact": "1785 年 1 月 7 日，布朗夏尔与杰弗里斯乘气球从多佛横越英吉利海峡，抵达加来。",
     "source": "https://www.si.edu/object/archives/sova-nasm-xxxx-0995",
-    "layout": "白崖↑低风带⇄高风带↓法国岸",
-    "goal": "从吊篮放下降落绳，接住岸上的回绳",
-    "choice": "从高空绕过逆风能省一次调整，低空则能回收海面浮球；水塔和风塔保护不同高度的航路。",
+    "layout": "多佛白崖 → 海峡风带 → 加来海岸",
+    "goal": "放下着陆绳，让气球落在对岸",
+    "choice": "风塔先给风涡圈上金边。选择单号位时在航程前半段吹开金环，选择双号位时等它过中心线再吹。",
     "souvenir": "海峡风带带结",
-    "memory": "从吊篮放下降落绳，接住岸上的回绳。"
+    "memory": "气球飞抵加来，着陆绳从吊篮边垂了下来。"
   },
   {
     "day": "0107",
@@ -351,11 +351,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "从河上望见卢克索",
     "fact": "1970 年 1 月 7 日，MoMA 记录《Luxor from the River》摄影作品入藏。",
     "source": "https://www.moma.org/collection/works/140583",
-    "layout": "南岸↑河心浮位↑北岸；取景框⇆",
-    "goal": "按下棋盘快门，让倒影和柱头同框",
-    "choice": "横消移动取景框，让一根柱影落入框内。顺流连消省步，逆流侧移能收齐远处柱影。",
+    "layout": "上游窗架 → 岸柱或舟影 → 下游框",
+    "goal": "先选择入窗的景物，再带船窗掠过柱廊",
+    "choice": "中段两个框可任选一个，让石柱或小舟先入取景窗。末段首框按所选方向横移或纵移，再接另一框。",
     "souvenir": "河岸方底片",
-    "memory": "按下棋盘快门，让倒影和柱头同框。"
+    "memory": "两岸的柱影与行舟留在一张取景框内。"
   },
   {
     "day": "0107",
@@ -365,11 +365,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "木星旁边的灯",
     "fact": "1610 年，伽利略在 1 月 7 日开始记录木星附近星点的位置。",
     "source": "https://science.nasa.gov/earth/earth-observatory/planetary-motion/",
-    "layout": "屋顶梯→三条视轴→观测簿",
-    "goal": "合拢镜架，玩家点过的位置印入自己的观测簿",
-    "choice": "守一条窄视轴等待亮点经过，或跨屋脊切换视轴。",
+    "layout": "校准座 → 长筒镜座 → 短筒目镜 → 轨迹架",
+    "goal": "折合的星位边框沿铜轴立起，木星旁出现一列卫星轨迹",
+    "choice": "先投左侧望远镜，在中间的金环留住分身，等两次亮点入窗。先投右侧目镜则保留分身，从近月点走到远月点，各等一次入窗。两种路线最后都要投对侧。",
     "souvenir": "木星观测纸页",
-    "memory": "合拢镜架，玩家点过的位置印入自己的观测簿。"
+    "memory": "折合的星位边框沿铜轴立起，木星旁出现一列卫星轨迹。"
   },
   {
     "day": "0107",
@@ -379,11 +379,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "猫眼的第二层光",
     "fact": "2024 年 1 月 7 日，每日天文图刊出猫眼星云光学与 X 射线图像。",
     "source": "https://apod.nasa.gov/apod/ap240107.html",
-    "layout": "光谱台→外弧→双波段窄门→内壳",
-    "goal": "点亮双波段猫眼",
-    "choice": "先切属性打开滤镜；外圈目标可贴壁绕行，内圈要同步分身才能让两种波段重合。",
+    "layout": "内圈亮边 → 外圈暗纹 → 双环切点",
+    "goal": "推动合页，使两层光环在猫眼镜片上重合",
+    "choice": "在片架按 J。遮光路线在两处内圈预定点摊开；扫描路线依次走过外圈三处光环，第二环等高光入窗。到终端时两片光环要对齐才可按 J 锁定。",
     "souvenir": "双色透镜",
-    "memory": "点亮双波段猫眼。"
+    "memory": "推动合页，使两层光环在猫眼镜片上重合。"
   },
   {
     "day": "0108",
@@ -393,11 +393,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "卡孔响过读数台",
     "fact": "1889 年 1 月 8 日，霍勒里斯取得其统计制表方法的美国专利。",
     "source": "https://cdn.www.census.gov/about/history/stories/monthly/2026/january-2026.html",
-    "layout": "卡片仓→分流栅↘插针台↗计数盘",
-    "goal": "合下总柄，看实际处理张数逐位进位",
-    "choice": "连续卡型用固定读头更快，混排卡型需雷塔切换脉冲；积压时决定暂停哪一支。",
+    "layout": "卡片仓 → 分流插针台 → 计数盘",
+    "goal": "合下计数总柄",
+    "choice": "蓝卡须有近台的金色读数标记，赭卡须保持原色。两种卡同时在场才可比对。",
     "souvenir": "穿孔统计卡",
-    "memory": "合下总柄，看实际处理张数逐位进位。"
+    "memory": "拨开读数窗。"
   },
   {
     "day": "0108",
@@ -407,11 +407,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "第一把吉他",
     "fact": "1946 年 1 月 8 日，埃尔维斯·普雷斯利在十一岁生日收到从图珀洛五金店买来的第一把吉他。",
     "source": "https://www.graceland.com/elvis-faq",
-    "layout": "琴头◎六弦平行↓音孔○",
-    "goal": "让最后一弦归位，亲手触发一记和弦",
-    "choice": "沿一根弦做纵消，看弦钮转一次。横消同时拨多根弦，纵消可精调走音的一根。",
+    "layout": "木案 → 两路试弦 → 琴桥",
+    "goal": "接通高音弦和低音弦，再对准琴码试音",
+    "choice": "中段低音横向接棕色物凝露，高音纵向接绿色风凝露。两种都入框以后，末段仍要按刻纹复调，然后对准弦桥。",
     "souvenir": "纸包拨片",
-    "memory": "让最后一弦归位，亲手触发一记和弦。"
+    "memory": "琴桥两道刻痕重叠，试弦上的纹路同时亮起。"
   },
   {
     "day": "0108",
@@ -421,11 +421,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "旋臂上的灯",
     "fact": "2021 年，每日天文图于 1 月 8 日刊出 NGC 1365 星系的图像。",
     "source": "https://apod.nasa.gov/apod/ap210108.html",
-    "layout": "棒心→内外两条旋臂→成像环",
-    "goal": "转动成像环，把完整棒旋结构收入视野",
-    "choice": "顺内臂回收速度快，张开的外臂能同时瞄见两颗不同步闪烁的星结。",
+    "layout": "曝光座 → 内弧底片 → 外缘底片 → 旋臂展开扣",
+    "goal": "旋臂投影盘展开，光点在两条旋臂上由内向外接亮",
+    "choice": "先投左侧内弧底片时，沿紧凑的三个金环依次走过。先投右侧外缘底片时，沿外沿两处金环定位，各等一次金区。确认后投另一条旋臂。",
     "souvenir": "旋臂印相片",
-    "memory": "转动成像环，把完整棒旋结构收入视野。"
+    "memory": "旋臂投影盘展开，光点在两条旋臂上由内向外接亮。"
   },
   {
     "day": "0108",
@@ -435,11 +435,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "粉笔画出的边界",
     "fact": "1942 年 1 月 8 日，物理学家斯蒂芬·霍金在牛津出生。",
     "source": "https://www.cam.ac.uk/stories/stephen-hawking",
-    "layout": "讲台→粉笔斜面→外圈书阶／中心漏斗→黑板",
-    "goal": "补完黑板上的最后一弧",
-    "choice": "试跳到第一道等高线；外圈逐步蓄势或在漏斗中以分身接力，把滚动的虚构引力球引回中心。",
+    "layout": "短断弧 → 偏心弧 → 闭合边界",
+    "goal": "拉下黑板边的收笔线，补出最后一截粉笔弧",
+    "choice": "从粉笔盒取笔 J。内弧线依次经过三处金环，第二环收身后的跳跃高度会帮助越过低尺；借力线按住 C，把分叉的两道粉线压到同一刻尺上。最后到终端按 J。",
     "souvenir": "粉笔轨道签",
-    "memory": "补完黑板上的最后一弧。"
+    "memory": "拉下黑板边的收笔线，补出最后一截粉笔弧。"
   },
   {
     "day": "0109",
@@ -449,11 +449,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "三条信号同台",
     "fact": "2007 年 1 月 9 日，苹果公开介绍初代 iPhone。",
     "source": "https://www.apple.com/newsroom/2007/01/09Apple-Reinvents-the-Phone-with-iPhone/",
-    "layout": "音频口↘通话口→合流屏←网页口",
-    "goal": "亲手滑过三段顺畅演示，点亮终场屏",
-    "choice": "风塔可把同类包送入缓存，分身可占住传输口；熄灭闲置路径能把容量让给下一段演示。",
+    "layout": "音频通道 → 通话通道 → 合流演示屏",
+    "goal": "滑亮终场屏",
+    "choice": "依次收蓝色音轨、金色通话、绿色网页。前两路小灯锁住后第三路才会并入；漏掉可等同色的下一包。",
     "souvenir": "首演滑条",
-    "memory": "亲手滑过三段顺畅演示，点亮终场屏。"
+    "memory": "三路信号归屏。"
   },
   {
     "day": "0109",
@@ -463,11 +463,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "穿过纸带的结",
     "fact": "1986 年 1 月 9 日，MoMA 记录比尔·詹森《Ribbons》入藏。",
     "source": "https://www.moma.org/collection/works/59783",
-    "layout": "纸带甲↘╳↗纸带乙；夹口在两端",
-    "goal": "将两条色带的末端搭进晾印夹，灯下显出套色",
-    "choice": "横移上层纸带，让第一个交叉点显色。先追一个长环的连锁，或逐个转动交点解开结。",
+    "layout": "织带口 → 横纵折口 → 翻面 → 结头",
+    "goal": "按折口方向穿过两条纸带，再将交结拉紧",
+    "choice": "第二段先沿横纹穿纸带，随后沿竖纹接住纵带。末段翻面，先纵再横。目标框旁的箭头指的是连成一排的方向。",
     "souvenir": "交错纸带条",
-    "memory": "将两条色带的末端搭进晾印夹，灯下显出套色。"
+    "memory": "翻过折页，两道纸带在桌上留下接好的结。"
   },
   {
     "day": "0109",
@@ -477,11 +477,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "越过费城的屋檐",
     "fact": "1793 年 1 月 9 日，布朗夏尔从费城乘气球升空。",
     "source": "https://www.nps.gov/parkhistory/online_books/inde/washington_square_clr.pdf",
-    "layout": "放球院→屋顶观测圈→风向台",
-    "goal": "放开最后一根系绳，气球越过街区",
-    "choice": "低路对气流靶逐个拨正，高路可以提前截住远侧回旋流。",
+    "layout": "试绳环 → 短巷绳锚 → 高廊风标 → 主缆闩",
+    "goal": "沙袋和吊篮拉开的同时，气球带着绳尾掠过屋檐",
+    "choice": "先投左侧巷口绳环，沿两个窄环摊开从屋檐底下穿过。也可先投右侧风标，依次在两处开阔环等风袋亮起。分身留在锚点，越过街口后投另一侧。",
     "souvenir": "吊篮铭片",
-    "memory": "放开最后一根系绳，气球越过街区。"
+    "memory": "沙袋和吊篮拉开的同时，气球带着绳尾掠过屋檐。"
   },
   {
     "day": "0109",
@@ -491,11 +491,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "星风吹起的盔形云",
     "fact": "2024 年 1 月 9 日，每日天文图刊出俗称“雷神头盔”的星云图像。",
     "source": "https://apod.nasa.gov/apod/ap240109.html",
-    "layout": "云缘→盔翼→两座风塔→盔顶",
-    "goal": "撑开完整云壳",
-    "choice": "借风跃上盔翼；先占一座塔可削弱迎风攻击，双塔同时共鸣会让中央风灵显形。",
+    "layout": "弧冠 → 左翼 → 右翼",
+    "goal": "升起镜框，把三片弧光合成一朵盔形云",
+    "choice": "在起点按 J 取一片云弧。绕风路线要跨两处稳定窗，在第二窗等风势变缓。护罩路线在挡光环摊开，让防风槽积满。到片夹后等暗段按 J 合片。",
     "souvenir": "盔形光片",
-    "memory": "撑开完整云壳。"
+    "memory": "升起镜框，把三片弧光合成一朵盔形云。"
   },
   {
     "day": "0110",
@@ -505,11 +505,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "雾汽下的首班车",
     "fact": "1863 年 1 月 10 日，伦敦大都会铁路向公众开放。",
     "source": "https://library.ltmuseum.co.uk/portal/Default/en-GB/RecordView/Index/108",
-    "layout": "地面入口↓浅埋拱廊→交换线→站台",
-    "goal": "摇响站铃，让乘客登上能看清车号的首班车",
-    "choice": "风塔接力清理视线，水塔在两班车间回充；预留末站能力或提前处理两股叠加的蒸汽。",
+    "layout": "地面入口 → 浅埋砖拱 → 站台交换线",
+    "goal": "摇响首班站铃",
+    "choice": "风塔先在雾团上留下金圈，再选单号位排第一站（中线以前），或双号位排第二站（过中线以后）。同站多个金圈可以一批排出。",
     "souvenir": "首班硬纸票",
-    "memory": "摇响站铃，让乘客登上能看清车号的首班车。"
+    "memory": "首班车的拱券灯。"
   },
   {
     "day": "0110",
@@ -519,11 +519,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "一座可以折起的城",
     "fact": "1974 年 1 月 10 日，MoMA 记录萨尔瓦多·布鲁的《The Soft City》入藏。",
     "source": "https://www.moma.org/collection/works/64936",
-    "layout": "平面街区▦→两道折线↑→立体街景",
-    "goal": "同时立起两侧街面，俯视图变为街口透视",
-    "choice": "在第一道折线旁三消，沿街掀起一排屋面。先折外街留中心通道，或先撑起中心再借纵纹越墙。",
+    "layout": "平面街网 → 街道和屋顶 → 翻纸扣",
+    "goal": "选择先搭街网还是屋顶，最后沿折痕立起纸城",
+    "choice": "中段先接街网或屋顶任意一边。先接街网，末段先横后竖；先接屋顶则先竖后横。展开前看清金框方向。",
     "souvenir": "折叠街景卡",
-    "memory": "同时立起两侧街面，俯视图变为街口透视。"
+    "memory": "你拉开翻纸扣，几排街屋沿河抬起。"
   },
   {
     "day": "0110",
@@ -533,11 +533,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "木桶的去向",
     "fact": "1870 年，洛克菲勒与合伙人在 1 月 10 日成立标准石油公司。",
     "source": "https://guides.loc.gov/this-month-in-business-history/january",
-    "layout": "货签桌→三叉桶道→铁路栈台",
-    "goal": "扣上车厢门，将当天的运单压上日期",
-    "choice": "分身留在分流岔口可自动拨桶，亲自跑去打漏签能及时救错道的桶。",
+    "layout": "吊钩踏板 → 摆臂吊具 → 滚桶止挡 → 仓门拉环",
+    "goal": "仓门升起，滚桶依次经过有木轨的出口",
+    "choice": "左路先投吊具，留分身拉住摆臂，摊开经过两个窄道金环；右路先投滚桶止挡，等金区出现回收分身，随它把桶带到中央的称重金环，稳住之后投对侧。",
     "souvenir": "桶箍运单",
-    "memory": "扣上车厢门，将当天的运单压上日期。"
+    "memory": "仓门升起，滚桶依次经过有木轨的出口。"
   },
   {
     "day": "0110",
@@ -547,11 +547,11 @@ export const januaryPilots: JanuaryStory[] = [
     "title": "穿过报纸的白边",
     "fact": "1929 年 1 月 10 日，丁丁的首段连载冒险开始发表。",
     "source": "https://www.tintin.com/en/albums/tintin-in-the-land-of-the-soviets",
-    "layout": "报摊→大格边框→跨栏／翻页→报头",
-    "goal": "折出一张完整周刊",
-    "choice": "弹跳翻过矮格；在纸背摊开抄近道或沿格框连续跳。墨渍守卫每次落地都会改变相邻格的边界。",
+    "layout": "门廊来信 → 街角递纸 → 雨棚回信",
+    "goal": "翻起自己的版面，让三格木刻纸偶接成一页街角来信",
+    "choice": "在字盘按 J 拿起原创分镜。翻窗路线先过下栏，再在上栏的金环跳一下，最后走过侧栏。窄栏路线在排字框摊开 C，稳到进度满。到末环按 J 压正版框。",
     "souvenir": "折角连载页",
-    "memory": "折出一张完整周刊。"
+    "memory": "翻起自己的版面，让三格木刻纸偶接成一页街角来信。"
   },
   {
     "day": "0111",

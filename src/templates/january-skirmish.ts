@@ -59,7 +59,7 @@ function sk(
 
 export const skirmishSpecs: Readonly<Record<string, SkirmishSpec>> = {
   '0101': sk('air', 'high', ['近岸浮台', '船棚高廊'], ['试风球', '西岸风向标', '棚顶风向标', '放行信号'],
-    '进入栈桥尽头的金环拉响放行铃', '水上飞机离开坦帕湾', '高廊顺风射击加力，浮台可留守风标',
+    '把分身投上码头尽头的放行铃', '沿栈桥目送飞行艇离水', '浮台与高廊可在木便桥换线；避开立柱，把分身投在风标上',
     ['ST. PETE • TAMPA', '1914 FIRST FLIGHT'], ['#78a5b7', '#ffd4a0'], '#bc8c61', '#de7653'),
   '0102': sk('space', 'pin', ['外框稀尘格', '中央尘束窗'], ['冰蓝校准粒', '左格捕尘点', '右格高速尘', '采样闭合闩'],
     '走进采样台金环手动合拢捕集板', '维尔德二号彗尘入格', '在青环留守分身可放缓高速尘束，便于瞄准',
@@ -184,6 +184,7 @@ export function buildCourse(day: SkirmishDay, seed: string): Course {
       (column === 1 ? [0, 0, 2.4, 2.4, 2.4] : [0, 0, 0.55, 2.4, 2.4]);
     tiles.push({x: column * width, z: (1.5 - row) * depth, width, depth, near: rises[row], far: rises[row + 1]});
   }
+  if(day==='0101')tiles.push({x:0,z:-2.66,width,depth:.72,near:.14,far:.14});
   const point = (x: number, z: number, offset = 0): Vec => [x, (floorAt({tiles}, x, z) ?? 0) + offset, z];
   return {
     day, ...spec, tiles,

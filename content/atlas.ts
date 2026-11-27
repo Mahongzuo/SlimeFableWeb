@@ -1,6 +1,7 @@
 import type {DayMeta} from './types';
 import type {AtlasKind,AtlasSpec} from './levels/types';
 import {atlasRecords} from './atlas-records';
+import {newyearChapters} from './chronicle-newyear';
 
 type Edition = {name:string; colors:[string,string]; finale:string; souvenir:string};
 export const editions:Record<AtlasKind,Edition> = {
@@ -19,5 +20,6 @@ export const atlasLevels:AtlasSpec[]=[];
 for(const [day,year,kind,title,fact,source] of atlasRecords){
   const {name,colors,finale,souvenir}=editions[kind],id=day+'-'+year;
   atlasLevels.push({id,template:'atlas',kind,title,fact,source,souvenir});
-  atlasDays.push({day,theme:title,chapters:[{id,day,year,event:fact,quest:title,steps:['沿光迹收集菱晶','弹跳越过横栏','摊开穿过低门',finale],souvenir,template:'atlas',era:name,tone:'bright',status:'web',palette:colors}]});
+  const room=newyearChapters[id];
+  atlasDays.push({day,theme:title,chapters:[{id,day,year,event:fact,quest:title,steps:room?[...room.tasks.map(([step])=>step),room.last]:['沿光迹收集菱晶','弹跳越过横栏','摊开穿过低门',finale],souvenir,template:'atlas',era:room?.title??name,tone:'bright',status:'web',palette:colors}]});
 }

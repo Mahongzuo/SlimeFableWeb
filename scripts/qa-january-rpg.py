@@ -27,7 +27,12 @@ driver="""async ({action,branch})=>{
    return Math.hypot(x,z)};
  const walk=async p=>{for(let i=0;i<360;i++){if(steer(p)<.38){stop();return}await tick()}
    throw Error('walk '+JSON.stringify([p,a.position,b.phase]))};
- if(action==='warm'){await walk(b.layout.warm);tap('KeyC');await tick();tap('KeyF');return b.phase}
+ if(action==='warm'){await walk(b.layout.warm);
+   if(l.spec.day==='0101'){
+     send('KeyC','keydown');await walk([.9,0,5.6]);send('KeyC','keyup');
+     await walk([.12,0,5.57]);for(let i=0;i<8;i++)await tick();
+   }else{tap('KeyC');await tick();}
+   tap('KeyF');return b.phase}
  if(action==='route'){const p=b.layout.branches[branch];
    if(b.arena==='stage'&&branch===1){await walk([p[0],0,5.35]);await walk([p[0],1.16,2.1])}
    await walk(p);tap('KeyF');return b.phase}

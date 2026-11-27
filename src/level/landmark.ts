@@ -24,7 +24,7 @@ const point:LandmarkPoint=[...spec.spawn], keys=new Set<string>();
 const ui=new LevelUI({start,resume,restart:()=>location.reload(),home:()=>location.href='./?from='+id},'11 月 16 日　/　1974');
 const slime=new SlimeCharacter(stage,{input:false,ui:false,title:spec.title,trainingTargets:[],
   world:{boxes:[],surfaces:[],height:baked.height??undefined,bounds:{min:[-40,-16,-45],max:[40,34,45]}},
-  spawn:[point[0],.6,point[2]],onToast:()=>{},onReady:()=>{if(phase==='intro')intro();}}).attach();
+  spawn:[point[0],.6,point[2]],onToast:()=>{},onReady:()=>{if(phase==='intro')start();}}).attach();
 applyLevelQuality(stage,slime,save.data.quality);
 const css=document.createElement('style');
 css.textContent=`
@@ -162,7 +162,7 @@ function climb(dt:number){
   }
 }
 const target=new T.Vector3(),eye=new T.Vector3(),look=new T.Vector3(0,5,-6);
-stage.camera.position.set(7,32,56);stage.camera.lookAt(look);intro();
+stage.camera.position.set(7,32,56);stage.camera.lookAt(look);
 function step(delta:number){
   const dt=Math.min(Math.max(delta,0),.09);time+=dt;
   if(!paused&&phase==='route')climb(dt);

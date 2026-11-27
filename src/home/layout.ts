@@ -21,14 +21,28 @@ export const pillarOffset = 1.15;
 export function plazaBoxes(): Box[] {
   const boxes: Box[] = [];
   for (const p of portalSlots) {
-    const rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+    const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
+    const localBox = (name: string, lx: number, lz: number, w: number, d: number, y0: number, y1: number, camera = true) => {
+      const wx = p.position[0] + lx * c + lz * s;
+      const wz = p.position[2] - lx * s + lz * c;
+      boxes.push({name, min: [wx - w / 2, y0, wz - d / 2], max: [wx + w / 2, y1, wz + d / 2], yaw: p.yaw, camera});
+    };
+    // Plinth & step (walkable low curb, leaves doorway passage open)
+    localBox(`prop:portal-${p.slot}-plinth`, 0, 0, 2.95, 2.95, 0, .22, false);
+    localBox(`prop:portal-${p.slot}-step`, 0, 0, 2.60, 2.60, .22, .28, false);
+    // Left & right pillar assemblies (foot 0.54, shaft 0.36, cap 0.54)
     for (const side of [-1, 1]) {
-      const x = p.position[0] + rx * pillarOffset * side, z = p.position[2] + rz * pillarOffset * side;
-      boxes.push({name: `prop:portal-${p.slot}-${side < 0 ? 'l' : 'r'}`, min: [x - .27, 0, z - .27], max: [x + .27, 3.1, z + .27], camera: true});
+      const tag = side < 0 ? 'l' : 'r';
+      localBox(`prop:portal-${p.slot}-${tag}-foot`, side * pillarOffset, 0, .54, .54, .28, .44, true);
+      localBox(`prop:portal-${p.slot}-${tag}`, side * pillarOffset, 0, .42, .42, .44, 2.99, true);
     }
+    // Overhead beam, keystone & roof (clear above y = 3.85 so player walks freely underneath)
+    localBox(`prop:portal-${p.slot}-beam`, 0, 0, 2.86, .58, 3.86, 4.18, true);
+    localBox(`prop:portal-${p.slot}-roof`, 0, 0, 3.36, .98, 4.16, 4.54, true);
   }
   const [cx, , cz] = plazaCenter;
-  boxes.push({name: 'prop:lectern', min: [cx - .5, 0, cz - .5], max: [cx + .5, 1.12, cz + .5], camera: false});
+  boxes.push({name: 'prop:lectern-base', min: [cx - .50, 0, cz - .50], max: [cx + .50, .18, cz + .50], camera: false});
+  boxes.push({name: 'prop:lectern', min: [cx - .44, .18, cz - .54], max: [cx + .44, 1.12, cz + .54], camera: false});
   return boxes;
 }
 /** Time shards: a reason to explore every corner, roof and the water. y is resolved against the scene at build time. */

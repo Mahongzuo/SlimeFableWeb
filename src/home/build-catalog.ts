@@ -1,3 +1,4 @@
+import {propStructures} from '../world/linqi/prop-structures';
 import {valleyHeight,riverLevel} from './waterway';
 import {portalSlots, plazaCenter, quayPavilion, nativeLane} from './layout';
 import type {Box, Vec} from '../slime/types';
@@ -84,7 +85,7 @@ export const BUILD_CATALOG: BuildItemDef[] = [
   },
   {
     id: 'build-moon-gate', name: '江南月洞门', category: 'house', asset: 'build-moon-gate', thumb: thumb('build-moon-gate'), icon: '🏮',
-    width: 3.2, depth: 1.0, height: 2.8, price: 14, unlockLevel: 1, solid: false, attracts: ['绒尾小熊猫'], tags: ['jiangnan', 'pavilion'],
+    width: 3.2, depth: 1.0, height: 2.8, price: 14, unlockLevel: 1, solid: true, attracts: ['绒尾小熊猫'], tags: ['jiangnan', 'pavilion'],
     desc: '白墙圆洞庭院门，框住一院竹影与湖光。',
   },
   {
@@ -151,7 +152,7 @@ export const BUILD_CATALOG: BuildItemDef[] = [
   },
   {
     id: 'nature-willow', name: '水岸垂柳', category: 'plant', asset: 'nature-willow', thumb: thumb('nature-willow'), icon: '🌳',
-    width: 3.6, depth: 3.6, height: 4.0, price: 10, unlockLevel: 1, solid: false, attracts: ['碧羽翠鸟', '林间梅花鹿'], tags: ['tree', 'water', 'jiangnan'],
+    width: 3.6, depth: 3.6, height: 4.0, price: 10, unlockLevel: 1, solid: true, attracts: ['碧羽翠鸟', '林间梅花鹿'], tags: ['tree', 'water', 'jiangnan'],
     desc: '轻垂丝条的柳树，水岸栽种最招翠鸟青睐。',
   },
   {
@@ -176,7 +177,7 @@ export const BUILD_CATALOG: BuildItemDef[] = [
   },
   {
     id: 'pack-ginkgo', name: '金秋银杏', category: 'plant', asset: 'pack-ginkgo', thumb: thumb('pack-ginkgo'), icon: '🍂',
-    width: 3.4, depth: 3.4, height: 4.2, price: 14, unlockLevel: 2, solid: false, attracts: ['林间梅花鹿'], tags: ['tree', 'pasture'],
+    width: 3.4, depth: 3.4, height: 4.2, price: 14, unlockLevel: 2, solid: true, attracts: ['林间梅花鹿'], tags: ['tree', 'pasture'],
     desc: '满树金黄扇叶的银杏树，林缘牧场绝配。',
   },
   {
@@ -221,12 +222,91 @@ export const BUILD_CATALOG: BuildItemDef[] = [
     width: 2.4, depth: 1.6, height: 0.45, price: 12, unlockLevel: 1, solid: false, attracts: ['草甸野兔', '紫藤赤狐'], tags: ['flower', 'garden', 'facility'],
     desc: '装点庭院的鲜花木槽，靠近时用风属性吹拂会飘起花瓣，也能吸引赤狐与野兔。',
   },
+  // ---- Living Artisan & Interactive POIs ----
+  {
+    id: 'poi-keg', name: '凝露酿造桶', category: 'facility', asset: 'procedural-keg', thumb: '', icon: '🏺',
+    width: 1.4, depth: 1.4, height: 1.35, price: 24, unlockLevel: 1, solid: true, tags: ['artisan', 'facility'],
+    desc: '把葡萄、草莓、蓝莓与南瓜慢酿成 3 倍价值的果酒与麦芽酒，暗/水元素可加速发酵！',
+  },
+  {
+    id: 'poi-kiln', name: '窑烤面包房', category: 'facility', asset: 'procedural-kiln', thumb: '', icon: '🔥',
+    width: 2.4, depth: 2.0, height: 1.9, price: 32, unlockLevel: 1, solid: true, tags: ['artisan', 'facility'],
+    desc: '用磨坊面粉烤制乡间面包，或果木慢熏鲜鱼。火属性旺炉可直推 40% 进度并出金标！',
+  },
+  {
+    id: 'poi-beehive', name: '庭院蜂箱', category: 'facility', asset: 'procedural-beehive', thumb: '', icon: '🐝',
+    width: 1.3, depth: 1.3, height: 1.25, price: 18, unlockLevel: 1, solid: true, tags: ['artisan', 'flower', 'facility'],
+    desc: '自动采撷周围 9 米内青莲/星露等花卉，酿出对应高价风味花蜜！',
+  },
+  {
+    id: 'poi-preserver', name: '古法腌渍缸', category: 'facility', asset: 'procedural-preserver', thumb: '', icon: '🥫',
+    width: 1.5, depth: 1.5, height: 1.2, price: 28, unlockLevel: 2, solid: true, tags: ['artisan', 'facility'],
+    desc: '把牧场鲜乳做成奶酪、鱼塘鱼籽腌成鱼子酱、松露冷榨为顶级松露油。',
+  },
+  {
+    id: 'poi-loom', name: '云绒织布机', category: 'facility', asset: 'procedural-loom', thumb: '', icon: '🧶',
+    width: 2.0, depth: 1.5, height: 1.6, price: 34, unlockLevel: 2, solid: true, tags: ['artisan', 'facility'],
+    desc: '把动物梳落的云朵软绒与星光狐绒织成高价云绒锦缎，风/雷属性穿梭提速。',
+  },
+  {
+    id: 'poi-hotspring', name: '露天温泉池', category: 'facility', asset: 'procedural-hotspring', thumb: '', icon: '♨️',
+    width: 3.6, depth: 3.2, height: 0.72, price: 46, unlockLevel: 2, solid: true, attracts: ['悠闲水豚'], tags: ['water', 'hotspring', 'facility'],
+    desc: '火/水属性注入暖泉后开启！史莱姆泡澡获活力祝福，水豚会自动来泡澡产出温泉暖露。',
+  },
+  {
+    id: 'poi-observatory', name: '观星授时台', category: 'facility', asset: 'procedural-observatory', thumb: '', icon: '🔭',
+    width: 2.8, depth: 2.8, height: 3.2, price: 52, unlockLevel: 3, solid: true, tags: ['landmark', 'astronomy', 'facility'],
+    desc: '查看今日稀兽遭遇预报、气象星象并每日祈星获赠星露种子或历史残片。',
+  },
+  {
+    id: 'poi-glider-tower', name: '乘风热气球台', category: 'facility', asset: 'procedural-glider-tower', thumb: '', icon: '🎈',
+    width: 2.6, depth: 2.6, height: 3.8, price: 42, unlockLevel: 2, solid: true, tags: ['landmark', 'facility'],
+    desc: '火/风属性点燃升空至高空，一键撑开滑翔伞俯瞰全岛并滑翔前往远方扩建领土！',
+  },
+  {
+    id: 'poi-waystone', name: '传送风铃柱', category: 'facility', asset: 'procedural-waystone', thumb: '', icon: '🎐',
+    width: 1.2, depth: 1.2, height: 2.4, price: 28, unlockLevel: 2, solid: true, tags: ['jiangnan', 'facility'],
+    desc: '在扩建远地摆放两座以上风铃柱，即可按 F 在各节点间快速水泡传送！',
+  },
+  {
+    id: 'poi-museum-altar', name: '时光博物苑展台', category: 'facility', asset: 'procedural-museum', thumb: '', icon: '🏛️',
+    width: 2.6, depth: 2.2, height: 2.1, price: 10, unlockLevel: 1, solid: true, tags: ['jiangnan', 'facility'],
+    desc: '向六大展厅捐献农产制品、珍鱼、动物馈赠与史事纪念品，永久修复凝露港奇迹！',
+  },
+  {
+    id: 'poi-coop', name: '林间小动物牧舍', category: 'facility', asset: 'procedural-coop', thumb: '', icon: '🏡',
+    width: 3.2, depth: 2.6, height: 2.2, price: 34, unlockLevel: 1, solid: true, tags: ['ranch', 'coop', 'pasture'],
+    desc: '收容野兔、锦鸡、松鼠、水獭等小型物种（+4 牧场容量），每日产出灵蛋与绒毛。',
+  },
+  {
+    id: 'poi-barn', name: '敞篷灵兽鹿苑', category: 'facility', asset: 'procedural-barn', thumb: '', icon: '🦌',
+    width: 4.4, depth: 3.4, height: 2.9, price: 50, unlockLevel: 2, solid: true, tags: ['ranch', 'barn', 'pasture'],
+    desc: '收容梅花鹿、白鹿、雪狐、水豚、小熊猫等中大型灵兽（+6 牧场容量），每日产出鲜乳与珍稀露。',
+  },
+  {
+    id: 'poi-fishpond', name: '生态养殖鱼塘', category: 'facility', asset: 'procedural-fishpond', thumb: '', icon: '🐟',
+    width: 3.8, depth: 3.2, height: 0.65, price: 38, unlockLevel: 1, solid: true, tags: ['water', 'pond', 'facility'],
+    desc: '投放钓到的活鱼进行繁育（最高扩容至 10 条），每日产出鲜鱼籽与河珠！',
+  },
 ];
 
 export const BUILD_ITEMS: Record<string, BuildItemDef> = Object.fromEntries(BUILD_CATALOG.map(i => [i.id, i]));
 
 /** Curated DreamWorld-inspired one-click landscape presets players can place & customize. */
 export const HOME_PRESETS: PresetBlueprint[] = [
+  {
+    id: 'preset-artisan-yard',
+    name: '手作工坊小院',
+    subtitle: '酿造桶 + 窑烤面包房 + 庭院蜂箱 + 培育花圃（立刻开启 3 倍价值加工链！）',
+    unlockLevel: 1,
+    discountPrice: 68,
+    items: [
+      {itemId: 'poi-kiln', dx: -2.6, dz: -1.4, yaw: 0.15, scale: 1},
+      {itemId: 'poi-keg', dx: 2.2, dz: -1.6, yaw: 0, scale: 1},
+      {itemId: 'poi-beehive', dx: 2.4, dz: 1.6, yaw: -0.3, scale: 1},
+      {itemId: 'facility-flowerbed', dx: -1.6, dz: 2.0, yaw: 0, scale: 1},
+    ],
+  },
   {
     id: 'preset-ue-farmstead',
     name: '田园自耕小菜园',
@@ -356,36 +436,45 @@ export function canPlaceProp(
   return {ok: true};
 }
 
-/** Generates a world-space climbable/standable collision Box for solid placed home props. */
+const isTreeDef = (def: BuildItemDef) => def.category === 'plant' && def.tags.includes('tree');
+
+/** Generates an exact world-space standable oriented collision Box for solid placed home props (trees are non-climbable). */
 export function buildPropCollisionBox(prop: PlacedProp): Box | null {
   const def = BUILD_ITEMS[prop.itemId];
   if (!def || !def.solid) return null;
-  const c = Math.abs(Math.cos(prop.yaw)), s = Math.abs(Math.sin(prop.yaw));
-  // Raised farm beds use exact 0.50 outer-wall half-extents and >= 0.35m height so the slime never clips into the frame
-  const extentFactor = def.farmBed ? 0.50 : 0.36;
-  const hw = ((def.width * c + def.depth * s) * prop.scale) * extentFactor;
-  const hd = ((def.width * s + def.depth * c) * prop.scale) * extentFactor;
-  const h = def.farmBed ? Math.max(0.35, def.height * prop.scale) : def.height * prop.scale * 0.88;
-  const min: Vec = [prop.x - hw, prop.y - 0.2, prop.z - hd];
+  const hw = (def.width * prop.scale) * 0.50;
+  const hd = (def.depth * prop.scale) * 0.50;
+  const h = def.farmBed ? Math.max(0.35, def.height * prop.scale) : def.height * prop.scale;
+  const min: Vec = [prop.x - hw, prop.y - 0.12, prop.z - hd];
   const max: Vec = [prop.x + hw, prop.y + h, prop.z + hd];
-  return {min, max, camera: !def.farmBed, name: `home-${prop.id}`};
+  const climbable = isTreeDef(def) ? false : undefined;
+  return {min, max, yaw: prop.yaw || undefined, camera: !def.farmBed, climbable, name: `home-${prop.id}`};
 }
 
-/** Keep pavilion entrances traversable while giving columns, floor and roof support. */
+// Emit exact oriented 3D collision boxes (OBBs) for every structural sub-part so rotated
+// buildings, archways, bridges and walls match their rendered geometry with zero staircasing.
 export function propCollisionParts(prop:PlacedProp):Box[] {
-  if(prop.itemId!=='pack-pavilion'){
+  const def=BUILD_ITEMS[prop.itemId],structure=propStructures[prop.itemId];
+  if(!structure){
     const box=buildPropCollisionBox(prop);return box?[box]:[];
   }
-  const result:Box[]=[],c=Math.cos(prop.yaw),s=Math.sin(prop.yaw),k=prop.scale;
-  const part=(dx:number,dz:number,r:number,bottom:number,top:number,kind:string)=>{
-    const x=prop.x+k*(dx*c+dz*s),z=prop.z+k*(dz*c-dx*s);
-    result.push({name:'pavilion-'+prop.id+'-'+kind,min:[x-r*k,prop.y+bottom*k,z-r*k],max:[x+r*k,prop.y+top*k,z+r*k],camera:true});
-  };
-  part(0,0,1.26,-.06,.12,'floor');part(0,0,1.28,1.94,2.4,'roof');
-  for(let i=0;i<6;i++){
-    const a=i*Math.PI/3;part(Math.cos(a)*1.25,Math.sin(a)*1.25,.08,.1,2.02,'post-'+i);
+  const k=Math.max(def.width,def.depth)*prop.scale/structure.span;
+  const c=Math.cos(prop.yaw),s=Math.sin(prop.yaw),boxes:Box[]=[];
+  const yaw=Math.abs(prop.yaw)>1e-5?prop.yaw:undefined;
+  const treeProp=isTreeDef(def);
+  for(const [dx,dz,w,d,lo,hi,kind] of structure.parts){
+    const x=prop.x+(dx*c+dz*s)*k,z=prop.z+(dz*c-dx*s)*k;
+    const hx=w*k/2,hz=d*k/2;
+    boxes.push({
+      name:`${prop.id}-${boxes.length}-${kind}`,
+      min:[x-hx,prop.y+lo*k,z-hz],
+      max:[x+hx,prop.y+hi*k,z+hz],
+      yaw,
+      camera:kind!=='deck'&&kind!=='floor',
+      climbable:(treeProp||kind==='trunk')?false:undefined,
+    });
   }
-  return result;
+  return boxes;
 }
 
 /** Re-seat old harbour builds on the new terrain once, preserving IDs, crops and inventories. */

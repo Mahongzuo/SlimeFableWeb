@@ -2,7 +2,6 @@ import type {AtlasKind} from './levels/types';
 // 每行对应 docs/days/atlas-calendar.md 的事实卡。景物、路线和演出均为虚构。
 type RecordRow = [day: string, year: number, kind: AtlasKind, title: string, fact: string, source: string];
 export const atlasRecords: RecordRow[] = [
-  ["0101", 1864, "atelier", "齐白石的印匣", "画家、篆刻家齐白石出生。", "https://baike.baidu.com/cms/home/eventsOnHistory/01.json"],
   ["0102", 1959, "flight", "月球一号的出发窗", "苏联发射月球一号探测器。", "https://baike.baidu.com/cms/home/eventsOnHistory/01.json"],
   ["0103", 1892, "ink", "铅字林中的小径", "作家托尔金出生。", "https://baike.baidu.com/cms/home/eventsOnHistory/01.json"],
   ["0104", 2010, "span", "通往云层的电梯", "迪拜的哈利法塔举行启用仪式。", "https://baike.baidu.com/cms/home/eventsOnHistory/01.json"],

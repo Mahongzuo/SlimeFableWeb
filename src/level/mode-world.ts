@@ -1,3 +1,4 @@
+import {bindHelpHint,readingHelp} from './help-state';
 import './mode-world.css';
 import * as T from 'three';
 import {session} from './mode-session';
@@ -20,7 +21,7 @@ const stage=new Stage(original?modeLook(s.day):newWorldLook(story));
 const art=original?buildModeWorld(stage,layout,s.kind,session.seed):buildWorldStory(stage,layout,session.seed);
 const latch=life?[layout.latch]:[];
 const actor=new SlimeCharacter(stage,{world:layout.world,spawn:layout.spawn,input:false,ui:false,
- trainingTargets:latch,title:s.title,onToast:()=>{},onReady:()=>{const b=button('start');b.disabled=false;b.textContent=shot?'走入场地':'去见关主';}}).attach();
+ trainingTargets:latch,title:s.title,onToast:()=>{},onReady:()=>{if(phase==='intro')perform('start');}}).attach();
 const characterHud = mountSlimeHud(actor, {elements:true, skills:false});
 applyLevelQuality(stage,actor,new Save().data.quality);
 type Phase='intro'|'play'|'pause'|'finale'|'done';
@@ -205,7 +206,9 @@ function gameTick(dt:number){
 }
 stage.camera.fov=53;stage.camera.updateProjectionMatrix();
 const clock=new T.Clock(),eye=new T.Vector3(),look=new T.Vector3();
+bindHelpHint(()=>phase==='intro'?s.goal:stateHint());
 function step(delta:number){
+  if(readingHelp())return;
  const dt=Math.min(.05,Math.max(0,delta));if(phase!=='pause'){
  time+=dt;actor.update(time,dt);
  characterHud.update(phase==='play');

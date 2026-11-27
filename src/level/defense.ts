@@ -342,6 +342,20 @@ function drawPanel() {
   primary?.focus({preventScroll: true});
 }
 
+let autoStarted = false;
+function beginDefense() {
+  if (!game.start([...loadout])) return;
+  autoStarted = true;
+  session.start();
+  audio.startAmbient('defense');
+  audio.playWaveHorn(false);
+  tool = game.loadout[0];
+  toolsBar();
+  scene.select(-1, -1);
+  drawPanel();
+  canvas.focus({preventScroll: true});
+}
+
 function send() {
   if (!game.transmit()) return;
   audio.playTransmitVictory();
@@ -362,15 +376,8 @@ hud.addEventListener('click', e => {
     syncPicks();
     return;
   }
-  if (b.hasAttribute('data-start') && game.start([...loadout])) {
-    session.start();
-    audio.startAmbient('defense');
-    audio.playWaveHorn(false);
-    tool = game.loadout[0];
-    toolsBar();
-    scene.select(-1, -1);
-    drawPanel();
-    canvas.focus({preventScroll: true});
+  if (b.hasAttribute('data-start')) {
+    beginDefense();
     return;
   }
   if (b.dataset.tool) { setTool(b.dataset.tool as Tool); return; }
@@ -553,7 +560,12 @@ function frame(now: number) {
   drawPanel();
 
   if (game.phase === 'setup') {
-    at<HTMLButtonElement>('[data-start]').disabled = loadout.size !== 4 || !scene.actor.ready;
+    if (!autoStarted && scene.actor.ready && loadout.size === 4) {
+      beginDefense();
+    } else {
+      const startBtn = panel.querySelector<HTMLButtonElement>('[data-start]');
+      if (startBtn) startBtn.disabled = loadout.size !== 4 || !scene.actor.ready;
+    }
   }
   if (!paused && (game.phase === 'wave' || game.phase === 'interval')) {
     const next = game.upcoming;

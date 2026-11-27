@@ -1,5 +1,12 @@
 import type {ChronicleMode, ChronicleSpec} from './levels/types';
 import type {ChapterMeta} from './types';
+import {exhibits,isDecemberChapter} from '../src/templates/december-chapters';
+import {monthendChapters,isMonthendChapter} from './chronicle-monthend';
+import {yearendChapters,isYearendChapter} from '../src/templates/yearend-chapters';
+import {midwinterChapters,isMidwinterChapter} from '../src/templates/midwinter-chapters';
+import {winterChapters,isWinterChapter} from '../src/templates/winter-chapters';
+import {isWorkshop,workshops} from './turning-season';
+import {newyearChapters,isNewyearChapter} from './chronicle-newyear';
 import {januaryChronicles} from './chronicle-january';
 import {februaryChronicles} from './chronicle-february';
 import {marchChronicles} from './chronicle-march';
@@ -42,6 +49,7 @@ export const chronicleLevels: ChronicleSpec[] = [
 export const chronicleEntries: {slot: 1 | 2; chapter: ChapterMeta}[] = chronicleLevels.map(s => {
   const [day, yearStr] = s.id.split('-');
   const meta = chronicleModeLabels[s.mode];
+  const exhibit=isNewyearChapter(s.id)?newyearChapters[s.id]:isMonthendChapter(s.id)?monthendChapters[s.id]:isYearendChapter(s.id)?yearendChapters[s.id]:isMidwinterChapter(s.id)?midwinterChapters[s.id]:isWinterChapter(s.id)?winterChapters[s.id]:isDecemberChapter(s.id)?exhibits[s.id]:undefined;
   return {
     slot: s.slot,
     chapter: {
@@ -50,10 +58,10 @@ export const chronicleEntries: {slot: 1 | 2; chapter: ChapterMeta}[] = chronicle
       year: Number(yearStr),
       event: s.fact,
       quest: s.title,
-      steps: meta.steps(s),
+      steps: exhibit?[...exhibit.tasks.map(([step])=>step),exhibit.last]:isWorkshop(s.id) ? [...workshops[s.id].steps] : meta.steps(s),
       souvenir: s.souvenir,
       template: 'chronicle',
-      era: `${s.region === 'cn' ? '中国' : '海外'} · ${meta.era}`,
+      era: exhibit?(s.region==='cn'?'中国':'海外')+' · '+exhibit.title:isWorkshop(s.id) ? '中国 · '+workshops[s.id].name : `${s.region === 'cn' ? '中国' : '海外'} · ${meta.era}`,
       tone: s.tone,
       status: 'web',
       palette: s.palette,

@@ -1,4 +1,4 @@
-import type {Vec} from '../slime/types';
+import type {Box, Vec} from '../slime/types';
 import type {ZoneRect} from '../world/map';
 import type {LifeData} from '../life/state';
 import type {LifeUI} from '../ui/life-ui';
@@ -29,7 +29,17 @@ export interface ZoneContext {
 export interface PlayerHandle {
   position: Readonly<Vec>; velocity: Readonly<Vec>; grounded: boolean; swimming: boolean; clinging: boolean;
   /** 0 水 1 风 2 火 3 雷 4 暗 5 物 */ element: number; /** 0..1, C held = flattened/sneaking */ spread: number;
+  /** True while the player is actively holding WASD movement input. */ hasMoveInput?: boolean;
+  /** True while a right-click home dash is active. */ isDashing?: boolean;
   /** Set the slime's velocity (bounce pads, launchers). */ launch: (v: Vec) => void;
+  /** Carry the slime along with a moving platform/seat without interrupting jump or walk-off. */
+  carry?: (delta: Vec, surfaceY?: number) => void;
+  /** Lock slime seamlessly onto a moving/tilted seat surface (zero drift, zero PBF clipping). */
+  seatAt?: (pos: Vec, plane: {point: Vec; normal: Vec}) => void;
+  /** Release seat lock when the player actively dismounts. */
+  clearRide?: () => void;
+  /** Re-index mutated dynamic solid boxes (e.g. swinging seat collider). */
+  refreshBoxes?: () => void;
   toast: (text: string, ms?: number) => void;
   mood: (m: 'Happy' | 'Surprised' | 'Hurt' | 'Squash', seconds?: number) => void;
   /** Freeze movement input (minigames). */ lock: (on: boolean) => void;
@@ -38,5 +48,5 @@ export interface PlayerHandle {
  * A zone's scene graph lives under `root` (named `zone-<id>`). Every visible mesh under it is baked as solid,
  * except names matching NEVER_SOLID (leaf, foliage, grass, flower, crop, water, fx…) or `userData.walkThrough`.
  */
-export interface ZoneBuild {root: any; spots?: Record<string, Vec>; update?: (t: number, dt: number, player: PlayerHandle) => void}
+export interface ZoneBuild {root: any; spots?: Record<string, Vec>; boxes?: Box[]; update?: (t: number, dt: number, player: PlayerHandle) => void}
 export type ZoneBuilder = (z: ZoneContext) => ZoneBuild;

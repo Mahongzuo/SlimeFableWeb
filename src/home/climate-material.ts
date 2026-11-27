@@ -26,7 +26,14 @@ export function climateMaterial(mat:any, surface:Surface) {
       ${surface==='structure'?'':`
       vec3 seasonal=baseColor*vec3(1.13,1.27,.91)+vec3(.022,.043,.009)*fleck;
       if(seasonIndex>.5)seasonal=baseColor*vec3(.63,.95,.78);
-      if(seasonIndex>1.5)seasonal=mix(vec3(.94,.36,.07),vec3(1.08,.72,.19),fleck)*(lum+.045);
+      if(seasonIndex>1.5){
+        ${surface==='terrain'?`
+        // Keep meadow lawns fresh sunlit green-gold in autumn (avoid muddy olive-grey!)
+        seasonal=mix(baseColor*vec3(1.04,1.18,.78),vec3(1.24,1.26,.54)*(lum+.08),fleck*.24);`:`
+        float grove=.5+.5*sin(climatePoint.x*.14+climatePoint.z*.20);
+        vec3 amber=mix(vec3(1.88,.48,.16),vec3(1.92,1.26,.22),fleck)*(lum+.085);
+        seasonal=mix(baseColor*vec3(.92,1.24,.78),amber,smoothstep(.26,.72,grove));`}
+      }
       if(seasonIndex>2.5)seasonal=mix(baseColor,vec3(lum)*vec3(.92,1.04,1.13),.70);
       diffuseColor.rgb=mix(baseColor,seasonal,green*${surface==='terrain'?'.83':'1.'});`}
       vec3 face=cross(dFdx(climatePoint),dFdy(climatePoint));
@@ -42,7 +49,9 @@ export function climateMaterial(mat:any, surface:Surface) {
       }`:''}
       diffuseColor.rgb*=1.-surfaceWet*(.06+.15*upward);
       float mantle=snowCover*upward*clamp(.75+fleck*.33,0.,1.);
-      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.79,.88,.93),mantle*.94);`);
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.79,.88,.93),mantle*.94);`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      roughnessFactor=clamp(roughnessFactor*(1.-surfaceWet*.52)+snowCover*.14,.14,1.);`);
   };
   mat.customProgramCacheKey=()=>key+'-home-climate-'+surface;
   mat.needsUpdate=true;

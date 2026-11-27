@@ -2,11 +2,13 @@ import {dailyLocations,SHARD_SHELLS,SHARD_COUNT,GATE_SHELLS} from './home-reward
 import {seasonNames,weatherNames,weatherMode} from '../home/climate';
 import {SlimeCharacter} from '../slime/character';
 import type {SwingAreaEvent} from '../slime/combat';
-import type {GroundSurface} from '../slime/world';
+import type {FluidVolume,GroundSurface} from '../slime/world';
 import {Vec} from '../slime/types';
 import {buildHomeWorld} from '../world/home-world';
-import {inland} from '../world/map';
+import {inland, WORLD} from '../world/map';
+import {buildCoastalCollisionSurfaces, buildOceanFluidVolumes} from '../world/island-coast';
 import {buildExpansionSurface, computeExpandedBounds} from '../world/expansion';
+import {OceanAdventure} from '../home/ocean-adventure';
 import type {BuiltZones} from '../zones';
 import {FarmRegistry} from '../zones/farm-registry';
 import {LifeUI} from '../ui/life-ui';
@@ -17,7 +19,12 @@ import {Graphics, PRESET_NAMES} from './graphics';
 import type {Interactable, PlayerHandle} from '../zones/types';
 import {homeSpawn, plazaCenter, portalSlots, spawnYaw} from '../home/layout';
 import {TimePortal} from '../home/portals';
+import {PortalParticleField} from '../home/portal-vfx';
 import {Lectern, Shards} from '../home/props';
+import {WaterFish,lotusPond} from '../home/water-fish';
+import {SimPondEcosystem} from '../home/simpond-ai';
+import {ITEMS} from '../life/catalog';
+import {observeFish} from '../life/state';
 import {SeaFX} from '../home/sea-fx';
 import {GameUI} from '../ui/game-ui';
 import {progressId} from '../../content/daily-modes';
@@ -38,9 +45,17 @@ function localDayKey(): string {
 /** Home = 凝露港. Owns the state machine; the slime, harbour, home builder and UI only talk through here. */
 export class Game {
   state: State = 'loading'; private panelFrom: State = 'play'; private ui: GameUI; readonly slime: SlimeCharacter; private save = new Save();
-  private showing!: Showing; private portals: TimePortal[]; private lectern: Lectern; private shards: Shards; private fx: SeaFX;
+  private showing!: Showing; private portals: TimePortal[]; private portalParticles!: PortalParticleField; private lectern: Lectern; private shards: Shards; private fx: SeaFX;
   private zones!: BuiltZones; private graphics!: Graphics; private life: LifeUI; private buildUI!: BuildUI; readonly builder!: HomeBuilder; readonly farmRegistry!: FarmRegistry;
   private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | {kind: 'spot'; spot: Interactable} | null = null;
+  private nativeFluids:FluidVolume[];
+  private currentExpansions: ExpandedTile[] = [];
+  private coastalSurfaces: GroundSurface[] = [];
+  private oceanBuoyancy = true;
+  private oceanAdventure!: OceanAdventure;
+  private fish:WaterFish;
+  private pondLife:SimPondEcosystem;
+  private waterImpact=0;
   private shardLayoutDirty=false;
   private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
 
@@ -62,6 +77,8 @@ export class Game {
     ctx.camera.position.fromArray(TITLE_CAM.pos); ctx.controls.target.fromArray(TITLE_CAM.target); ctx.controls.update();
     // plaza pieces exist before the bake so their meshes become part of the height field
     this.portals = portalSlots.map(s => new TimePortal(ctx, s));
+    this.portalParticles = new PortalParticleField(portalSlots);
+    ctx.scene.add(this.portalParticles.points);
     this.lectern = new Lectern(ctx);
     this.life = new LifeUI(); this.life.show(false);
     this.farmRegistry = new FarmRegistry({
@@ -83,7 +100,16 @@ export class Game {
       dayKey: () => localDayKey(),
     }), world = home.world;
     this.zones = home.zones;
+    // Keep only inland river/lake fluids as base; outer ocean fluids are dynamically composed with expansions & diving
+    this.nativeFluids=(world.fluids??[]).filter(f=>f.min[0]>=WORLD.min[0]-1&&f.max[0]<=WORLD.max[0]+1&&f.min[1]>=WORLD.min[1]-1&&f.max[1]<=WORLD.max[1]+1);
     this.fx = new SeaFX(ctx);
+    this.fish=new WaterFish(ctx.scene,id=>{
+      if(!observeFish(this.save.data.life,id))return;
+      this.save.write();this.life.refresh(this.save.data.life);
+      this.ui.toast(`发现${ITEMS[id].name} · 已收入农鱼图鉴（B）`,3000);
+    });
+    this.fish.sync(ensureHome(this.save.data.life).expansions);
+    this.pondLife = new SimPondEcosystem(ctx.scene);
     // 3 ARPG elemental training dummies at the open park lawn for testing E/R/Q skills & 11 reactions
     const trainingTargets: Vec[] = [
       [10.2, inland(10.2, 48.0), 48.0],
@@ -91,13 +117,14 @@ export class Game {
       [11.5, inland(11.5, 51.4), 51.4],
     ];
     this.slime = new SlimeCharacter(ctx, {
-      world, spawn: homeSpawn, ui: false, trainingTargets, showCollisionBoxes: false, title: '凝露港',
+      world, spawn: homeSpawn, ui: false, trainingTargets, showCollisionBoxes: false, title: '凝露港', homeDash: true,
       onToast: text => this.ui.toast(text, 2200),
       onReady: () => this.ready(),
-      onLand: (speed, swimming) => { if (swimming && speed > 1.2) this.fx.splash(this.slime.position, speed); },
+      onLand: (speed, swimming) => { if (swimming && speed > 1.2) this.waterImpact=speed; },
       onElementAttack: ev => this.handleElementAttack(ev),
     }).attach();
     this.slime.arm=4.8;
+    this.slime.oceanWaveSampler=(x,z,t)=>ctx.ocean?.isOceanAt?.(x,z)?ctx.ocean.sampleWave(x,z,t):null;
     this.ui.bindCharacter(this.slime);
     ctx.reflectActor=(renderer:any,camera:any,target:any)=>{
       if(this.slime.running)this.slime.renderer.renderReflection(renderer,camera,target);
@@ -116,6 +143,11 @@ export class Game {
       selectExpansionTheme: th => this.builder.selectExpansionTheme(th),
       toggleSandboxFreeExpand: () => this.builder.toggleSandboxFreeExpand(),
       confirmExpand: () => this.builder.confirmExpand(),
+      setVoxelMode: on => this.builder.setVoxelMode(on),
+      selectVoxelBlock: id => this.builder.selectVoxelBlock(id),
+      setVoxelTint: hex => this.builder.setVoxelTint(hex),
+      selectVoxelBlueprint: id => this.builder.selectVoxelBlueprint(id),
+      saveVoxelBlueprint: () => this.builder.saveCurrentVoxelBlueprint(),
       exit: () => this.toggleBuildMode(false),
     });
 
@@ -125,11 +157,21 @@ export class Game {
       nativeFootprints: home.footprints,
       souvenirs: () => this.save.data.souvenirs,
       dayKey: () => localDayKey(),
+      mmdd: () => this.showing?.shown?.day ?? realToday().id,
+      env: () => ({
+        season: this.app.director.sky.season,
+        weather: this.app.director.target,
+        hour: new Date().getHours(),
+        historyDay: !!(this.showing?.isToday && this.showing.shown.chapters.some(c => c.status === 'web')),
+      }),
       ground: (x, z) => this.slime.world.terrain(x, z),
       fluid: (x, z) => this.slime.world.fluid(x, z),
       syncCollision: boxes => {this.slime.setDynamicBoxes(boxes);this.shardLayoutDirty=true;},
       syncExpansions: exps => this.syncExpansions(exps),
       farmRegistry: this.farmRegistry,
+      openMuseum: () => this.life.openTab('museum', this.save.data.life, localDayKey(), this.lifeUIContext()),
+      teleport: pos => this.slime.teleport(pos),
+      onFloatText: (pos, text, color) => this.slime.spawnFloatingText(pos, text, color, 1.1),
       save: () => this.save.write(),
       toast: (t, ms) => this.ui.toast(t, ms),
       onChange: () => {
@@ -139,6 +181,23 @@ export class Game {
     });
 
     this.player = this.makePlayer();
+    this.oceanAdventure = new OceanAdventure({
+      ctx,
+      slime: this.slime,
+      life: this.save.data.life,
+      lifeUI: this.life,
+      save: () => this.save.write(),
+      toast: (msg, ms) => this.ui.toast(msg, ms),
+      getExpansions: () => this.currentExpansions,
+      isHistoryDay: () => !!(this.showing?.isToday && this.showing.shown.chapters.some(c => c.status === 'web')),
+      isPlaying: () => this.state === 'play',
+      refreshOceanWorld: () => this.applyDynamicWorld(),
+      setOceanSurfaceBuoyancy: enabled => {
+        this.oceanBuoyancy = enabled;
+        this.applyDynamicWorld();
+      },
+    });
+    (window as any).__ocean = this.oceanAdventure;
     this.graphics = new Graphics(ctx, this.slime, this.zones.roots); this.graphics.set(this.save.data.quality);
     this.graphics.onAutoChange = p => this.ui.toast(`画面有点吃力，已自动调到「${PRESET_NAMES[p]}」画质 · 暂停菜单里可以改`, 3600);
     (window as any).__graphics = this.graphics;
@@ -151,13 +210,13 @@ export class Game {
     };
     const query = new URLSearchParams(location.search);
     const linkedDay = query.get('date') ?? query.get('from')?.split('-')[0];
-    this.applyShowing(linkedDay && days[linkedDay] ? linkedDay : this.save.data.selectedDay); this.titleScreen();
+    this.applyShowing(linkedDay && days[linkedDay] ? linkedDay : this.save.data.selectedDay);
     ctx.onUpdate((t: number, dt: number) => this.update(t, dt)); ctx.renderSlime = (pass: any) => this.slime.render(pass);
     window.addEventListener('keydown', e => this.key(e));
   }
 
   private info() { const today = realToday(); return {ready: this.slime.ready, todayId: today.id, year: today.year, weekday: today.weekday, shown: this.showing.shown, isToday: this.showing.isToday, quality: this.save.data.quality}; }
-  private ready() { if (this.state === 'loading') { this.state = 'title'; this.titleScreen(); } }
+  private ready() { if (this.state === 'loading') { this.start(); } }
   private titleScreen() { this.ui.title(this.info()); }
   private applyShowing(selected = this.save.data.selectedDay) {
     this.showing = resolveShowing(selected);
@@ -189,20 +248,57 @@ export class Game {
       canUndo: this.builder.history.canUndo, canRedo: this.builder.history.canRedo,
       demolish: this.builder.demolishMode,
       expandMode: this.builder.expandMode,
+      voxelMode: this.builder.voxelMode,
+      selectedVoxelId: this.builder.selectedVoxelId,
+      voxelTint: this.builder.voxelTint,
+      voxelBlueprintId: this.builder.voxelBlueprintId,
+      souvenirCount: this.save.data.souvenirs.length,
       selectedSlotId: this.builder.selectedSlotId,
       selectedTheme: this.builder.selectedTheme,
       frontierFocus: this.builder.frontierFocus,
     };
   }
 
+  private lifeUIContext() {
+    return {
+      souvenirCount: this.save.data.souvenirs.length,
+      mmdd: this.showing?.shown?.day ?? realToday().id,
+      voxelPens: this.builder.voxels.fencedPastures,
+      onMutate: () => {
+        this.builder.ranch.sync();
+        this.save.write();
+        this.life.refresh(this.save.data.life);
+      },
+      toast: (msg: string, ms?: number) => this.ui.toast(msg, ms),
+    };
+  }
+
   private syncExpansions(expansions: ExpandedTile[]) {
-    const surfaces: GroundSurface[] = [];
+    this.currentExpansions = expansions;
+    this.coastalSurfaces = buildCoastalCollisionSurfaces(expansions, 76);
+    this.fish.sync(expansions);
+    this.oceanAdventure?.syncExpansions(expansions);
+    this.applyDynamicWorld();
+    this.shardLayoutDirty=true;
+  }
+
+  private applyDynamicWorld() {
+    const expansions = this.currentExpansions;
+    if(!this.coastalSurfaces.length)this.coastalSurfaces=buildCoastalCollisionSurfaces(expansions,76);
+    const surfaces = [...this.coastalSurfaces];
+    const fluids: FluidVolume[] = [...this.nativeFluids];
     for (const tile of expansions) {
+      const pond=lotusPond(tile);
+      if(pond)fluids.push({min:[pond.x-pond.radius,pond.z-pond.radius],max:[pond.x+pond.radius,pond.z+pond.radius],level:pond.level,circle:true,sink:.12});
       const s = buildExpansionSurface(tile);
       if (s) surfaces.push(s);
     }
-    this.slime.setDynamicSurfaces(surfaces, computeExpandedBounds(expansions));
-    this.shardLayoutDirty=true;
+    if (this.oceanBuoyancy) {
+      fluids.push(...buildOceanFluidVolumes(expansions, 76));
+    }
+    const bounds=computeExpandedBounds(expansions);
+    this.oceanAdventure?.islands.extend(surfaces,fluids,bounds,this.oceanBuoyancy);
+    this.slime.setDynamicSurfaces(surfaces, bounds, fluids);
   }
 
   private handleElementAttack(ev: SwingAreaEvent) {
@@ -215,6 +311,7 @@ export class Game {
         this.slime.setMood('Happy', 0.9, 60);
       }
     });
+    this.builder.handleElementAttack(ev);
   }
 
   private toggleBuildMode(force?: boolean) {
@@ -276,7 +373,8 @@ export class Game {
       const returnDay = this.showing.shown.day;
       this.returnFrom = null; history.replaceState(null, '', location.pathname);
       this.applyShowing(returnDay);
-    } else if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('临水书埠 · 沿河去钓鱼，沿石径去公园，按 V 建造家园。', 4500), 600);
+    } else if(this.save.data.life.sailing?.run){this.oceanAdventure.restoreVoyage();}
+    else if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('临水书埠 · 西南柳岸钓台可乘史莱姆号出海，按 V 建造家园。', 4500), 600);
   }
   private resume() { if (this.state === 'door') this.stepOutOfDoor(); if (this.state === 'shop') this.buildUI.closeSeedShop(); if (this.state === 'title' || this.state === 'loading') { this.ui.panel(null); this.state = 'title'; return; } this.ui.panel(null); this.slime.play(); this.state = 'play'; this.ui.showHud(true); this.refreshHud(); }
   private pauseGame() { if (this.state !== 'play') return; this.state = 'pause'; this.slime.pause(); this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
@@ -315,6 +413,20 @@ export class Game {
   }
   private openDoor(portal: TimePortal) {
     const gate = portal.gate; if (!gate) return;
+    // Single-destination playable portals launch straight into the level without an extra confirmation modal
+    const directId =
+      gate.type === 'story' && gate.stories.length === 1 && !gate.archive.length && gate.stories[0].status === 'web'
+        ? gate.stories[0].id
+        : gate.type === 'story' && !gate.stories.length && gate.archive.length === 1
+          ? gate.archive[0].id
+          : gate.type === 'mode' && gate.challenge && !gate.additional?.length
+            ? gate.challenge.id
+            : null;
+    if (directId) {
+      this.ui.prompt(null);
+      this.go(directId);
+      return;
+    }
     this.state = 'door'; this.panelFrom = 'play'; this.slime.pause(); this.focusPortal = portal;
     const id = defaultEntry(gate);
     if (id) this.save.add('visited', progressId(id));
@@ -349,7 +461,7 @@ export class Game {
       if(this.state==='play'||this.state==='sky'){e.preventDefault();this.openSky();return;}
     }
     if(e.code==='Escape' && this.state==='sky'){this.state='pause';this.ui.pause(this.save.data.quality,PRESET_NAMES[this.graphics.preset]);return;}
-    if (e.code === 'KeyB' && !e.repeat && this.state === 'play') { this.life.dex(this.life.dexOpen ? null : this.save.data.life, localDayKey()); return; }
+    if (e.code === 'KeyB' && !e.repeat && this.state === 'play') { this.life.dex(this.life.dexOpen ? null : this.save.data.life, localDayKey(), this.lifeUIContext()); return; }
     if (e.code === 'Escape' && this.life.dexOpen) { this.life.dex(null); return; }
     if (e.code === 'Escape' && this.state === 'build') { this.toggleBuildMode(false); return; }
     if (e.code === 'Escape' && this.state === 'shop') { this.buildUI.closeSeedShop(); this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); return; }
@@ -363,6 +475,7 @@ export class Game {
       return;
     }
     if (e.code === 'KeyF' && !e.repeat) {
+      if (this.oceanAdventure?.mode !== 'idle') return;
       if (this.state === 'play' && this.focus) { if (this.focus.kind === 'lectern') this.openBook(); else if (this.focus.kind === 'spot') this.focus.spot.act(); else this.openDoor(this.focus.portal); }
       return;
     }
@@ -370,10 +483,22 @@ export class Game {
   }
   private update(t: number, dt: number) {
     const s = this.slime;
-    s.update(t, dt); this.fx.update(dt, s); this.lectern.update(t);
+    s.update(t, dt);
+    if(this.waterImpact){
+      const wSample=this.app.ctx.ocean?.isOceanAt?.(s.position[0],s.position[2])?this.app.ctx.ocean.sampleWave(s.position[0],s.position[2],t):null;
+      const splashY=wSample?wSample.seaLevel+wSample.height:(s.world.fluid(s.position[0],s.position[2])??undefined);
+      this.fx.splash(s.position,this.waterImpact,splashY);
+      this.waterImpact=0;
+    }
+    this.fish.update(t,this.state==='play'?s.position:null);
+    this.pondLife.update(dt, this.state==='play'?s.position:null, this.state==='play'?s.velocity:null, s.spread);
+    this.oceanAdventure?.update(t, dt);
+    this.fx.update(dt, s); this.lectern.update(t);
     this.builder.update(t, dt);
+    if (this.state === 'play') this.builder.stepPlayer(this.player, t, dt);
     if(this.builder.active)this.buildUI.setStatus(this.builder.currentGhostStatus.reason);
     for (const p of this.portals) { p.hover += ((this.focus?.kind === 'portal' && this.focus.portal === p ? 1 : 0) - p.hover) * (1 - Math.exp(-dt * 8)); p.update(t, dt); }
+    this.portalParticles.sync(t, this.portals);
     if (this.state === 'play' && s.mode !== 'play') { this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
     if(this.shardLayoutDirty || this.app.director.sky.date!==this.save.data.homeDaily?.date)this.refreshShards();
     this.shards.update(t, dt, this.state === 'play' ? s.position : [0, -99, 0]);
@@ -422,7 +547,12 @@ export class Game {
     }
     this.focus = best;
     if (!best) { this.ui.prompt(null); return; }
-    const anchor = best.kind === 'lectern' ? new this.T.Vector3(plazaCenter[0], 1.95, plazaCenter[2]) : best.kind === 'spot' ? new this.T.Vector3(best.spot.position[0], best.spot.position[1] + 1.2, best.spot.position[2]) : new this.T.Vector3(best.portal.slot.position[0], 3.05, best.portal.slot.position[2]);
+    // Lower interact prompt anchors to fit the short slime comfortably in the player's natural sightline
+    const anchor = best.kind === 'lectern'
+      ? new this.T.Vector3(plazaCenter[0], 1.45, plazaCenter[2])
+      : best.kind === 'spot'
+        ? new this.T.Vector3(best.spot.position[0], best.spot.position[1] + 0.95, best.spot.position[2])
+        : new this.T.Vector3(best.portal.slot.position[0], 1.25, best.portal.slot.position[2]);
     const v = anchor.project(this.app.ctx.camera);
     if (v.z > 1) { this.ui.prompt(null); return; }
     const x = (v.x * .5 + .5) * innerWidth, y = (-v.y * .5 + .5) * innerHeight;
@@ -443,7 +573,37 @@ export class Game {
     return {
       get position() { return s.position; }, get velocity() { return s.velocity; }, get grounded() { return s.grounded; }, get swimming() { return s.swimming; },
       get clinging() { return !!s.cling; }, get element() { return s.element; }, get spread() { return s.spread; },
-      launch: v => { s.cling = null; s.umbrella.cancel(); s.velocity = [...v]; s.grounded = false; s.jumps = 1; },
+      get hasMoveInput() { return s.keys.has('KeyW') || s.keys.has('KeyA') || s.keys.has('KeyS') || s.keys.has('KeyD'); },
+      get isDashing() { return s.isDashing; },
+      launch: v => { s.cling = null; s.ridePlane = null; s.umbrella.cancel(); s.velocity = [...v]; s.grounded = false; s.jumps = 1; },
+      carry: (delta, surfaceY) => {
+        s.position[0] += delta[0];
+        s.position[2] += delta[2];
+        if (surfaceY !== undefined) {
+          s.position[1] = surfaceY;
+          if (s.velocity[1] < 0) s.velocity[1] = 0;
+          s.grounded = true;
+          s.jumps = 0;
+        } else {
+          s.position[1] += delta[1];
+        }
+      },
+      seatAt: (pos, plane) => {
+        s.cling = null;
+        s.umbrella.cancel();
+        s.position[0] = pos[0];
+        s.position[1] = pos[1];
+        s.position[2] = pos[2];
+        s.velocity[0] = 0;
+        s.velocity[1] = 0;
+        s.velocity[2] = 0;
+        s.grounded = true;
+        s.jumps = 0;
+        s.ridePlane = {point: [...plane.point], normal: [...plane.normal]};
+        s.renderer.setOffset(s.surfaceOffset());
+      },
+      clearRide: () => { s.ridePlane = null; },
+      refreshBoxes: () => { s.world.refreshBoxes(); },
       toast: (text, ms) => ui.toast(text, ms), mood: (m, sec = .8) => s.setMood(m as any, sec, 70), lock: on => { s.inputLock = on; },
     };
   }

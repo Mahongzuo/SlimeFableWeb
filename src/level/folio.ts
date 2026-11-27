@@ -21,7 +21,7 @@ const view = {active: 0, done: [false, false, false], taken: FOLIO.lights.map(()
 const need = RITE_ELEMENT[spec.rite];
 const ui = new LevelUI({start: () => start(), resume: () => resume(), restart: () => location.reload(), home: () => goHome()}, `${dayLabel(day)} · ${year}`);
 const ctx = {THREE: T, renderer: stage.renderer, scene: stage.scene, camera: stage.camera, sun: stage.sun, controls: stage.controls};
-const slime = new SlimeCharacter(ctx, {world: folioWorld(), spawn: [FOLIO.spawn[0], .6, FOLIO.spawn[2]], ui: false, trainingTargets: [], title: spec.title, onToast: () => {}, onReady: () => { if (phase === 'intro') showIntro(); }}).attach();
+const slime = new SlimeCharacter(ctx, {world: folioWorld(), spawn: [FOLIO.spawn[0], .6, FOLIO.spawn[2]], ui: false, trainingTargets: [], title: spec.title, onToast: () => {}, onReady: () => { if (phase === 'intro') start(); }}).attach();
 ui.bindCharacter(slime);
 applyLevelQuality(stage, slime, save.data.quality);
 const hud = ui.root.querySelector('.hud')!, clockLabel = document.createElement('div'); clockLabel.className = 'folio-clock'; hud.appendChild(clockLabel);
@@ -114,6 +114,5 @@ function step(delta: number) {
   stage.render(dt, slime);
 }
 const clock = new T.Clock(); stage.renderer.setAnimationLoop(() => step(clock.getDelta()));
-showIntro();
 (window as any).__slime = slime;
 (window as any).__level = {spec, stage, step, view, art, get phase() { return phase; }, get time() { return time; }, finale: () => { view.done = [true, true, true]; view.ready = true; beginFinale(); }};

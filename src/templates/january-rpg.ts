@@ -165,6 +165,8 @@ export class ArenaEncounter {
   clock = 0;
   turn = 0;
   lastContact = -1;
+  private following: Side | 0 = 0;
+  private caughtPuck = false;
   message = '';
   readonly initialSide: Side;
   readonly layout;
@@ -175,13 +177,16 @@ export class ArenaEncounter {
     this.config = config;
   }
   get rules(): ArenaRuleSet {return this.config ?? arenaRules[this.arena];}
+  get winterClassic() {return this.config?.day==='0101';}
   get blocked(): Side {
+    if(this.winterClassic&&this.following)return this.following;
     const invert = this.arena === 'field' && this.round >= 2 ? 1 : 0;
     return ((this.round + this.turn + invert) % 2 ? -this.initialSide : this.initialSide) as Side;
   }
   get z() {return this.arena === 'field' ? 1 - this.round * 2.4 : this.arena === 'ice' ? -3.0 - this.round * 0.8 : -5;}
   get cue() {return this.clock < 0.46 ? 'read' : this.clock < 0.63 ? 'strike' : 'open';}
   get duration() {return this.rules.period + (this.arena === 'stage' && this.route === -1 ? 0.8 : 0);}
+  get keeperMotion() {return this.clock<.26?'shoulder':this.clock<.46?'edge':'dive';}
   get safeSpot(): Vec {return [-this.blocked * 2.35, 0, this.z];}
   get finaleSpot(): Vec {return this.layout.end;}
   near(p: Vec, q: Vec, r = 1.45) {return Math.hypot(p[0] - q[0], p[2] - q[2]) <= r && Math.abs(p[1] - q[1]) < 0.95;}
@@ -202,8 +207,13 @@ export class ArenaEncounter {
   }
   advance(dt: number, p: Vec, guard: boolean, evading: boolean) {
     if (this.phase !== 'duel') return;
-    this.clock += dt / this.duration;
-    if (this.clock >= 1) {this.clock %= 1; this.turn++;}
+    if(this.winterClassic){
+      if(this.clock<.26&&dt<this.duration*.25&&Math.abs(p[0])>.85&&Math.abs(p[2]-this.z)<2.3)
+        this.following=p[0]<0?-1:1;
+      if(this.route===1&&guard&&this.cue==='strike'&&Math.abs(p[2]-this.z)<2.6)this.caughtPuck=true;
+    }
+    this.clock += dt / (this.duration*(this.caughtPuck&&this.cue==='open'?1.85:1));
+    if (this.clock >= 1) {this.clock %= 1; this.turn++;this.following=0;this.caughtPuck=false;}
     if (this.cue !== 'strike' || this.lastContact === this.turn || Math.abs(p[2] - this.z) > 2.6) return;
     if (this.blocked * p[0] < -0.35) return;
     this.lastContact = this.turn;
@@ -225,14 +235,19 @@ export class ArenaEncounter {
       this.message = '空侧出现后，用闪避加速穿过推进线。'; return false;
     }
     this.round += this.arena === 'stage' && this.route === 1 ? 2 : 1;
-    this.clock = 0; this.turn++; this.lastContact = -1;
+    this.clock = 0; this.turn++; this.lastContact = -1;this.following=0;this.caughtPuck=false;
     this.message = this.arena === 'stage' ? '破绽已击中。' : this.arena === 'field' ? '推进成功，下一条线亮了。' : '出手命中空侧！';
     if (this.round >= this.rules.rounds) this.phase = 'finale';
     return true;
   }
+  missedShot(){
+    if(!this.winterClassic||this.phase!=='duel')return;
+    this.errors++;this.clock=0;this.turn++;this.lastContact=-1;
+    this.following=0;this.caughtPuck=false;
+  }
   retry() {
     if (this.phase !== 'lost') return;
-    this.health = 3; this.clock = 0; this.lastContact = -1; this.turn++;
+    this.health = 3; this.clock = 0; this.lastContact = -1; this.turn++;this.following=0;this.caughtPuck=false;
     this.phase = 'duel'; this.message = '从本轮继续。';
   }
 }

@@ -16,6 +16,80 @@ const activeMixers = new Set<{mixer: any; root: any; speed: number}>();
 let activeLoads = 0;
 let sharedLoader: GLTFLoader | null = null;
 
+const GROUNDED_BUILDINGS = new Set([
+  'build-teahall',
+  'build-huizhou',
+  'build-thatch',
+  'pack-pavilion',
+  'pack-windmill',
+  'pack-greenhouse',
+  'watermill',
+  'build-red-pagoda',
+]);
+
+/**
+ * Seals structural roof-to-wall air gaps in specific DreamWorld GLBs and adds a recessed
+ * stone foundation skirt under solid buildings so no building ever looks disassembled or floating on slopes.
+ */
+function patchBuildingStructure(T: any, id: string, root: any, box: any) {
+  if (!GROUNDED_BUILDINGS.has(id)) return;
+  const makeMat = (hex: number, roughness = 0.86) => {
+    const m = new T.MeshStandardMaterial({color: hex, roughness, metalness: 0.02});
+    climateMaterial(m, 'structure');
+    return m;
+  };
+
+  // 1. Seal build-teahall wall-to-roof open gap (walls stop at y=2.57 while hipped roof starts at y=2.74)
+  if (id === 'build-teahall') {
+    const plaster = makeMat(0xcbbda5, 0.88);
+    const timber = makeMat(0x7c5d4e, 0.82);
+    const roofDark = makeMat(0x4b6b73, 0.78);
+    // Upper wall frieze closing the open gap cleanly into the roof cavity
+    const frieze = new T.Mesh(new T.BoxGeometry(4.66, 0.36, 2.62), plaster);
+    frieze.position.set(0, 2.68, -0.70);
+    // Continuous timber eave beam & front veranda header tying all 4 columns cleanly to the eaves
+    const beam = new T.Mesh(new T.BoxGeometry(4.84, 0.16, 2.74), timber);
+    beam.position.set(0, 2.75, -0.70);
+    const porchBeam = new T.Mesh(new T.BoxGeometry(5.16, 0.18, 0.24), timber);
+    porchBeam.position.set(0, 2.74, 1.56);
+    for (const sx of [-2.34, 2.34]) {
+      const sideTie = new T.Mesh(new T.BoxGeometry(0.22, 0.18, 1.12), timber);
+      sideTie.position.set(sx, 2.74, 1.05);
+      root.add(sideTie);
+    }
+    // Solid inner roof soffit/ridge backing so no sky leaks between roof panels
+    const soffit = new T.Mesh(new T.BoxGeometry(5.10, 0.14, 3.80), roofDark);
+    soffit.position.set(0, 2.86, -0.02);
+    root.add(frieze, beam, porchBeam, soffit);
+  } else if (id === 'pack-pavilion') {
+    const timber = makeMat(0x7b5642, 0.82);
+    const collar = new T.Mesh(new T.BoxGeometry(3.38, 0.22, 2.94), timber);
+    collar.position.set(0, 2.80, 0);
+    root.add(collar);
+  }
+
+  // 2. Grounded stone foundation skirt extending downward (-1.15m..+0.015m, inset 0.04m to prevent Z-fighting)
+  const size = new T.Vector3();
+  const center = new T.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+  const skirtH = 1.18;
+  const stoneMat = makeMat(0x9ca49c, 0.90);
+  let skirt: any;
+  if (id === 'pack-windmill') {
+    const r = Math.max(0.8, Math.min(size.x, size.z) * 0.46);
+    skirt = new T.Mesh(new T.CylinderGeometry(r, r * 1.08, skirtH, 16), stoneMat);
+    skirt.position.set(center.x, box.min.y - skirtH * 0.5 + 0.02, center.z);
+  } else {
+    const w = Math.max(0.6, size.x * 0.91);
+    const d = Math.max(0.6, size.z * 0.88);
+    skirt = new T.Mesh(new T.BoxGeometry(w, skirtH, d), stoneMat);
+    skirt.position.set(center.x, box.min.y - skirtH * 0.5 + 0.02, center.z);
+  }
+  skirt.name = `${id}-foundation-skirt`;
+  root.add(skirt);
+}
+
 function pump(T: any) {
   while (activeLoads < 2 && queue.length) {
     const {id, resolve} = queue.shift()!;
@@ -34,11 +108,13 @@ function pump(T: any) {
       const box = new T.Box3().setFromObject(root);
       const sizeVec = new T.Vector3();
       box.getSize(sizeVec);
+      const origMinY = Number.isFinite(box.min.y) ? box.min.y : 0;
+      patchBuildingStructure(T, id, root, box);
       const entry: CachedAsset = {
         scene: root,
         animations: gltf.animations ?? [],
         size: [Math.max(sizeVec.x, 0.1), Math.max(sizeVec.y, 0.1), Math.max(sizeVec.z, 0.1)],
-        minY: Number.isFinite(box.min.y) ? box.min.y : 0,
+        minY: origMinY,
       };
       cache.set(id, entry);
       resolve(entry);

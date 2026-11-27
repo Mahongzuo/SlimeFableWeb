@@ -350,7 +350,7 @@ export function isInsideHomeTerritory(x: number, z: number, expansions: Expanded
   return pointIn(x + inset, z) && pointIn(x - inset, z) && pointIn(x, z + inset) && pointIn(x, z - inset);
 }
 
-/** Computes expanded CollisionWorld bounds enclosing base WORLD + all unlocked infinite tiles. */
+/** Computes expanded CollisionWorld bounds enclosing base WORLD + unlocked tiles + coastal ocean & dive depth. */
 export function computeExpandedBounds(expansions: ExpandedTile[]): {min: Vec; max: Vec} {
   let minX = WORLD.min[0], maxX = WORLD.max[0], minZ = WORLD.min[1], maxZ = WORLD.max[1];
   for (const e of expansions) {
@@ -361,5 +361,5 @@ export function computeExpandedBounds(expansions: ExpandedTile[]): {min: Vec; ma
     minZ = Math.min(minZ, slot.min[1]);
     maxZ = Math.max(maxZ, slot.max[1]);
   }
-  return {min: [minX - 2, -9, minZ - 2], max: [maxX + 2, 42, maxZ + 2]};
+  return {min: [minX - 72, -24, minZ - 72], max: [maxX + 72, 65, maxZ + 72]};
 }

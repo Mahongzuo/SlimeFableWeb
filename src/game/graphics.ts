@@ -1,20 +1,20 @@
 import type {SlimeCharacter} from '../slime/character';
 import {ZONES} from '../world/map';
 /**
- * Graphics presets for the Home. Cost per frame is mostly whole-scene passes: shadow map, sea reflection, puddle
- * reflection, lake reflection, outline normals and the main MSAA pass all redraw the scene; the slime adds a worker
- * simulation + surface mesh. Each preset scales those levers; "auto" picks one from the GPU and steps down when the
- * measured frame rate stays low.
+ * Graphics presets for the Home. The pipeline redraws the scene at most three times per frame (shadow map, one
+ * shared water mirror, main MSAA pass); the slime adds a worker simulation + surface mesh. Each preset scales the
+ * mirror size and cadence, MSAA, shadow map, grass and the dynamic-resolution floor; "auto" picks one from the GPU
+ * and steps down when the measured frame rate stays low.
  */
 export type Preset = 'low' | 'medium' | 'high' | 'ultra';
 export type QualitySetting = Preset | 'auto';
 export const PRESET_NAMES: Record<QualitySetting, string> = {auto: '自动', low: '低', medium: '中', high: '高', ultra: '极致'};
-interface Spec {/** smallest world radius (m) still drawn in reflections */ reflectMin: number; scale: number; msaa: number; shadow: number; shadowEvery: number; refl: [number, number, number]; reflEvery: number; draw: number; grass: number; slime: 'high' | 'balanced'; fogMin: number}
+interface Spec {/** smallest world radius (m) still drawn in reflections */ reflectMin: number; scale: number; /** dynamic-resolution floor */ minScale: number; msaa: number; shadow: number; shadowEvery: number; /** mirror size relative to the drawing buffer */ refl: number; reflEvery: number; ssr: boolean; draw: number; grass: number; slime: 'high' | 'balanced'; fogMin: number; oceanFFT: number; oceanCascades: number; clouds: 'off' | 'analytic' | 'volumetric'; gtao: boolean; volumetricShafts: boolean}
 export const PRESETS: Record<Preset, Spec> = {
-  low: {reflectMin: 2.5, scale: .7, msaa: 0, shadow: 1024, shadowEvery: 3, refl: [.2, .15, .18], reflEvery: 3, draw: 70, grass: .2, slime: 'balanced', fogMin: .009},
-  medium: {reflectMin: 1.2, scale: 1, msaa: 2, shadow: 2048, shadowEvery: 2, refl: [.3, .22, .25], reflEvery: 2, draw: 110, grass: .5, slime: 'balanced', fogMin: .006},
-  high: {reflectMin: .45, scale: 1.25, msaa: 4, shadow: 2048, shadowEvery: 1, refl: [.42, .3, .35], reflEvery: 1, draw: 170, grass: .85, slime: 'high', fogMin: 0},
-  ultra: {reflectMin: 0, scale: 2, msaa: 4, shadow: 4096, shadowEvery: 1, refl: [.5, .35, .4], reflEvery: 1, draw: 1e4, grass: 1, slime: 'high', fogMin: 0},
+  low: {reflectMin: 2.5, scale: .7, minScale: .7, msaa: 0, shadow: 1024, shadowEvery: 3, refl: .2, reflEvery: 3, ssr: false, draw: 90, grass: .25, slime: 'balanced', fogMin: .0022, oceanFFT: 0, oceanCascades: 0, clouds: 'off', gtao: false, volumetricShafts: false},
+  medium: {reflectMin: 1.2, scale: 1, minScale: .7, msaa: 2, shadow: 2048, shadowEvery: 2, refl: .3, reflEvery: 2, ssr: false, draw: 140, grass: .55, slime: 'balanced', fogMin: .0014, oceanFFT: 128, oceanCascades: 1, clouds: 'analytic', gtao: false, volumetricShafts: false},
+  high: {reflectMin: .45, scale: 1.25, minScale: .7, msaa: 4, shadow: 2048, shadowEvery: 1, refl: .42, reflEvery: 1, ssr: true, draw: 240, grass: .85, slime: 'high', fogMin: 0, oceanFFT: 128, oceanCascades: 2, clouds: 'volumetric', gtao: true, volumetricShafts: true},
+  ultra: {reflectMin: 0, scale: 2, minScale: .8, msaa: 4, shadow: 4096, shadowEvery: 1, refl: .5, reflEvery: 1, ssr: true, draw: 1e4, grass: 1, slime: 'high', fogMin: 0, oceanFFT: 256, oceanCascades: 2, clouds: 'volumetric', gtao: true, volumetricShafts: true},
 };
 const ORDER: Preset[] = ['low', 'medium', 'high', 'ultra'];
 /** Objects that never need reflections, outlines or cast shadows: they go on their own layer (main camera only). */
@@ -35,17 +35,25 @@ export function detectPreset(renderer: any): Preset {
 export class Graphics {
   preset: Preset = 'medium'; setting: QualitySetting = 'auto'; gpu = '';
   private reflectables: {m: any; r: number}[] = [];
-  private frames: number[] = []; private last = performance.now(); private calm = 0; private tick = 0; private reflTick = 0;
+  private scanned = new WeakSet<object>(); private rescanIn = 2;
+  private frames: number[] = []; private last = performance.now(); private calm = 0; private tick = 0;
   onAutoChange?: (p: Preset) => void;
   constructor(private ctx: any, private slime: SlimeCharacter, private zones: any[]) {
-    // throttled reflections: render only every N frames (the texture is kept in between)
-    for (const r of [ctx.waterReflection, ctx.puddleReflection]) if (r && !r.__wrapped) { const render = r.render.bind(r); r.render = (...a: any[]) => (this.reflTick % PRESETS[this.preset].reflEvery === 0 ? render(...a) : false); r.__wrapped = true; }
     (globalThis as any).__shadowTick = () => ++this.tick % PRESETS[this.preset].shadowEvery === 0;
     this.layers();
-    // reflections only draw the reflect layer (+ sky/no-outline layer 1); which meshes join it depends on their size
-    const T = ctx.THREE, sphere = new T.Sphere(); ctx.scene.updateMatrixWorld(true);
-    ctx.scene.traverse((m: any) => { if (!(m.isMesh || m.isInstancedMesh) || !(m.layers.mask & 1)) return; const g = m.geometry; if (!g.boundingSphere) g.computeBoundingSphere(); sphere.copy(g.boundingSphere).applyMatrix4(m.matrixWorld); this.reflectables.push({m, r: m.isInstancedMesh ? 99 : sphere.radius}); });
-    for (const r of this.reflectors()) { r.camera.layers.mask = (1 << LAYER_REFLECT) | (1 << 1); }
+    this.scanReflectables();
+  }
+  /** The mirror only draws the reflect layer (+ sky/no-outline layer 1); which meshes join it depends on their size. */
+  private scanReflectables() {
+    const ctx = this.ctx, sphere = new ctx.THREE.Sphere(), min = PRESETS[this.preset].reflectMin; if (!this.reflectables.length) ctx.scene.updateMatrixWorld(true);
+    ctx.scene.traverse((m: any) => {
+      if (!(m.isMesh || m.isInstancedMesh) || this.scanned.has(m) || m.userData.staticBatch || m.userData.staticBatched) return; this.scanned.add(m);
+      if (!(m.layers.mask & 1)) return;
+      const g = m.geometry; if (!g.boundingSphere) g.computeBoundingSphere(); sphere.copy(g.boundingSphere).applyMatrix4(m.matrixWorld);
+      // instanced sets are judged by one instance, so pebble and stone scatters drop out like single small props
+      const r = m.isInstancedMesh ? g.boundingSphere.radius * m.matrixWorld.getMaxScaleOnAxis() * 1.5 : sphere.radius; this.reflectables.push({m, r});
+      if (r >= min) m.layers.enable(LAYER_REFLECT); else m.layers.disable(LAYER_REFLECT);
+    });
   }
   /** Foliage, small props and effects skip the shadow, reflection and outline passes. */
   layers() {
@@ -54,7 +62,6 @@ export class Graphics {
     // grass instance counts are scaled per preset
     for (const root of this.zones) root.traverse((m: any) => { if (m.isInstancedMesh && /grass|flower/i.test(m.name)) m.userData.fullCount ??= m.count; });
   }
-  private reflectors() { const g = globalThis as any; return [this.ctx.waterReflection, this.ctx.puddleReflection, g.__lakeRefl].filter(Boolean); }
   set(setting: QualitySetting) {
     this.setting = setting; this.frames = []; this.calm = 0;
     this.apply(setting === 'auto' ? detectPreset(this.ctx.renderer) : setting);
@@ -65,17 +72,30 @@ export class Graphics {
     g.__renderScale = s.scale >= 1 ? Math.min(window.devicePixelRatio || 1, s.scale) : s.scale;
     const rt = g.__harborRT; if (rt && rt.samples !== s.msaa) { rt.samples = s.msaa; rt.dispose(); }
     const sun = ctx.sun; if (sun?.shadow && sun.shadow.mapSize.x !== s.shadow) { sun.shadow.mapSize.set(s.shadow, s.shadow); sun.shadow.map?.dispose(); sun.shadow.map = null; }
-    if (ctx.waterReflection) ctx.waterReflection.scale = s.refl[0]; if (ctx.puddleReflection) ctx.puddleReflection.scale = s.refl[1];
-    g.__lakeReflScale = s.refl[2]; g.__reflEvery = s.reflEvery;
-    for (const {m, r} of this.reflectables) { if (r >= s.reflectMin) m.layers.enable(LAYER_REFLECT); else m.layers.disable(LAYER_REFLECT); }
-    for (const r of this.reflectors()) r.camera.layers.mask = (1 << LAYER_REFLECT) | (1 << 1);
+    // static-batch originals sit on their own hidden layer; their batch keeps the layer they had when merged
+    for (const {m, r} of this.reflectables) { if (m.userData.staticBatched) continue; if (r >= s.reflectMin) m.layers.enable(LAYER_REFLECT); else m.layers.disable(LAYER_REFLECT); }
     for (const root of this.zones) root.traverse((m: any) => { if (m.userData.fullCount !== undefined) m.count = Math.max(1, Math.round(m.userData.fullCount * s.grass)); });
+    // grass blades also thin with distance; their per-frame count follows this density (see grass-ism.ts)
+    if (ctx.U?.uGrassDensity) ctx.U.uGrassDensity.value = s.grass;
     this.slime.quality = s.slime;
+    ctx.pipeline?.applyQuality({
+      msaa: s.msaa,
+      oceanFFT: s.oceanFFT,
+      oceanCascades: s.oceanCascades,
+      clouds: s.clouds,
+      gtao: s.gtao,
+      volumetricShafts: s.volumetricShafts,
+      reflScale: s.refl,
+      reflEvery: s.reflEvery,
+      ssr: s.ssr,
+      minScale: s.minScale,
+    });
     g.__harborResize?.();
   }
   /** Per frame: distance culling, fog floor, reflection cadence, and the auto preset's frame-time watch. */
   update(dt: number, playing: boolean) {
-    this.reflTick++; (globalThis as any).__reflTick = this.reflTick;
+    // meshes added after start-up (expansions, props) join the reflect layer on the next scan
+    if ((this.rescanIn -= dt) <= 0) { this.rescanIn = 2; this.scanReflectables(); }
     const s = PRESETS[this.preset], cam = this.ctx.camera.position;
     for (const root of this.zones) { const r = ZONES.find(z => 'zone-' + z.id === root.name); if (!r) continue;
       const dx = Math.max(r.min[0] - cam.x, 0, cam.x - r.max[0]), dz = Math.max(r.min[1] - cam.z, 0, cam.z - r.max[1]); root.visible = Math.hypot(dx, dz) < s.draw; }

@@ -1,4 +1,101 @@
 import type {SkirmishSpec} from './january-skirmish';
+import type {Vec} from '../slime/types';
+import {RelayCourse,type Exhibit} from './season-skirmish';
+
+// 微缩展场、时间窗和分身接应流程均为游戏演绎。
+export const decemberRelayMaps:Record<string,Exhibit>={
+ '1202':{kind:'crossing',name:'陪最后一位行人过街',lesson:'从缘石坡道向黄灯投一团分身，唤醒路口。',middle:'左侧按钮亮起绿灯。留分身压住它，等三位行人通过斑马线，再去对面报平安。',end:'最后一位行人走上了人行道',pads:['路口铃','行人按钮','对岸感应灯','平安回执'],sky:['#699bb3','#f3d5ac'],stone:'#7f8580',trim:'#ffce6f'},
+ '1203':{kind:'speedtrap',name:'记录同一趟车',lesson:'先向纸带起点投一团分身，打开两道测速门。',middle:'看车头从左向右掠过。第一道门亮时在西段投分身，随车跑到东段，在第二道门亮起时再投。',end:'两道时线印上了同一张测速纸带',pads:['校时器','西段光门','东段光门','记录笔'],sky:['#729fb7','#e7daba'],stone:'#a5ada2',trim:'#e8b64d'},
+ '1204':{kind:'beads',name:'三加二的两声珠响',lesson:'先试投到记数签，三颗下珠会靠梁。',middle:'在第四颗下珠旁投分身，三变四。再加一要换五：收回分身让四颗退开，转到上珠一侧，把抵五的珠拨向横梁。',end:'上珠靠梁，三加二正好是五',pads:['记数签','第四颗下珠','抵五上珠','记账印'],sky:['#887660','#f1d6aa'],stone:'#a98156',trim:'#eeb575'},
+ '1205':{kind:'twins',name:'让两副星翼分开',lesson:'从晨光里的发令盘投分身，打开两侧接应架。',middle:'任选一侧投向对面的星托，收回后把分身送到另一颗星上。第二副星翼挡住低处视线，要跳起来再投。',end:'两副太阳翼朝不同方向展开',pads:['发令盘','天雁接应托','星池接应托','晨光接收灯'],sky:['#414965','#f4be8b'],stone:'#a68f72',trim:'#83d5dc'},
+ '1206':{kind:'town',name:'沿海湾送出第一束光',lesson:'在展馆门前把分身投进岸灯。',middle:'选择渔港或民居先收灯讯。沿地上的亮点亲自把光带过海湾，再投分身给另一岸。',end:'灯从海湾展馆一直亮进了家窗',pads:['岸灯','渔港收讯窗','民居收讯窗','海湾总灯'],sky:['#558798','#e8d3ac'],stone:'#929e91',trim:'#e7c26e'}
+};
+
+export class DecemberReception extends RelayCourse{
+  crossing=0;
+  pass=-1;
+  swept=false;
+  nextLamp=0;
+  launches=0;
+  constructor(day:string,seed:string){
+    super(day,seed,decemberRelayMaps[day]);
+    if(this.spec.kind==='speedtrap'){this.pads[1]=[-3.2,.04,.8];this.pads[2]=[3.3,.04,-2];}
+    if(this.spec.kind==='town'){this.pads[1]=[-3.3,.04,.25];this.pads[2]=[3.15,.04,-1.32];}
+  }
+  get trainTime(){return this.elapsed+this.phaseOffset;}
+  get trainX(){
+    const t=this.trainTime%12;
+    // The little train spends its readable four seconds between instruments.
+    // Clear the visible viaduct at both ends before the following pass enters.
+    if(t<2)return -24+8*t;
+    if(t>10)return 8+12*(t-10);
+    return -8+2*(t-2);
+  }
+  get trip(){return Math.floor(this.trainTime/12);}
+  windowAt(i:number){return Math.abs(this.trainX-(i===1?-3.7:4.1))<1.65;}
+  get lamp():Vec{
+    const side=this.order===1?-1:1;
+    return this.nextLamp===0?[side*1.52,.06,.7]:this.nextLamp===1?[0,.06,-1.52]:[-side*1.98,.06,-1.02];
+  }
+  override available(i:number){
+    if((this.spec.kind==='twins'||this.spec.kind==='town')&&(i===1||i===2))return this.done.has(0)&&!this.done.has(i);
+    return super.available(i);
+  }
+  override cast(i:number,p:Vec){
+    if(!this.available(i)||this.pending||this.returning)return false;
+    const kind=this.spec.kind;
+    if(i===1&&kind==='crossing'&&p[0]>-.65)return this.reject('沿左边缘石坡道靠近过街按钮。');
+    if(i===2&&kind==='crossing'&&(!this.westHeld||this.crossing<1||p[0]<1.15))
+      return this.reject('让分身保持绿灯，等最后一位行人上岸，再从对岸接应。');
+    if((i===1||i===2)&&kind==='speedtrap'){
+      if((i===1?p[0]>-.8:p[0]<.8)||!this.windowAt(i))return this.reject('站到对应站台，等车头经过亮起的光门再投。');
+      if(i===2&&this.trip!==this.pass)return this.reject('两处要记同一趟车，从西段重新计时。');
+    }
+    if(i===2&&kind==='beads'&&(!this.swept||p[0]<.8))return this.reject('先收回下珠分身，再去上珠一边拨五。');
+    if((i===1||i===2)&&kind==='twins'){
+      if(i===1?p[0]<.85:p[0]>-.85)return this.reject('从另一侧星托向它投射，让两副星翼错开。');
+      if(this.order&&!this.swept)return this.reject('收回第一枚分身，腾出星翼之间的通道。');
+      if(this.order&&p[1]<.18)return this.reject('第二道展开翼缘挡住了视线，跳起再投。');
+    }
+    if((i===1||i===2)&&kind==='town'&&this.order&&this.nextLamp<3)return this.reject('跟着发光的路标，让灯讯先走到对岸窗边。');
+    const ok=super.cast(i,p);
+    if(ok)this.launches++;
+    if(ok&&kind==='speedtrap'&&i===1)this.pass=this.trip;
+    return ok;
+  }
+  override update(dt:number,p:Vec,shots:readonly {phase:string;center:Vec}[]){
+    const landed=super.update(dt,p,shots);
+    if(this.order&&!shots.length&&!this.pending&&(this.spec.kind==='twins'||this.spec.kind==='beads'))this.swept=true;
+    if(this.spec.kind==='crossing'&&this.westHeld&&!this.done.has(2)){
+      const t=this.pads[1],held=shots.some(s=>s.phase==='active'&&Math.hypot(s.center[0]-t[0],s.center[2]-t[2])<.79);
+      if(held)this.crossing=Math.min(1,this.crossing+dt*.40);
+      else{this.done.delete(1);this.westHeld=false;this.hint='行人已在安全处等候，重新留守绿灯即可继续。';}
+    }
+    if(this.spec.kind==='speedtrap'&&this.done.has(1)&&!this.done.has(2)&&this.pending?.i!==2&&this.trip>this.pass){
+      this.done.delete(1);this.retries++;this.hint='这趟车已经过去，下一趟会重新经过西门。';
+    }
+    if(this.spec.kind==='town'&&this.order&&this.nextLamp<3){
+      const l=this.lamp;
+      if(Math.hypot(p[0]-l[0],p[2]-l[2])<.81)this.nextLamp++;
+    }
+    return landed;
+  }
+  override recall(){
+    if(this.spec.kind==='crossing'&&this.westHeld&&!this.done.has(2))this.done.delete(1);
+    if(this.order&&(this.spec.kind==='beads'||this.spec.kind==='twins'))this.swept=true;
+    super.recall();
+  }
+  override retry(){
+    if(this.spec.kind==='crossing'&&this.westHeld&&!this.done.has(2))this.done.delete(1);
+    if(this.spec.kind==='speedtrap'&&!this.done.has(2)){this.done.delete(1);this.pass=-1;}
+    super.retry();
+  }
+  override get instruction(){
+    if(this.spec.kind==='crossing'&&this.westHeld&&!this.done.has(2))return this.crossing<1?'绿灯亮着，三位行人正在过街。留住分身，走向对岸。':'三人都到岸了，从右边接应灯投出下一团。';
+    if(this.spec.kind==='town'&&this.order&&!this.done.has(this.order===1?2:1))return this.nextLamp<3?'走到亮着的岸灯，把灯讯引过弯。　'+this.nextLamp+' / 3':'灯讯到岸，可以投向另一扇窗口了。';
+    return super.instruction;
+  }
+}
 
 export const decemberSkirmishSpecs: Readonly<Record<string, SkirmishSpec>> = {
   '1201': {"style":"court","bonus":"cross","routes":["左粉笔行情板","右电脑撮合台"],"names":["红岭试业标","电子托管标","电脑撮合标","特区腾飞灯"],"prompt":"走进大厅金环点亮深交所试营业灯","finale":"深圳证券交易所集中试营业启航","tactic":"跨半场斜射享加力，快捷点亮无纸化撮合核心节点","banner":["SHENZHEN SZSE • 1990","ELECTRONIC FIRST"],"sky":["#326996","#f5dca8"],"floor":"#7d9299","accent":"#e67842"},

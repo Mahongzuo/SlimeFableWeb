@@ -28,7 +28,7 @@ const ui = new LevelUI({start, resume, restart: () => location.reload(), home: (
 const ctx = {THREE, renderer: stage.renderer, scene: stage.scene, camera: stage.camera, sun: stage.sun, controls: stage.controls};
 const slime = new SlimeCharacter(ctx, {world, spawn: layout.spawn, gravityScale: spec.gravityScale, ui: false, trainingTargets: [], title: spec.title,
   onToast: text => { if (state === 'play') ui.toast(text); },
-  onReady: () => { if (state === 'intro') showIntro(); },
+  onReady: () => { if (state === 'intro') start(); },
   // The shared attach probe reaches slightly farther than the subsequent climb probe.
   // Seat the body on the detected ice face before its first climb step, using the existing hook.
   onCling: attached => {
@@ -49,8 +49,6 @@ batteryBar.max = spec.battery.capacity;
 const cameraPosition = new THREE.Vector3(), cameraTarget = new THREE.Vector3(), projected = new THREE.Vector3();
 const shots = LANDER_SHOTS;
 stage.camera.position.fromArray(shots.opening.position); stage.camera.lookAt(...shots.opening.target);
-function showIntro() { ui.intro(spec.title, spec.intro, ['WASD 微调下降 · C 摊开吸收冲击', '空格低重力跳跃 · 朝冰崖持续移动即可贴墙上爬', '3 切换火属性 · 空格短促喷气（消耗电池）', '追随金色阳光，站在三个平台上按 F 展开太阳能板', '到 Abydos 按 F 回传数据；背面的鸭形岩石藏着纪念品'], slime.ready); }
-showIntro();
 function start() {
   if (state !== 'intro' || !slime.ready) return;
   slime.play(); slime.grounded = false; slime.yaw = -Math.PI / 2; slime.arm = 5.2; slime.pitch = .45;

@@ -1,11 +1,11 @@
-import {ITEMS, RECIPES} from './catalog';
+import {ITEMS, RECIPES, RESIDENT_FISH} from './catalog';
 import {rng} from '../templates/random';
 import {takeItem, type LifeData, type RequestState} from './state';
 /**
  * The 委托板: three requests a day from the harbour folk, the same for everyone on the same date.
  * Rewards pay half again over the shop price, plus a tip, so delivering beats selling.
  */
-const POOL = [...Object.values(ITEMS).filter(i => i.kind === 'crop' || i.kind === 'fish').map(i => i.id), ...RECIPES.map(r => r.id)];
+const POOL = [...Object.values(ITEMS).filter(i => i.kind === 'crop' || (i.kind === 'fish' && !RESIDENT_FISH.has(i.id))).map(i => i.id), ...RECIPES.map(r => r.id)];
 const RARE = new Set(['fish-golden-trout', 'fish-rainbow-trout', 'fish-history', 'fish-eel']);
 const WHO = ['码头的阿海叔', '渔社的林阿姨', '候船室的小卖部', '凝露小学的孩子们', '灯塔看守老周', '汤圆岛来的游客', '茶水摊的阿婆', '渡轮船长'];
 export function dailyRequests(day: string): RequestState[] {

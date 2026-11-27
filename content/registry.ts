@@ -1,4 +1,5 @@
 import {DayMeta} from './types';
+import {jan01Day} from './jan01-chapters';
 import {day0815} from './days/0815';
 import {day1001} from './days/1001';
 import {day1112} from './days/1112';
@@ -24,6 +25,7 @@ for (const day of novemberDays) days[day.day] = day;
 for (const day of decemberDays) days[day.day] = day;
 for (const day of octoberDays) if (!days[day.day]) days[day.day] = day;
 for (const day of atlasDays) days[day.day] = day;
+days[jan01Day.day] = jan01Day;
 for (const c of abilityChapters) {
   const day = days[c.day] ?? {day: c.day, theme: c.quest, chapters: []};
   const others = day.chapters.filter(ch => ch.id !== c.id);

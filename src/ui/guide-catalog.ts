@@ -45,7 +45,8 @@ export const BUILTIN_GUIDE_SECTIONS: GuideSection[] = [
       {keys: ['空格'], label: '二段跳 / 空中开伞'},
       {keys: ['8'], label: '家园天气与时间'},
       {keys: ['C'], label: '摊开钻缝'},
-      {keys: ['G', '右键'], label: '过肩瞄准 + 左键发射分身'},
+      {keys: ['右键'], label: '家园向前冲刺突进'},
+      {keys: ['G'], label: '过肩瞄准 + 左键发射分身'},
       {keys: ['X'], label: '按住收回分身'},
       {keys: ['T'], label: '脱离墙面 / 卡住复位'},
     ],
@@ -64,7 +65,7 @@ export const BUILTIN_GUIDE_SECTIONS: GuideSection[] = [
         icon: '🎯',
         title: '分身发射与黏合回收',
         tag: '物理机关',
-        summary: '按住 G 或鼠标右键进入过肩瞄准视角，屏幕中心出现四段准星，左键可发射最多 5 团分身（射程 40m）。',
+        summary: '按住 G 进入过肩瞄准视角，屏幕中心出现四段准星，左键可发射最多 5 团分身（射程 40m）；家园探索按右键可直接向前冲刺突进。',
         bullets: [
           '分身可用来压住远处的机关踏板、在关卡中协助触发连携。',
           '按住 X 键可将散落的分身吸回本体，靠近后触发丝滑液体融球。',

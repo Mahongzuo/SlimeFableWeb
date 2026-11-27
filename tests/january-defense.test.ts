@@ -13,16 +13,19 @@ function arrange(game:JanuaryDefense,sector:number) {
   assert.ok(game.deploy(sector*2+1,'wind'));
 }
 for(const day of Object.keys(defenseMaps)){
-  test(day+' · 四十个种子可凭两座元素塔零损收尾',()=>{
+  test(day+' · 四十个种子可通过迁塔零损收尾',()=>{
     for(let seed=0;seed<40;seed++){
       const game=new JanuaryDefense(day,day+'-'+seed);
       assert.equal(game.finish(),false);
       for(let w=0;w<6;w++){
-        arrange(game,Math.floor(w/2));wave(game);
+        arrange(game,Math.floor(w/2));
+        if (game.parade && w>0 && w%2===0) game.deploy(w-1,'water');
+        wave(game);
         assert.notEqual(game.phase,'lost','seed '+seed+' wave '+w);
       }
       assert.equal(game.phase,'finale');assert.equal(game.plates.length,6);
       assert.equal(game.served,57);assert.ok(game.plates.every(Boolean));
+      if(game.parade){assert.equal(game.finish(),false);assert.ok(game.castWheel());game.secureWheel(false);assert.equal(game.finish(),false);game.secureWheel(true);}
       assert.ok(game.finish());assert.equal(game.finish(),false);assert.equal(game.start(),false);
     }
   });

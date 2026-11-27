@@ -2,7 +2,7 @@ import {buildGardenRegions} from '../home/garden-regions';
 import {riverCenter,riverLevel} from '../home/waterway';
 import {createWorld, type WorldDefinition} from '../slime/world';
 import type {HeightFieldData} from '../slime/height-field';
-import {SEA_LEVEL} from '../home/layout';
+import {plazaBoxes, SEA_LEVEL} from '../home/layout';
 import {buildZones, type BuiltZones} from '../zones';
 import {bakeRegion} from './bake';
 import {buildQuay} from '../home/jiangnan';
@@ -10,6 +10,7 @@ import {ensureHome,type LifeData,type PlacedProp} from '../life/state';
 import {settleLegacyGarden} from '../home/build-catalog';
 import type {ZoneContext} from '../zones/types';
 import {buildInlandGround} from './terrain-mesh';
+import {buildCoastalCollisionSurfaces, buildCoastalReefBoxes, buildOceanFluidVolumes} from './island-coast';
 import {inland, inlandSurfaces, LAKE, lakeFluid, WORLD, ZONES} from './map';
 
 export function buildHomeWorld(
@@ -21,14 +22,17 @@ export function buildHomeWorld(
   const started = performance.now();
   if(settleLegacyGarden(ensureHome(life)))save();
   buildInlandGround(ctx);
-  buildQuay(ctx);
+  const quayBoxes=buildQuay(ctx);
   const zones = buildZones(ctx, life, save, extra);
   const {boxes,footprints}=buildGardenRegions(ctx,zones.roots,life.home?.placed??[]);
+  boxes.push(...quayBoxes, ...plazaBoxes(), ...zones.boxes, ...buildCoastalReefBoxes(ensureHome(life).expansions));
+  const coastalPad = 76;
   const base: WorldDefinition = {
-    boxes, water: ctx.puddles, surfaces:inlandSurfaces(),
+    indexBoxes:true,boxes, water: ctx.puddles,
+    surfaces:[...inlandSurfaces(), ...buildCoastalCollisionSurfaces([], coastalPad)],
     fluids:[...Array.from({length:54},(_,i)=>{const z=i-31,x=riverCenter(Math.min(z,18)),w=z<18?4:Math.max(.15,4-(z-18));
-      return {min:[x-w,z] as [number,number],max:[x+w,z+1] as [number,number],level:riverLevel,sink:.14};}),lakeFluid],
-    bounds: {min: [WORLD.min[0] - 1, -9, WORLD.min[1] - 1], max: [WORLD.max[0] + 1, 40, WORLD.max[1] + 1]},
+      return {min:[x-w,z] as [number,number],max:[x+w,z+1] as [number,number],level:riverLevel,sink:.14};}),lakeFluid,...buildOceanFluidVolumes([], coastalPad)],
+    bounds: {min: [WORLD.min[0] - 72, -24, WORLD.min[1] - 72], max: [WORLD.max[0] + 72, 65, WORLD.max[1] + 72]},
   };
   const terrain = createWorld({...base, boxes: []}).terrain, heights: HeightFieldData[] = [];
   for (const root of zones.roots) {

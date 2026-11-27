@@ -1,3 +1,8 @@
+import {isNewyearDay,newyearService} from './newyear-defense';
+import {isMonthendDay,monthendService} from './monthend-defense';
+import {isYearendDay,yearendService} from './yearend-defense';
+import {isMidDay} from './midwinter-defense';
+import {DefenseControl,isSeasonDefense} from './season-defense';
 import {rng} from './random';
 import {alongStroke,type MapStroke} from './january-layout';
 import {buildFebruaryDefenseMaps} from './february-defense';
@@ -126,7 +131,7 @@ export const defenseMaps: Record<string, DefenseMap> = {
     '快车集袋', '压出第四十七星', '邮袋全对', '错分邮袋',
     '窄道快车与主道慢车交替发邮，切换压台与风槽把地图送入正确邮格。', {flow: 'alternate', palette: ['#8d9c8e', '#f4d9b5', '#c3b290', '#e8d5b0', '#9f5246', '#e4a756']}),
   '0107': def(layoutWave, 'airship', ['多佛白崖', '海峡风带', '加来海岸'], '逆风涡流', '海面稳流台', '高空顺风塔',
-    '风袋定向', '放下着陆回绳', '不触海雾', '涡流偏航',
+    '风袋定向', '放下着陆绳', '不触海雾', '涡流偏航',
     '热气球跨越英吉利海峡。水塔护住低空海面，风塔托住高空顺风带。'),
   '0108': def(layoutConverge, 'workshop', ['卡片仓', '分流插针台', '计数盘'], '混排卡流', '固定读卡头', '分道脉冲塔',
     '清槽进位', '合下计数总柄', '无积压', '卡槽积压',
@@ -252,7 +257,7 @@ export const defenseMaps: Record<string, DefenseMap> = {
 
 interface Packet {
   id: number; route: number; distance: number; x: number; z: number; speed: number;
-  work: number; max: number; slow: number; connected: boolean;
+  work: number; max: number; slow: number; connected: boolean; lit?:boolean;
 }
 interface Tower {kind: Installation; cooldown: number; flash: number; aim: Point}
 export interface Track extends MapStroke {total: number}
@@ -266,20 +271,27 @@ export function sample(track: Track, distance: number, out: Point): Point {
 
 export class JanuaryDefense {
   readonly map: DefenseMap;
+  readonly control:DefenseControl|null;
   readonly tracks: Track[];
   readonly towers: (Tower | null)[] = Array(6).fill(null);
   readonly packets: Packet[] = [];
   readonly plates: boolean[] = [];
-  readonly random: ReturnType<typeof rng>;
+  random: ReturnType<typeof rng>;
   phase: DefensePhase = 'setup';
   wave = 0; released = 0; clock = 0; errors = 0; served = 0; assists = 0; activeTime = 0;
   private startErrors = 0;
+  private checkpoint: {served:number; pollen:number; activeTime:number; serial:number;
+    desk?:Pick<DefenseControl,'count'|'hits'|'reserve'|'side'|'active'|'lock'>} | null = null;
   private next = 0;
   private recovery = 0;
   private serial = 0;
   private probe: Point = [0, 0];
-  constructor(day: string, seed: string) {
-    this.map = defenseMaps[day];
+  pollen = 0; retries = 0;
+  wheel: 'free' | 'cast' | 'held' = 'free';
+  get parade() {return this.day === '0101';}
+  constructor(readonly day: string, private readonly seed: string) {
+    this.control=isSeasonDefense(day)?new DefenseControl(day):null;
+    this.map = isNewyearDay(day)?{...defenseMaps[day],...newyearService[day]}:isMonthendDay(day)?{...defenseMaps[day],...monthendService[day]}:isYearendDay(day)?{...defenseMaps[day],...yearendService[day],sectors:[...yearendService[day].sectors]}:defenseMaps[day];
     if (!this.map) throw new Error('缺少本日塔防地图 ' + day);
     this.tracks = this.map.routes.map(measure);
     this.random = rng(seed);
@@ -291,6 +303,7 @@ export class JanuaryDefense {
   get steps() {return this.plates.length;}
   deploy(index: number, kind: Installation | 'remove') {
     if (!['setup', 'interval', 'wave'].includes(this.phase) || !Number.isInteger(index) || index < 0 || index >= 6) return false;
+    if(this.control&&kind!=='remove')this.control.focus=index;
     const current = this.towers[index];
     if (kind === 'remove') {if (!current) return false; this.towers[index] = null; return true;}
     if ((!current && this.charges === 0) || current?.kind === kind) return false;
@@ -301,13 +314,43 @@ export class JanuaryDefense {
     if (this.phase !== 'setup' && this.phase !== 'interval') return false;
     if (this.phase === 'interval') this.wave++;
     this.phase = 'wave'; this.clock = 0; this.startErrors = this.errors; this.next = 0; this.released = 0;
+    if(this.parade||this.control)this.random=rng(this.seed+':wave:'+this.wave);
+    if(this.parade||this.control){
+      this.checkpoint={served:this.served,pollen:this.pollen,activeTime:this.activeTime,serial:this.serial};
+      if(this.control&&(isMidDay(this.day)||isYearendDay(this.day)||isMonthendDay(this.day)||isNewyearDay(this.day))){
+        const {count,hits,reserve,side,active,lock}=this.control;
+        this.checkpoint.desk={count,hits,reserve,side,active,lock};
+      }
+    }
+    return true;
+  }
+  retryCorner() {
+    if(!(this.parade||this.control) || this.phase!=='lost' || !this.checkpoint)return false;
+    const previous=this.checkpoint;
+    this.served=previous.served;this.retries++;this.pollen=previous.pollen;
+    this.activeTime=previous.activeTime;this.serial=previous.serial;this.errors=this.startErrors;
+    this.recovery=0;
+    if(this.control){this.control.active=0;this.control.lock=0;if(previous.desk)Object.assign(this.control,previous.desk);}
+    this.packets.length=0;this.released=0;this.clock=0;
+    for(const tower of this.towers)if(tower){tower.cooldown=.28;tower.flash=0;}
+    this.phase=this.wave===0?'setup':'interval';this.wave=Math.max(0,this.wave-1);
     return true;
   }
   routeFor(serial: number) {
+    // At the turn the first plume still reaches the trailing coach.
+    if (this.parade && this.wave > 0 && this.wave % 2 === 0 && serial === 0) return this.sector - 1;
     if (this.map.theme === 'station' || this.map.flow === 'alternate') {
       return this.wave >= 4 ? (serial % 3 === 0 ? 1 : 2) : (this.wave % 2 && serial % 3 === 0 ? 1 - this.sector : this.sector);
     }
     return this.sector;
+  }
+  operate() {
+    if(!this.control||!['wave','interval'].includes(this.phase))return false;
+    if(this.day==='1202'){
+      const first=2*Math.floor(this.control.focus/2),a=this.towers[first],b=this.towers[first+1];
+      this.control.linked=!!a&&!!b&&a.kind!==b.kind;
+    }
+    return this.control.operate(this.packets,r=>this.tracks[r].total);
   }
   assist() {
     if (!this.canAssist) return false;
@@ -317,15 +360,17 @@ export class JanuaryDefense {
   }
   private release() {
     const route = this.routeFor(this.released), track = this.tracks[route];
-    const work = 2 + (this.wave >= 2 ? 1 : 0) + (this.released % 4 === 3 ? 1 : 0);
+    const cadence=this.control?.release(this.released,this.wave,this.serial);
+    const work = (cadence?.load??0) + 2 + (this.wave >= 2 ? 1 : 0) + (this.released % 4 === 3 ? 1 : 0);
     this.packets.push({
       id: this.serial++, route, distance: 0, x: track.points[0][0], z: track.points[0][1],
-      speed: track.total / (8.7 + this.random.range(-0.55, 0.55)), max: work, work, slow: 0, connected: false,
+      speed: track.total * (cadence?.speed??1) / (8.7 + this.random.range(-0.55, 0.55)), max: work, work, slow: 0, connected: false,
     });
-    this.released++; this.next += 1.8 + this.random.range(-0.22, 0.22);
+    this.released++; this.next += 1.8 + (cadence?.spacing??0) + this.random.range(-0.22, 0.22);
   }
   tick(dt: number) {
     if (this.phase !== 'wave' || !Number.isFinite(dt) || dt <= 0) return;
+    this.control?.tick(dt);
     this.clock += dt; this.activeTime += dt; this.recovery = Math.max(0, this.recovery - dt);
     if (this.released < this.size && this.clock >= this.next) this.release();
     for (let i = 0; i < this.towers.length; i++) {
@@ -335,24 +380,34 @@ export class JanuaryDefense {
       const p = this.packets.find(v => !v.connected && v.work > 0 && Math.hypot(v.x - x, v.z - z) <= range);
       if (!p) continue;
       p.work -= water ? 2 : 1; if (!water) p.slow = 1.5;
+      if(this.control)p.work-=this.control.beam(i,tower.kind,p,this.packets);
       tower.aim[0] = p.x; tower.aim[1] = p.z; tower.flash = 0.27; tower.cooldown = water ? 0.83 : 1;
     }
     for (let i = this.packets.length - 1; i >= 0; i--) {
       const p = this.packets[i], track = this.tracks[p.route];
       if (p.work <= 0 && !p.connected) {
         p.connected = true; this.served++;
+        if (this.parade) this.pollen = Math.max(0, this.pollen - 0.32);
         if (this.map.theme !== 'station' && this.map.flow !== 'alternate') {this.packets.splice(i, 1); continue;}
       }
       p.slow = Math.max(0, p.slow - dt);
       p.distance += p.speed * dt * (p.connected ? 1.65 : p.slow > 0 ? 0.67 : 1);
       sample(track, p.distance, this.probe); p.x = this.probe[0]; p.z = this.probe[1];
-      if (p.distance >= track.total) {if (!p.connected) this.errors++; this.packets.splice(i, 1);}
+      if (p.distance >= track.total) {if (!p.connected) {this.errors++; if (this.parade) this.pollen = Math.min(1, this.pollen + 0.75);} this.packets.splice(i, 1);}
     }
     if (this.errors >= 5) {this.phase = 'lost'; return;}
     if (this.released === this.size && this.packets.length === 0) {
+      if(this.control){this.control.lock=0;this.control.active=0;}
       this.plates.push(this.startErrors === this.errors);
       this.phase = this.wave === 5 ? 'finale' : 'interval';
     }
   }
-  finish() {if (this.phase !== 'finale') return false; this.phase = 'won'; return true;}
+  castWheel() {
+    if (!this.parade || this.phase !== 'finale' || this.wheel !== 'free') return false;
+    this.wheel = 'cast'; return true;
+  }
+  secureWheel(contact: boolean) {
+    if (this.wheel === 'cast' && contact) this.wheel = 'held';
+  }
+  finish() {if (this.phase !== 'finale' || (this.parade && this.wheel !== 'held')) return false; this.phase = 'won'; return true;}
 }

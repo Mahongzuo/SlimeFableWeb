@@ -1,7 +1,6 @@
 import type {AbilityKind,AbilityMode} from './levels/types';
 // 史实见 docs/days/second-calendar.md。机关和场景为虚构。
 export const abilityRecords: [string,number,AbilityKind,string,string,string,AbilityMode,number][] = [
-  ["0101", 1823, "ink", "裴多菲 · 登上高台", "诗人裴多菲出生。", "https://baike.baidu.com/cms/home/eventsOnHistory/01.json", "climb", 4],
   ["0102", 1920, "ink", "艾萨克·阿西莫夫 · 留在彼岸的光", "作家艾萨克·阿西莫夫出生。", "https://baike.baidu.com/cms/home/eventsOnHistory/01.json", "relay", 4],
   ["0104", 1951, "ink", "史铁生 · 接通最后一环", "作家史铁生出生。", "https://baike.baidu.com/cms/home/eventsOnHistory/01.json", "circuit", 2],
   ["0107", 1862, "ink", "鲁巴金 · 沿水线取样", "作家鲁巴金出生。", "https://baike.baidu.com/cms/home/eventsOnHistory/01.json", "tide", 0],

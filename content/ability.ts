@@ -1,4 +1,5 @@
 import {abilityRecords} from './ability-records';
+import {newyearChapters} from './chronicle-newyear';
 import type {AbilityKind,AbilityMode,AbilitySpec} from './levels/types';
 import type {ChapterMeta} from './types';
 
@@ -18,6 +19,7 @@ const exhibits:Record<AbilityKind,[string,string]>={
   memorial:['白花','敲响和平钟'],
 };
 export function chapterSteps(s:AbilitySpec):string[]{
+ const room=newyearChapters[s.id];if(room)return [...room.tasks.map(([step])=>step),room.last];
  if(s.kind==='memorial')return ['让两团分身分别点亮远端灯座','双灯亮起时，本体拾起三束白花','在祭台敲响和平钟'];
  const [item,finish]=exhibits[s.kind],element=elementNames[s.element];
  switch(s.mode){

@@ -1,0 +1,12 @@
+.js-course.season-course aside {max-width:min(380px,88vw);top:15%}
+.season-course .relay-meter {height:6px;margin:7px 0 3px;border-radius:5px;background:#6a756e;overflow:hidden;display:none}
+.season-course .relay-meter.show {display:block}
+.season-course .relay-meter i {display:block;height:100%;background:#efc275;transform-origin:left}
+.season-course .relay-meter[data-window="true"] i {background:#bdf5b0}
+.season-course nav button {min-height:36px}
+.season-course .js-pad {grid-template-columns:repeat(3,39px)}
+.season-course .js-pad button{padding:5px 0}
+.season-course header{align-items:start}
+.season-course .relay-tools {max-width:315px}
+.js-course.season-course.december-finale aside {top:auto;bottom:3%}
+@media(max-width:600px){.js-course.season-course aside{top:14%;padding:7px 10px}.season-course .relay-tools{max-width:191px}.season-course article{bottom:2%}.season-course aside strong{font-size:14px}}

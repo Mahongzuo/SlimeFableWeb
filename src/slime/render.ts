@@ -241,7 +241,11 @@ export class SlimeRenderer {
    if(frame.centers[i]){this.material.uniforms.uCenters.value[i].fromArray(frame.centers[i]);this.material.uniforms.uRadii.value[i].fromArray(frame.radii[i])}
    const shadow=this.shadows[i],c=frame.centers[i],r=frame.radii[i];shadow.visible=!!c;
    if(c&&r){
-    const floor=this.world.support(c[0],c[2],c[1]+.1);shadow.visible=floor!==null;
+    const solidFloor=this.world.support(c[0],c[2],c[1]+.1,true);
+    const fluidLevel=this.world.fluid(c[0],c[2]);
+    const inOpenWater=fluidLevel!==null&&(solidFloor===null||solidFloor<fluidLevel-.18);
+    const floor=inOpenWater?null:solidFloor;
+    shadow.visible=floor!==null;
     if(floor!==null){
      shadow.position.set(c[0],floor+.006,c[2]);shadow.userData.base=[c[0],floor+.006,c[2]];
      const domeScale=i===0?1+(frame.shapeBlend??1)*.32:1;

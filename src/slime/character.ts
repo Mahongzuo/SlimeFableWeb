@@ -6,7 +6,7 @@ import {FaceDirector,Mood} from './face';
 import {Combat,isSelfSkill,skillAimStatus,stopAtMeleeTarget,type CombatTarget,type SwingAreaEvent} from './combat';
 import {elements} from './elements';
 import {CLING,stepCling,tryAttach,type ClingState} from './cling';
-import {createWorld,CollisionWorld,GroundSurface,WorldDefinition} from './world';
+import {createWorld,CollisionWorld,FluidVolume,GroundSurface,WorldDefinition} from './world';
 import {UMBRELLA,UmbrellaLogic} from './umbrella';
 import {SlashVfxSystem} from './slash-vfx';
 import {SkillRuntime,type CombatHudSnapshot,type ReactionResult,type SkillDef,type SkillSlot} from './skills';
@@ -23,6 +23,8 @@ export interface SlimeOptions {
   onFire?:()=>void;
   /** Encounter targets supply foot positions. The level draws their models and HUD. */
   battleTargets?:Vec[]; burstOnEnemy?:boolean; defaultAim?:boolean; onDodgePress?:()=>void;
+  /** Enables crisp short forward dash on right-click in Home exploration (with wall & ground safety checks). */
+  homeDash?:boolean;
   onBattleCloneBurst?:(point:Vec,element:number)=>void;
   onBattleSceneryHit?:(point:Vec,element:number)=>void;
   onBattleHit?:(target:CombatTarget,damage:number,element:number,reaction:ReactionResult|null,point:Vec)=>void;
@@ -32,6 +34,7 @@ export interface SlimeOptions {
 
 const CANNON = {speed: 28, maxSpeed: 36, gravity: 9.8, aimDistance: 40, fireInterval: 0.35, clearance: 0.03};
 const LAUNCH_CAM = {height: 0.60, shoulder: 0.45, blendSeconds: 0.18};
+const HOME_DASH = {duration: 0.18, speed: 17.5, cooldown: 0.50};
 
 function createUI(mount?:HTMLElement){
  const ui=document.createElement('div');ui.id='slime-ui';ui.innerHTML=`
@@ -48,7 +51,13 @@ function createUI(mount?:HTMLElement){
 }
 
 export class SlimeCharacter {
- position:Vec=[0,0,0];velocity:Vec=[0,0,0];forward:Vec=[0,0,-1];grounded=true;jumps=0;spread=0;element=0;quality:Quality='high';mode:'observe'|'play'|'paused'='observe';yaw=0;pitch=.23;arm=2.6;currentArm=2.6;keys=new Set<string>();generation=0;swimming=false;
+ position:Vec=[0,0,0];velocity:Vec=[0,0,0];forward:Vec=[0,0,-1];grounded=true;jumps=0;spread=0;element=0;quality:Quality='high';mode:'observe'|'play'|'paused'='observe';yaw=0;pitch=.23;arm=2.6;currentArm=2.6;keys=new Set<string>();generation=0;swimming=false;submerged=false;
+ /** Optional CPU ocean wave sampler injected by Home scene for wave-synced buoyancy & rocking. */
+ oceanWaveSampler:((x:number,z:number,time:number)=>{height:number;normal:Vec;velocityY:number;seaLevel:number}|null)|null=null;
+ private surfaceJumpLock=0;private waterNormal:Vec|null=null;private smoothedWaterNormal:Vec=[0,1,0];private waterWaveVelY=0;
+ /** Active moving/tilted ride surface plane (e.g. park swing plank) locked while riding. */
+ ridePlane:{point:Vec;normal:Vec}|null=null;
+ get isDashing(){return this.homeDashTimer>0}
  readonly bodyShape='dome';readonly shapeBlend=1;
  readonly umbrella=new UmbrellaLogic();
  readonly slashVfx:SlashVfxSystem;
@@ -66,6 +75,7 @@ export class SlimeCharacter {
   return live+this.sentLaunches+this.commands.filter(c=>c.type==='launch').length;
  }
  private jumpRequest=false;private jumpBuffer=0;private coyoteTimer=0;private jumpHeld=false;private jumpStretch=0;private airBounce=0;
+ private homeDashTimer=0;private homeDashCooldown=0;private homeDashDir:[number,number]=[0,-1];private homeDashTrailTimer=0;
  /** Level-authored dodges feed displacement through the usual capsule, floor and camera. */
  dodgeMotion:Vec|null=null;
  /** Only the RPG supplies a target; other scenes keep their existing camera and casting controls. */
@@ -77,7 +87,7 @@ export class SlimeCharacter {
  private cameraHeight=new GroundCameraHeight();
  private shake=0;private aimBlend=0;private launchBlocked=false;private listeners:{target:EventTarget;type:string;fn:EventListener}[]=[];
  private baseBoxCount=0;private pendingDynamicBoxes:Box[]|null=null;
- private baseSurfaceCount=0;private pendingDynamicSurfaces:{surfaces:GroundSurface[];bounds?:{min:Vec;max:Vec}}|null=null;
+ private baseSurfaceCount=0;private pendingDynamicSurfaces:{surfaces:GroundSurface[];fluids?:FluidVolume[];bounds?:{min:Vec;max:Vec}}|null=null;
  readonly T:any;readonly world:CollisionWorld;readonly ui:HTMLElement;private $:(s:string)=>HTMLElement;private spawn:Vec;private worldPending=true;
 
  constructor(readonly ctx:SlimeContext,readonly options:SlimeOptions){
@@ -122,6 +132,7 @@ export class SlimeCharacter {
  }
 
  jump(){this.jumpRequest=true;this.jumpBuffer=.12;}
+ setSurfaceJumpLock(seconds:number){this.surfaceJumpLock=Math.max(this.surfaceJumpLock,seconds);}
  launch(target:Vec){this.commands.push({type:'launch',target:[...target]});}
  setMood(mood:Mood,duration=.8,priority=60){this.face.pulse(mood,duration,priority);}
  private meleeAim():Vec|undefined{
@@ -212,26 +223,28 @@ export class SlimeCharacter {
  teleport(p:Vec){this.cameraHeight.reset();this.currentArm=this.arm;this.frameAnchor=null;this.pendingImpacts.length=0;this.sentLaunches=0;this.commands=[];this.cling=null;this.umbrella.cancel(true);this.position=[...p];this.velocity=[0,0,0];this.generation++;this.decals.reset();}
 
  /** Move an existing platform in the worker without regenerating the body or its clones. */
- syncBox(index:number){const box=this.world.boxes[index];if(box&&!this.worldPending)this.worker.postMessage({boxUpdate:{index,min:box.min,max:box.max}});}
+ syncBox(index:number){this.world.refreshBoxes();const box=this.world.boxes[index];if(box&&!this.worldPending)this.worker.postMessage({boxUpdate:{index,min:box.min,max:box.max}});}
 
  /** Replace dynamically built home-prop collision boxes in both main world & simulation worker. */
  setDynamicBoxes(boxes:Box[]){
   this.world.boxes.length=this.baseBoxCount;
   for(const b of boxes)this.world.boxes.push(b);
+  this.world.refreshBoxes();
   if(this.worldPending){this.pendingDynamicBoxes=boxes.map(b=>({...b,min:[...b.min] as Vec,max:[...b.max] as Vec}));}
   else this.worker.postMessage({dynamicBoxes:boxes});
  }
 
  /** Append dynamically expanded territory terrain surfaces & updated world bounds into main thread & worker. */
- setDynamicSurfaces(surfaces:GroundSurface[],bounds?:{min:Vec;max:Vec}){
+ setDynamicSurfaces(surfaces:GroundSurface[],bounds?:{min:Vec;max:Vec},fluids?:FluidVolume[]){
+  if(fluids)this.world.definition.fluids=fluids;
   this.world.definition.surfaces.length=this.baseSurfaceCount;
   for(const s of surfaces)this.world.definition.surfaces.push(s);
   if(bounds){
    this.world.definition.bounds=bounds;
    this.options.world.bounds=bounds;
   }
-  if(this.worldPending){this.pendingDynamicSurfaces={surfaces,bounds};}
-  else this.worker.postMessage({dynamicSurfaces:{surfaces,bounds}});
+  if(this.worldPending){this.pendingDynamicSurfaces={surfaces,bounds,fluids};}
+  else this.worker.postMessage({dynamicSurfaces:{surfaces,bounds,fluids}});
  }
 
  attach(){return this}
@@ -274,22 +287,67 @@ export class SlimeCharacter {
   this.on(this.ctx.renderer.domElement,'pointerdown',e=>{
    if(this.mode!=='play')return;
    if(e.button===0){
+    if(!document.pointerLockElement&&!this.dragging){
+     try{const p=this.ctx.renderer.domElement.requestPointerLock?.();p?.catch?.(()=>{});}catch{}
+    }
     if(this.aiming)this.fire();
     else this.attack();
    }
+   if(e.button===1&&!document.pointerLockElement){
+    e.preventDefault();this.dragging=true;
+   }
    if(e.button===2&&!this.options.onDodgePress){
-    if(document.pointerLockElement)this.rightAimHeld=true;
+    e.preventDefault();
+    if(this.options.homeDash){this.startHomeDash();}
+    else if(document.pointerLockElement)this.rightAimHeld=true;
     else this.dragging=true;
    }
   });
   this.on(window,'pointerup',e=>{
-   if(e.button===2&&!this.options.onDodgePress){this.dragging=false;this.rightAimHeld=false;}
+   if(e.button===1)this.dragging=false;
+   if(e.button===2&&!this.options.onDodgePress&&!this.options.homeDash){this.dragging=false;this.rightAimHeld=false;}
   });
-  this.on(this.ctx.renderer.domElement,'contextmenu',e=>e.preventDefault());
+  this.on(window,'contextmenu',e=>{
+   const t=e.target as HTMLElement|null;
+   if(t&&t.closest('input, textarea, select, [contenteditable="true"]'))return;
+   e.preventDefault();
+  });
   this.on(this.ctx.renderer.domElement,'wheel',e=>{if(this.mode==='play'){e.preventDefault();this.arm=clamp(this.arm+Math.sign(e.deltaY)*.4,1.2,5.2)}});
   this.$('#play').onclick=()=>this.play();this.$('#observe').onclick=()=>this.observe();this.$('#reset').onclick=()=>this.reset();
   this.$('#quality').onchange=e=>{this.quality=(e.target as HTMLSelectElement).value as Quality;this.toast(this.quality==='high'?'高画质 · 60 Hz 模拟 / 精细表面':'平衡画质 · 保留完整玩法 / 降低表面刷新')};
   this.ui.querySelectorAll<HTMLElement>('[data-element]').forEach(b=>b.onclick=()=>this.setElement(Number(b.dataset.element)));
+ }
+
+ startHomeDash():boolean{
+  if(!this.options.homeDash||this.mode!=='play'||this.inputLock||this.homeDashCooldown>0||this.homeDashTimer>0)return false;
+  let ix=(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0);
+  let iz=(this.keys.has('KeyW')?1:0)-(this.keys.has('KeyS')?1:0);
+  const fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw),rx=Math.cos(this.yaw),rz=-Math.sin(this.yaw);
+  let dx=fx,dz=fz;
+  if(ix||iz){
+   const l=Math.hypot(ix,iz)||1;ix/=l;iz/=l;
+   dx=rx*ix+fx*iz;dz=rz*ix+fz*iz;
+   const dl=Math.hypot(dx,dz)||1;dx/=dl;dz/=dl;
+  }
+  if(this.cling){
+   const n=this.cling.normal;
+   this.position=[this.position[0]+n[0]*.08,this.position[1],this.position[2]+n[2]*.08];
+   this.cling=null;this.clingCooldown=CLING.cooldown;this.options.onCling?.(false);
+   if(dx*n[0]+dz*n[2]<0){dx=n[0];dz=n[2];}
+  }
+  this.umbrella.cancel();
+  this.spread=Math.min(this.spread,.12);
+  this.homeDashDir=[dx,dz];
+  this.homeDashTimer=HOME_DASH.duration;
+  this.homeDashCooldown=HOME_DASH.cooldown;
+  this.homeDashTrailTimer=0;
+  this.forward=[dx,0,dz];
+  this.jumpStretch=.28;this.impact=.14;
+  this.face.pulse('Attack',.30,55);
+  this.shake=Math.max(this.shake,.012);
+  this.skillVfx.spawnHomeDashFx([...this.position],[dx,0,dz],this.element);
+  this.slashVfx.spawnBurst([this.position[0],this.position[1]+.24,this.position[2]],this.element,16,2.4);
+  return true;
  }
 
  play(){
@@ -297,7 +355,7 @@ export class SlimeCharacter {
   if(this.mode==='observe'){this.cameraHeight.reset();this.saved={position:this.ctx.camera.position.clone(),target:this.ctx.controls.target.clone(),fov:this.ctx.camera.fov,near:this.ctx.camera.near};this.yaw=0;this.pitch=.23;this.currentArm=this.arm;this.camPos.set(this.position[0],this.position[1]+1.1,this.position[2]+this.arm)}
   this.mode='play';this.ctx.controls.enabled=false;this.ctx.camera.fov=60;this.ctx.camera.near=.04;this.ctx.camera.updateProjectionMatrix();
   this.ui.classList.remove('viewing');this.ui.classList.add('playing');this.$('#observe').classList.remove('hidden');this.$('.combo').classList.remove('hidden');
-  const promise=this.ctx.renderer.domElement.requestPointerLock?.();promise?.catch?.(()=>this.toast(this.options.onDodgePress?'可按住鼠标中键转动镜头':'可按住鼠标右键转动镜头'));
+  try{const promise=this.ctx.renderer.domElement.requestPointerLock?.();promise?.catch?.(()=>{});}catch{}
   this.$('#status').textContent='正在漫游 · 六属性 decal';
  }
  pause(){
@@ -326,6 +384,7 @@ export class SlimeCharacter {
  }
  reset(){
   this.cameraHeight.reset();this.currentArm=this.arm;this.face.reset();this.frameAnchor=null;this.pendingImpacts.length=0;this.sentLaunches=0;this.commands=[];this.cling=null;this.umbrella.cancel(true);this.slashVfx.reset();this.skillVfx.reset();this.skills.reset();this.debugFreeze=false;
+  this.homeDashTimer=0;this.homeDashCooldown=0;this.homeDashTrailTimer=0;
   this.position=[...this.spawn];this.velocity=[0,0,0];this.forward=[0,0,-1];this.grounded=true;this.jumps=0;this.spread=0;this.impact=0;this.jumpStretch=0;this.airBounce=0;this.coyoteTimer=0;this.jumpBuffer=0;this.jumpHeld=false;
   this.aiming=false;this.aimReady=false;this.rightAimHeld=false;this.keys.clear();this.combat.reset();this.decals.reset();this.generation++;this.resets++;this.latest=null;this.yaw=0;this.pitch=.23;
   if(this.mode==='play')this.camPos.set(this.position[0],1.1,this.position[2]+this.arm);
@@ -446,11 +505,103 @@ export class SlimeCharacter {
  }
 
  private movement(dt:number,time:number){
-  this.spread=clamp(this.spread+(this.keys.has('KeyC')&&this.grounded?dt/.42:-dt/.58),0,1);
+  this.surfaceJumpLock=Math.max(0,this.surfaceJumpLock-dt);
+  this.homeDashCooldown=Math.max(0,this.homeDashCooldown-dt);
+  // Crisp Home exploration right-click forward dash with fine sub-step anti-clipping & floor safety clamping
+  if(this.homeDashTimer>0){
+   this.homeDashTimer=Math.max(0,this.homeDashTimer-dt);
+   const prog=1-this.homeDashTimer/HOME_DASH.duration;
+   const speedScale=1-.55*prog;
+   const dashSpeed=HOME_DASH.speed*speedScale*(this.submerged?.58:1);
+   const [dx,dz]=this.homeDashDir;
+   this.forward=[dx,0,dz];
+   const totalDist=dashSpeed*dt;
+   const subSteps=Math.max(1,Math.ceil(totalDist/.06));
+   const stepDist=totalDist/subSteps;
+   const cur:Vec=[...this.position];
+   const capR=.23,capH=.52;
+   let blocked=false;
+   for(let s=0;s<subSteps;s++){
+    const sx=dx*stepDist,sz=dz*stepDist;
+    const probeFrom:Vec=[cur[0],cur[1]+.26,cur[2]];
+    const probeTo:Vec=[cur[0]+dx*(stepDist+capR+.04),cur[1]+.26,cur[2]+dz*(stepDist+capR+.04)];
+    const wallHit=this.world.cast(probeFrom,probeTo,.16);
+    if(wallHit&&wallHit.t<.65){blocked=true;break;}
+    const moved=this.world.moveCapsule(cur,[sx,0,sz],capR,capH);
+    const nx=moved.position[0],nz=moved.position[2];
+    const bounds=this.options.world.bounds;
+    if(bounds&&(nx<bounds.min[0]+.4||nx>bounds.max[0]-.4||nz<bounds.min[2]+.4||nz>bounds.max[2]-.4)){blocked=true;break;}
+    const actualDist=Math.hypot(nx-cur[0],nz-cur[2]);
+    cur[0]=nx;cur[2]=nz;
+    const sup=this.world.support(cur[0],cur[2],cur[1]+.36,this.submerged);
+    if(sup!==null){
+     if(this.submerged){
+      if(cur[1]<sup+.04)cur[1]=sup+.04;
+     }else if(cur[1]<sup){
+      cur[1]=sup;this.grounded=true;this.velocity[1]=0;
+     }else if(this.grounded&&!this.swimming&&sup>=cur[1]-.30){
+      cur[1]=sup;this.velocity[1]=0;
+     }
+    }
+    if(moved.squeezed&&actualDist<stepDist*.25){blocked=true;break;}
+   }
+   if(!this.submerged&&!this.grounded){
+    this.velocity[1]=Math.max(this.velocity[1]-10*dt,-1.6);
+    cur[1]+=this.velocity[1]*dt;
+    const sup=this.world.support(cur[0],cur[2],cur[1]+.12,false);
+    if(sup!==null&&cur[1]<=sup+.02){cur[1]=sup;this.velocity[1]=0;this.grounded=true;this.jumps=0;}
+   }
+   this.position=cur;
+   if(blocked){
+    this.homeDashTimer=0;
+    this.velocity[0]=dx*1.4;this.velocity[2]=dz*1.4;
+    this.impact=.22;
+   }else{
+    this.velocity[0]=dx*dashSpeed*.72;this.velocity[2]=dz*dashSpeed*.72;
+    this.homeDashTrailTimer-=dt;
+    if(this.homeDashTrailTimer<=0){
+     this.homeDashTrailTimer=.035;
+     this.slashVfx.spawnBurst([cur[0]-dx*.18,cur[1]+.20,cur[2]-dz*.18],this.element,5,1.3);
+    }
+   }
+   if(this.grounded&&cur[1]>-2)this.lastSafe=[...cur];
+   return this.combat.update(dt,this.position,time,(target,damage,el,reaction)=>this.hit(target,damage,el,reaction)).pose;
+  }
+  this.spread=clamp(this.spread+(this.keys.has('KeyC')&&this.grounded&&!this.swimming&&!this.submerged?dt/.42:-dt/.58),0,1);
   let x=(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),z=(this.keys.has('KeyW')?1:0)-(this.keys.has('KeyS')?1:0);
   if(this.inputLock){x=0;z=0;this.jumpRequest=false;this.jumpBuffer=0}
   const norm=Math.hypot(x,z);if(norm){x/=norm;z/=norm}
   const fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw),rightX=Math.cos(this.yaw),rightZ=-Math.sin(this.yaw);
+  // While locked onto a moving seat (e.g. park swing), hold position cleanly until jump or park.ts dismounts on WASD!
+  if(this.ridePlane){
+   if(this.jumpRequest||this.jumpBuffer>0){
+    this.ridePlane=null;
+   }else{
+    this.velocity=[0,0,0];this.grounded=true;this.jumps=0;this.coyoteTimer=.12;this.umbrella.cancel();
+    return this.combat.update(dt,this.position,time,(target,damage,el,reaction)=>this.hit(target,damage,el,reaction)).pose;
+   }
+  }
+  if(this.submerged){
+   this.cling=null;this.umbrella.cancel(true);this.jumpRequest=false;this.jumpBuffer=0;this.jumps=0;
+   const swimSpeed=this.element===0?3.9:2.95;
+   const targetX=(rightX*x+fx*z)*swimSpeed,targetZ=(rightZ*x+fz*z)*swimSpeed;
+   const swimChange=(norm?16:11)*dt;
+   this.velocity[0]+=clamp(targetX-this.velocity[0],-swimChange,swimChange);
+   this.velocity[2]+=clamp(targetZ-this.velocity[2],-swimChange,swimChange);
+   if(norm||this.aiming)this.forward=[fx,0,fz];
+   if(norm&&!this.aiming){const d=Math.hypot(targetX,targetZ)||1;this.forward=[targetX/d,0,targetZ/d]}
+   const combat=this.combat.update(dt,this.position,time,(target,damage,el,reaction)=>this.hit(target,damage,el,reaction));
+   const move:Vec=[this.velocity[0]*dt,this.velocity[1]*dt,this.velocity[2]*dt];
+   const moved=this.world.moveCapsule(this.position,move,.22,.50);
+   const next=moved.position;
+   next[1]+=move[1];
+   const bed=this.world.support(next[0],next[2],this.position[1],true);
+   if(bed!==null&&next[1]<bed+.02){next[1]=bed+.02;if(this.velocity[1]<0)this.velocity[1]=0;}
+   this.grounded=false;this.swimming=true;this.waterNormal=null;this.waterWaveVelY=0;
+   this.position=next;
+   if(this.outOfBounds()){const safe=[...this.lastSafe] as Vec;this.submerged=false;this.reset();this.position=safe;}
+   return combat.pose;
+  }
   const speed=(this.keys.has('ShiftLeft')?6.4:3.3)*mix(1,.45,this.spread)*(this.swimming?(this.element===0?1:.64):1);
   const targetX=(rightX*x+fx*z)*speed,targetZ=(rightZ*x+fz*z)*speed;
 
@@ -509,6 +660,7 @@ export class SlimeCharacter {
    this.jumpRequest=false;this.jumpBuffer=0;
   }
 
+  if(this.surfaceJumpLock>0){this.jumpRequest=false;this.jumpBuffer=0;}
   if(this.jumpBuffer>0){
    const canFirstJump=this.grounded||this.coyoteTimer>0;
    if(canFirstJump){
@@ -547,18 +699,63 @@ export class SlimeCharacter {
    if(roof){move[1]*=Math.max(0,roof.t-.01);this.velocity[1]=0;}
   }
   next[1]+=move[1];
-  const floor=this.world.support(next[0],next[2],this.position[1]);
-  if(floor!==null&&this.velocity[1]<=0&&next[1]<=floor+.04&&this.position[1]>=floor-.38){
-   const fluid=this.world.fluid(next[0],next[2]);
-   const floating=fluid!==null&&floor<=fluid-.05;
-   if(!this.grounded){
-    this.face.pulse(floating?'Happy':'Squash',.20,40);
-    this.impact=clamp(-this.velocity[1]*.038,0,.50);
-    this.options.onLand?.(-this.velocity[1],floating);
+  const fluidAt=this.world.fluid(next[0],next[2]);
+  const wave=fluidAt!==null&&this.oceanWaveSampler?this.oceanWaveSampler(next[0],next[2],time):null;
+  if(wave){
+   const solidFloor=this.world.support(next[0],next[2],this.position[1],true);
+   const waveFloor=wave.seaLevel+wave.height-.065;
+   if(solidFloor!==null&&solidFloor>=waveFloor){
+    if(this.velocity[1]<=0&&next[1]<=solidFloor+.04&&this.position[1]>=solidFloor-.38){
+     if(!this.grounded){this.face.pulse('Squash',.20,40);this.impact=clamp(-this.velocity[1]*.038,0,.50);this.options.onLand?.(-this.velocity[1],false);}
+     this.umbrella.cancel();next[1]=solidFloor;this.velocity[1]=0;this.grounded=true;this.jumps=0;this.swimming=false;
+     this.waterNormal=null;this.waterWaveVelY=0;
+    }else{this.grounded=false;this.swimming=false;this.waterNormal=null;this.waterWaveVelY=0;}
+   }else{
+    const riding=this.swimming||(this.velocity[1]<=.6&&next[1]<=waveFloor+.18&&this.position[1]>=waveFloor-.95);
+    if(riding){
+     if(!this.grounded){
+      this.face.pulse('Happy',.20,40);
+      this.impact=clamp(-this.velocity[1]*.032,0,.35);
+      this.options.onLand?.(-this.velocity[1],true);
+     }
+     this.umbrella.cancel();
+     // Smooth buoyancy spring tracks rising wave crests & falling troughs without clipping
+     const follow=1-Math.exp(-dt*16);
+     next[1]=mix(next[1],waveFloor,follow)+wave.velocityY*dt*.18;
+     if(next[1]<waveFloor-.06)next[1]=mix(next[1],waveFloor,.65);
+     // Subtle lateral surge drift along the passing swell slope
+     const surgeX=wave.normal[0]*.52*dt,surgeZ=wave.normal[2]*.52*dt;
+     if(Math.abs(surgeX)+Math.abs(surgeZ)>1e-5){
+      const drifted=this.world.moveCapsule(next,[surgeX,0,surgeZ],.22,.52);
+      next[0]=drifted.position[0];next[2]=drifted.position[2];
+     }
+     this.velocity[1]=wave.velocityY*.35;this.grounded=true;this.jumps=0;this.swimming=true;
+     const na=1-Math.exp(-dt*9);
+     this.smoothedWaterNormal=[
+      mix(this.smoothedWaterNormal[0],wave.normal[0],na),
+      mix(this.smoothedWaterNormal[1],wave.normal[1],na),
+      mix(this.smoothedWaterNormal[2],wave.normal[2],na),
+     ];
+     this.waterNormal=[...this.smoothedWaterNormal];
+     this.waterWaveVelY=wave.velocityY;
+    }else{
+     this.grounded=false;this.swimming=false;this.waterNormal=null;this.waterWaveVelY=0;
+    }
    }
-   this.umbrella.cancel();
-   next[1]=floor;this.velocity[1]=0;this.grounded=true;this.jumps=0;this.swimming=floating;
-  }else{this.grounded=false;this.swimming=false}
+  }else{
+   this.waterNormal=null;this.waterWaveVelY=0;
+   const floor=this.world.support(next[0],next[2],this.position[1]);
+   if(floor!==null&&this.velocity[1]<=0&&next[1]<=floor+.04&&this.position[1]>=floor-.38){
+    const floating=fluidAt!==null&&floor<=fluidAt-.05;
+    if(!this.grounded){
+     this.face.pulse(floating?'Happy':'Squash',.20,40);
+     this.impact=clamp(-this.velocity[1]*.038,0,.50);
+     this.options.onLand?.(-this.velocity[1],floating);
+    }
+    this.umbrella.cancel();
+    next[1]=floor;this.velocity[1]=0;this.grounded=true;this.jumps=0;this.swimming=floating;
+   }else{this.grounded=false;this.swimming=false}
+  }
   this.position=next;
   if(this.outOfBounds()){
    const safe=[...this.lastSafe] as Vec;
@@ -693,10 +890,16 @@ export class SlimeCharacter {
     cling:this.cling&&!this.cling.mantle?{point:[...this.cling.point],normal:[...this.cling.normal]}:null,
     battleTargets:this.options.battleTargets?this.battleColliders():undefined,
     generation:this.generation,shapeBlend:this.shapeBlend,jumpStretch:this.jumpStretch,airBounce:this.airBounce,glideAmount:this.umbrella.openAmount,
+    waterNormal:this.waterNormal?[...this.waterNormal]:null,waterWaveVelY:this.waterWaveVelY,submerged:this.submerged,
+    ridePlane:this.ridePlane?{point:[...this.ridePlane.point],normal:[...this.ridePlane.normal]}:null,
    };
    this.sentLaunches=input.commands.filter(c=>c.type==='launch').length;
    const recycle=this.recycle;this.recycle=undefined;this.sentAnchor=[...input.anchor];
-   this.worker.postMessage({input,recycle,world:this.worldPending?this.options.world:undefined},recycle?[recycle.positions.buffer,recycle.normals.buffer,recycle.slots.buffer]:[]);
+   // The first worker message may follow restoration of a populated save.
+   // Send the immutable prefixes first, then replay pending garden edits once.
+   const world=this.worldPending?{...this.options.world,boxes:this.world.boxes.slice(0,this.baseBoxCount),
+    surfaces:this.world.definition.surfaces.slice(0,this.baseSurfaceCount)}:undefined;
+   this.worker.postMessage({input,recycle,world},recycle?[recycle.positions.buffer,recycle.normals.buffer,recycle.slots.buffer]:[]);
    if(this.worldPending){
     this.worldPending=false;
     if(this.pendingDynamicBoxes){this.worker.postMessage({dynamicBoxes:this.pendingDynamicBoxes});this.pendingDynamicBoxes=null;}

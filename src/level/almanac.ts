@@ -1,4 +1,5 @@
 import './almanac.css';
+import {seasonExhibit} from './season-entry';
 import {drawInstrument} from './almanac-instrument';
 import * as T from 'three';
 import {levels} from '../../content/levels/registry';
@@ -13,6 +14,7 @@ import {rng} from '../templates/random';
 
 const id=new URLSearchParams(location.search).get('id')!, spec=levels[id] as AlmanacSpec;
 const [day,year]=id.split('-'), save=new Save(), stops=course(id), random=rng(id);
+const exhibit=seasonExhibit(id);
 document.title=spec.title+' · 史莱姆寓言';
 document.body.innerHTML='<canvas id="map"></canvas><main class="hud"><header><div><small></small><h1></h1></div><div><select class="select" aria-label="切换十一月章节"></select> <button data-pause>暂停</button></div></header><section class="card"><small></small><h2></h2><p></p><div class="readout"></div><div class="meter" hidden><i class="band"></i><i class="needle"></i></div><div class="actions"></div></section></main><div class="map-label" hidden></div><div class="jump" hidden></div><div class="badge" hidden></div>';
 const find=<E extends HTMLElement=HTMLElement>(s:string)=>document.querySelector(s) as E;
@@ -34,7 +36,7 @@ const slime=new SlimeCharacter({
 },{
  spawn:[-.6,floor,2.4],world:{boxes:[],surfaces:[{min:[-11,-9.2],max:[11,9.2],height:floor}]},
  ui:false,input:false,trainingTargets:[],title:spec.title,onToast:()=>{},
- onReady:()=>{if(state==='intro')panel();},
+ onReady:()=>{if(state==='intro')begin();},
 }).attach();
 slime.forward=[0,0,1];
 const preset=applyLevelQuality({renderer,sun:art.sun},slime,save.data.quality);
@@ -67,7 +69,8 @@ let state:State='intro', paused=false,station=0,x=slime.position[0],z=slime.posi
 let value=.16,goal=.68,clock=0,velocity=0,stable=0,pressed=false,queued=0,a=false,b=false,jump=0,spread=false;
 let burst=0,burstX=0,burstZ=0,destination:Place|null=null,messageTime=0;
 const keys=new Set<string>(),ray=new T.Raycaster(),plane=new T.Plane(new T.Vector3(0,1,0),0),hit=new T.Vector3(),pointer=new T.Vector2();
-const mode=spec.activity,record=save.data.life.records;
+const mode=spec.activity;
+let record=save.data.life.records;
 function resize(){camera.aspect=innerWidth/innerHeight;
  camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
  renderer.getDrawingBufferSize(bufferSize);backdrop.setSize(bufferSize.x,bufferSize.y);}
@@ -77,7 +80,7 @@ function btn(label:string,act:()=>void,parent=find('.actions'),primary=false){co
 function announce(text:string){find('.badge').textContent=text;find('.badge').hidden=false;messageTime=2.5;}
 function info(k:string,h:string,p:string){card.querySelector('small')!.textContent=k;card.querySelector('h2')!.textContent=h;card.querySelector('p')!.textContent=p;}
 function flare(){burst=1;burstX=x;burstZ=z;}
-function begin(){if(!slime.ready)return;state='walk';save.add('visited',id);panel();}
+function begin(){if(!slime.ready)return;state='walk';(exhibit.enabled?new Save():save).add('visited',id);panel();}
 function startWork(){if(state!=='walk')return;state='work';destination=null;value=.16;goal=[.69,.34,.77][station];clock=0;velocity=0;stable=0;queued=0;a=b=pressed=false;panel();}
 function success(){seals[station].visible=true;flare();slime.setMood('Happy');station++;state=station===3?'ready':'walk';announce(station===3?'三站完成':spec.stops[station-1]+' · 完成');panel();}
 function miss(){mistakes++;announce('再试一次');}
@@ -85,7 +88,7 @@ function adjust(amount:number){if(queued)return;
  if(mode==='drive'){queued=amount;clock=0;}else value=Math.max(0,Math.min(1,value+amount));}
 function confirm(){
  if(paused)return;
- if(state==='intro'){begin();return;}if(state==='ready'){state='finale';finalTime=0;flare();panel();return;}
+ if(state==='intro'){begin();return;}if(state==='ready'){exhibit.finish(()=>{state='finale';finalTime=0;flare();panel();});return;}
  if(state==='walk'){if(Math.hypot(x-stops[station][0],z-stops[station][1])<1.25)startWork();else destination=[...stops[station]];return;}
  if(state!=='work')return;
  if(mode==='hover'||mode==='dock'){velocity+=.21;return;}
@@ -104,7 +107,7 @@ function panel(){
  find('[data-pause]').hidden=state==='done'||state==='finale';
  if(paused){info('时光暂停',spec.title,'当前进度保留在这一局。');btn('继续',pause,actions,true);btn('重新开始',()=>location.reload());btn('回到凝露港',home);return;}
  if(state==='intro'){info(year+'　/　11.'+day.slice(2),spec.stops.join(' · '),spec.fact);
-  btn(slime.ready?'进入这一日':'史莱姆正在凝聚…',begin,actions,true).disabled=!slime.ready;btn('回到凝露港',home);return;}
+  btn(slime.ready?'进入这一日':'史莱姆正在凝聚…',begin,actions,true).disabled=!slime.ready;btn('回到凝露港',home);exhibit.preview(actions);return;}
  if(state==='walk'){info('行程　'+(station+1)+' / 3',spec.stops[station],'点击地面或 WASD 移动到信标。空格跳起可摘取旁边的金晶，C 摊开加速。');
   btn('前往'+spec.stops[station],confirm,actions,true);find('.map-label').hidden=false;return;}
  if(state==='work'){info('操作台　'+(station+1)+' / 3',spec.stops[station],activityHint(mode));
@@ -176,9 +179,10 @@ function step(delta:number){
   slime.spread=T.MathUtils.damp(slime.spread,spread&&slime.grounded?1:0,9,dt);
   slime.update(time,dt);
   if(state==='finale'){finalTime+=dt;if(finalTime>4.5){state='done';const ms=Math.max(1,Math.round(elapsed*1000));
+   const current=exhibit.enabled?new Save():save;record=current.data.life.records;
    record[id+'-time']=Math.min(ms,record[id+'-time']||Infinity);if(!mistakes)record[id+'-clean']=1;
    record[id+'-crystals']=Math.max(record[id+'-crystals']||0,collected.size);
-   save.add('completed',id);save.add('souvenirs',id);save.write();panel();}}
+   current.add('completed',id);current.add('souvenirs',id);current.write();panel();}}
   burst=Math.max(0,burst-dt*.72);messageTime-=dt;if(messageTime<0)find('.badge').hidden=true;
  }
  const finish=state==='finale'||state==='done',lift=finish?Math.min(1,finalTime/3):0;

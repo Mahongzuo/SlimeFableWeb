@@ -2,10 +2,13 @@ import * as T from 'three';
 import {bakeRegion} from '../world/bake';
 import type {Stage,StageLook} from '../level/stage';
 import type {WorldDefinition} from '../slime/world';
+import type {Vec} from '../slime/types';
 import {arenaLayout,type Arena,type ArenaEncounter,type RpgDayConfig} from '../templates/january-rpg';
 import {alongStroke,fitSpan} from '../templates/january-layout';
+import {buildWinterRink} from './jan01-rpg';
 
 export function arenaLook(arena: Arena, config?: RpgDayConfig): StageLook {
+  if(config?.day==='0101')return {skyTop:'#47678e',skyHorizon:'#a4b9c8',sun:'#fff4db',sunIntensity:1.85,hemiSky:'#d5eaf4',hemiGround:'#657c94',ink:'#25384d',wash:'#d4dae0',fog:[29,63]};
   const skyTop = config?.sky[0] ?? (arena === 'stage' ? '#30213b' : arena === 'ice' ? '#607ca9' : '#416f96');
   const skyHorizon = config?.sky[1] ?? (arena === 'stage' ? '#a87856' : arena === 'ice' ? '#edcfc2' : '#ffdcba');
   return {
@@ -26,6 +29,18 @@ function paintedSurface(arena: Arena, config?: RpgDayConfig) {
       for (let j = 0; j < 8; j++) {g.fillStyle = '#785339'; g.fillRect(i * 28, (j * 170 + i * 63) % 1152, 27, 1);}
     }
   } else if (visual === 'ice') {
+    if(config?.day==='0101'){
+      const frost=g.createLinearGradient(0,0,768,840);
+      frost.addColorStop(0,'#a8cedf');frost.addColorStop(.31,'#d6e6eb');frost.addColorStop(.53,'#b4d6e4');frost.addColorStop(1,'#d9e8e8');
+      g.fillStyle=frost;g.fillRect(0,0,768,1152);
+      g.save();g.translate(384,576);g.strokeStyle='#91b5c5';g.lineWidth=5;
+      for(let i=0;i<6;i++){
+        g.rotate(Math.PI/3);g.beginPath();g.moveTo(0,0);g.lineTo(0,-64);
+        g.moveTo(-14,-30);g.lineTo(0,-43);g.lineTo(14,-30);
+        g.moveTo(-10,-45);g.lineTo(0,-54);g.lineTo(10,-45);g.stroke();
+      }
+      g.restore();
+    }
     for (const [y, col] of [[365, '#36649d'], [576, '#be655a'], [788, '#36649d']] as const) {g.fillStyle = col; g.fillRect(0, y, 768, 7);}
     g.strokeStyle = '#ae5551'; g.lineWidth = 4;
     for (const [x, y, r] of [[384, 576, 87], [190, 225, 61], [578, 225, 61], [190, 925, 61], [578, 925, 61]]) {
@@ -63,13 +78,15 @@ function paintedSurface(arena: Arena, config?: RpgDayConfig) {
 
 export function buildArena(stage: Stage, arena: Arena, config?: RpgDayConfig) {
   const visual = config?.visual ?? arena;
+  const winter=config?.day==='0101';
   const root = new T.Group(); root.name = 'january-arena'; stage.scene.add(root);
   const block = new T.BoxGeometry(1, 1, 1), ball = new T.SphereGeometry(1, 14, 10), rod = new T.CylinderGeometry(1, 1, 1, 10);
   function mesh(geo: T.BufferGeometry, color: string, x: number, y: number, z: number, w: number, h: number, d: number, parent: T.Object3D = root) {
     const m = new T.Mesh(geo, stage.toon(color)); m.scale.set(w, h, d); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m;
   }
   const prop = (color: string, x: number, y: number, z: number, w: number, h: number, d: number, parent: T.Object3D = root) => mesh(block, color, x, y, z, w, h, d, parent);
-  const ground = new T.Mesh(new T.BoxGeometry(13, 0.34, 24), stage.toon('#ffffff', {map: paintedSurface(arena, config)}));
+  const surface=paintedSurface(arena,config);
+  const ground = new T.Mesh(new T.BoxGeometry(13, 0.34, 24), stage.toon('#ffffff', {map: surface}));
   ground.position.y = -0.17; ground.receiveShadow = true; ground.name = 'walk-base'; root.add(ground);
   const instanceData: {x: number; y: number; z: number; w: number; h: number; d: number; c: string}[] = [];
   function box(c: string, x: number, y: number, z: number, w: number, h: number, d: number) {instanceData.push({c, x, y, z, w, h, d});}
@@ -107,7 +124,7 @@ export function buildArena(stage: Stage, arena: Arena, config?: RpgDayConfig) {
       for (let row = 0; row < 3; row++) {
         box(blue ? '#91a3b1' : '#a37c64', side * (8.4 + row * 1.1), 0.45 + row * 0.63, 0, 1.05, 0.68, 25);
         const path = {points: [[side * (8.4 + row * 1.1), -11], [side * (8.4 + row * 1.1), 11]] as [number, number][], width: 1};
-        for (let j = 0; j < 23; j++) {
+        for (let j = 0; !winter && j < 23; j++) {
           if ((j + row) % 7 === 0) continue;
           const [x, z] = alongStroke(path, j * 0.98); const y = 1.06 + row * 0.63;
           box(['#395870', '#b97950', '#e7ca9c', '#627278'][(j * 13 + row * 3) % 4], x, y, z, 0.42, 0.47, 0.46);
@@ -133,7 +150,7 @@ export function buildArena(stage: Stage, arena: Arena, config?: RpgDayConfig) {
     if (blue) {
       for (const x of [-2.1, 2.1]) box('#be4d4b', x, 0.71, -8.5, 0.12, 1.42, 0.12);
       box('#be4d4b', 0, 1.48, -8.5, 4.32, 0.12, 0.12);
-      for (let j = 0; j < 16; j++) box('#e4e0ce', -2 + j * 0.27, 0.69, -9.03, 0.035, 1.38, 0.035);
+      if(!winter)for (let j = 0; j < 16; j++) box('#e4e0ce', -2 + j * 0.27, 0.69, -9.03, 0.035, 1.38, 0.035);
     } else {
       box('#d5ad43', 0, 1.42, -9.9, 0.22, 2.84, 0.22); box('#e5bf56', 0, 2.94, -9.9, 4.9, 0.16, 0.16);
       for (const x of [-2.37, 2.37]) box('#ecc752', x, 4.32, -9.9, 0.14, 2.62, 0.14);
@@ -178,6 +195,8 @@ export function buildArena(stage: Stage, arena: Arena, config?: RpgDayConfig) {
   instanceData.forEach((o, i) => {dummy.position.set(o.x, o.y, o.z); dummy.scale.set(o.w, o.h, o.d); dummy.updateMatrix(); scenery.setMatrixAt(i, dummy.matrix); scenery.setColorAt(i, color.set(o.c));});
   scenery.castShadow = true; scenery.receiveShadow = true; root.add(scenery);
   const rival = new T.Group(); root.add(rival);
+  rival.visible=!winter;
+  const winterRink=winter?buildWinterRink(stage,root,surface):null;
   const coat = config?.coat ?? (arena === 'stage' ? '#ce9d4e' : arena === 'ice' ? '#bf574d' : '#705d8b');
   mesh(ball, coat, 0, 0.85, 0, 0.62, 0.76, 0.45, rival);
   mesh(ball, arena === 'stage' ? '#e9c59b' : '#edf0cf', 0, 1.66, 0, 0.42, 0.39, 0.4, rival);
@@ -212,16 +231,18 @@ export function buildArena(stage: Stage, arena: Arena, config?: RpgDayConfig) {
   const puck = mesh(ball, arena === 'ice' ? '#353749' : '#b3764e', 0, 0.19, -4, 0.21, 0.13, 0.2);
   const collision = bakeRegion(stage, {root, x0: -7, z0: -12.5, w: 14, h: 25, ground: () => null, classify: m => m.name.startsWith('walk-') ? 'filled' : null});
   const world: WorldDefinition = {boxes: [], surfaces: [], height: collision.height ?? undefined, bounds: {min: [-6.2, -2, -11.5], max: [6.2, 10, 11.5]}};
-  let shotAge = 1; const shotFrom = new T.Vector3();
+  let shotAge = 1,shotSide=0,goal=true; const shotFrom = new T.Vector3();
   return {
-    world, meshCount: instanceData.length, shot(x: number, z: number) {shotAge = 0; shotFrom.set(x, 0.28, z);},
-    update(battle: ArenaEncounter, t: number, dt: number, finale: number) {
+    world, meshCount: instanceData.length, shot(x: number, z: number,success=true) {
+      shotAge = 0;goal=success;shotSide=Math.sign(x)||1;shotFrom.set(x, 0.28, z);
+    },
+    update(battle: ArenaEncounter, t: number, dt: number, finale: number,player?:Vec) {
       const lane = battle.blocked, duel = battle.phase === 'duel', phase = battle.cue;
       const lean = phase === 'strike' ? 1 : phase === 'open' ? 0.85 : 0.28;
       rival.position.set(lane * (arena === 'stage' ? 0.74 : 2.25) * lean, 0.08 + Math.sin(t * 3) * 0.045, battle.z - 1.65);
       rival.rotation.z = lane * (phase === 'strike' ? -0.35 : Math.sin(t * 2) * 0.04);
       arms.forEach((a, i) => {a.rotation.z = (i ? 1 : -1) * (arena === 'stage' ? lean * 1.55 : lean * 0.7);});
-      lamp.visible = visual === 'ice' && (shotAge < 1 || finale > 0);
+      lamp.visible = visual === 'ice' && (winter?goal&&shotAge>.86&&shotAge<1||finale>0:shotAge<1||finale>0);
       if (config) {
         caption(finale ? config.board[1] : config.board[0], finale ? config.board[2] : `${Math.min(battle.round, battle.rules.rounds)} / ${battle.rules.rounds}`);
       } else {
@@ -231,11 +252,26 @@ export function buildArena(stage: Stage, arena: Arena, config?: RpgDayConfig) {
       }
       for (const [i, m] of marks.entries()) {m.visible = battle.phase === 'route'; const p = layout.branches[i]; m.position.set(p[0], p[1] + 0.82, p[2]);}
       const p = battle.phase === 'warmup' ? layout.warm : battle.phase === 'finale' ? layout.end : battle.safeSpot;
-      target.visible = duel || battle.phase === 'warmup' || battle.phase === 'finale'; target.position.set(p[0], p[1] + 0.83 + 0.09 * Math.sin(t * 3), p[2]); target.rotation.y = 0.2 * Math.sin(t);
+      target.visible = !winter&&duel || battle.phase === 'warmup' || battle.phase === 'finale'; target.position.set(p[0], p[1] + 0.83 + 0.09 * Math.sin(t * 3), p[2]); target.rotation.y = 0.2 * Math.sin(t);
       weights.forEach((w, i) => w.position.y = 2.65 + (i ? 1 : -1) * lane * lean * 0.92);
       curtains.forEach((c, i) => c.position.x = (i ? 1 : -1) * (2.35 + Math.min(1, finale / 1.5) * 3.85));
-      if (shotAge < 1) {shotAge = Math.min(1, shotAge + dt * 1.75); puck.visible = true; puck.position.set(shotFrom.x * (1 - shotAge), 0.25 + Math.sin(shotAge * Math.PI) * 1.2, shotFrom.z + (-8.8 - shotFrom.z) * shotAge);}
-      else {puck.visible = duel && arena !== 'stage'; puck.position.set(p[0], 0.15, p[2]);}
+      if (shotAge < 1) {
+        shotAge = Math.min(1, shotAge + dt * (winter?1.1:1.75));puck.visible = true;
+        if(winter){
+          const reach=Math.min(1,shotAge/.8),bounce=goal?0:Math.max(0,(shotAge-.65)*5);
+          puck.position.set(T.MathUtils.lerp(shotFrom.x,shotSide*(goal?1.15:.6),reach),.16+Math.sin(reach*2.2)*.44,T.MathUtils.lerp(shotFrom.z,goal?-9.55:-7.7,reach)+bounce);
+        }else puck.position.set(shotFrom.x*(1-shotAge),.25+Math.sin(shotAge*Math.PI)*1.2,shotFrom.z+(-8.8-shotFrom.z)*shotAge);
+      }else {
+        puck.visible=duel&&arena!=='stage';
+        if(winter&&player&&duel&&battle.route===1&&battle.cue==='strike'){
+          const pass=T.MathUtils.smoothstep(battle.clock,.46,.63);
+          puck.position.set(T.MathUtils.lerp(lane,player[0],pass),.16,T.MathUtils.lerp(-7.3,player[2]-.48,pass));
+        }else puck.position.set(winter&&player?player[0]:p[0],.15,winter&&player?player[2]-.48:p[2]);
+      }
+      if(winterRink){
+        if(player)winterRink.skateTrace(t,player);
+        winterRink.update(battle,t,shotAge,shotSide,goal,finale);
+      }
     },
   };
 }

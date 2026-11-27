@@ -2,8 +2,8 @@ import {ensureHome, type LifeData} from '../life/state';
 
 /** Only state owned by a build transaction is journalled. Crop clocks outside a removed bed keep running. */
 function capture(life: LifeData) {
-  const {placed,paving,expansions,xp,level,unlocks,daily,souvenirSlots}=ensureHome(life);
-  return structuredClone({placed,paving,expansions,xp,level,unlocks,daily,souvenirSlots,coins:life.coins,plots:life.plots});
+  const {placed,paving,expansions,xp,level,unlocks,daily,souvenirSlots,voxels,machines}=ensureHome(life);
+  return structuredClone({placed,paving,expansions,xp,level,unlocks,daily,souvenirSlots,voxels,machines,coins:life.coins,plots:life.plots});
 }
 type Snapshot=ReturnType<typeof capture>;
 type Change={before:Snapshot;after:Snapshot};

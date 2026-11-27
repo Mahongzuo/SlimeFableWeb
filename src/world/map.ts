@@ -50,8 +50,10 @@ export function inland(x: number, z: number): number {
     h = Math.max(h, valleyHeight(-30, z) * (1 - smooth(0, 9, d)));
   } else if (zone === 'forest') h = hills(x, z) * 1.5 * seam;
   else if (zone === 'park') {
-    const mound = 3.2 * (1 - smooth(0, 1, Math.hypot(x - 20, z - 64) / 10));
-    h = (.25 * Math.sin(x * .2) * Math.sin(z * .17) + .25) * seam + mound;
+    const r = Math.hypot(x - 20, z - 64);
+    const plateau = 1 - smooth(4.6, 11.6, r);
+    const mound = 3.2 * plateau;
+    h = (.25 * Math.sin(x * .2) * Math.sin(z * .17) + .25) * seam * (1 - plateau * .96) + mound;
   } else if (zone === 'lake') {
     const e = lakeEdge(x, z);
     h = (hills(x, z) * .7) * smooth(1.05, 1.6, e) * seam;

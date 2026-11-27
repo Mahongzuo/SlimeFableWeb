@@ -1,4 +1,7 @@
+import {januaryDefenseStatus,januaryPacketCount,januaryWeekDefense} from '../templates/newyear-defense';
+import {bindHelpHint,readingHelp} from './help-state';
 import './january-defense.css';
+import {seasonExhibit} from './season-entry';
 import {session} from './mode-session';
 import {Save} from '../game/save';
 import {applyLevelQuality} from '../game/graphics';
@@ -6,6 +9,7 @@ import {JanuaryDefense,type Installation} from '../templates/january-defense';
 import {buildJanuaryDefense} from '../themes/january-defense';
 
 const {spec}=session,game=new JanuaryDefense(spec.day,session.seed);
+const exhibit=seasonExhibit(spec.id),directLanding=spec.id==='0107-defense';
 const scene=buildJanuaryDefense(game),map=game.map;
 applyLevelQuality(scene.stage,scene.actor,new Save().data.quality);
 const ui=document.createElement('main');ui.id='jan-defense';ui.dataset.theme=map.theme;
@@ -38,6 +42,17 @@ for(const [kind,label] of [['water',map.water],['wind',map.wind],['remove','回�
     }
     selection=kind as typeof selection;refresh();
   };
+}
+let recallControl=0;
+const machineButton=document.createElement('button');
+let readyPackets=0;
+if(game.control){
+  machineButton.dataset.machine='';tools.append(machineButton);machineButton.textContent=game.control.spec.name;
+  machineButton.onclick=()=>{if(!paused&&game.operate()){
+    scene.react('wind');
+    if(scene.actor.ready){scene.actor.launch([2.10,.32,3.92]);recallControl=1.4;}
+    say(game.control!.spec.used);
+  }};
 }
 function place(index:number){
   if(!entered||paused)return;
@@ -79,12 +94,17 @@ function refresh(){
   }else if(phase==='lost'){
     heading.textContent='本次调度结束';copy.textContent=incident+'达到五次。可以从头整备，再试另一种部署。';
     action.textContent='重新布防';
+    if(game.parade){heading.textContent='花车停在街角';copy.textContent='花粉盖住了花瓣。回到本轮起点调塔，之前的街段已经通过。';action.textContent='从这个弯道再试';}
   }else{
     const clear=game.plates.filter(Boolean).length;
     heading.textContent=phase==='finale'?'六轮已完成':spec.souvenir;
-    copy.textContent=(map.theme==='eclipse'?'保存曝光 '+clear+' / 6　·　':'')+(game.errors===0?'✓ ':'○ ')+map.clean+'　'+(game.assists===0?'✓ ':'○ ')+'未用支援';
+    copy.textContent=(map.theme==='eclipse'?'保存曝光 '+clear+' / 6　·　':'')+(game.errors===0 && !game.retries?'✓ ':'○ ')+map.clean+'　'+(game.assists===0?'✓ ':'○ ')+'未用支援';
     hint=phase==='finale'?'亲手完成最后一步':spec.memory;
     action.textContent=phase==='finale'?map.finale:'领取纪念品';
+    if(directLanding){
+      if(phase==='finale')hint='点「放下着陆绳」，气球就会飞向加来。';
+      else if(finalTime<1.75){hint='着陆绳已放下，等吊篮落稳。';action.textContent='气球正在着陆';}
+    }
     action.disabled=phase==='won'&&finalTime<1.75;
     if(!art.hidden&&art.childElementCount!==game.plates.length){
       art.replaceChildren(...game.plates.map((kept,i)=>{
@@ -94,22 +114,86 @@ function refresh(){
       }));
     }
   }
-  tip.textContent=messageTimer>0?lastMessage:hint;panel.dataset.phase=!entered?'intro':phase;
+  if(game.parade && !paused){
+    if(phase==='setup'&&entered){copy.textContent='温室门口的缎带向东。先在 1 号位架水雾喷台，试着拦下贴近车身的花粉。';}
+    if(phase==='interval' && (game.wave===1||game.wave===3)){
+      copy.textContent='车头已转，车尾还在前街。留一座旧塔守第一团花粉，把另一座移到新弯道。';
+    }
+    if(phase==='finale'){
+      heading.textContent='双绳轮花拱';
+      copy.textContent='让分身压住左侧绳轮，本体再去收紧右边的绳。';
+      action.textContent=game.wheel==='free'?'投分身压左轮':game.wheel==='cast'?'分身正在落位':scene.crossing?'正在拉开花拱':'本体去拉右绳';
+      action.disabled=!scene.wheelReady && game.wheel==='free'||game.wheel==='cast'||scene.crossing;
+    }
+  }
+  if(game.control){
+    const c=game.control;
+    machineButton.hidden=!['wave','interval'].includes(phase);
+    machineButton.disabled=c.lock>0;
+    machineButton.textContent=c.spec.name+(machineButton.disabled?' · '+Math.ceil(c.lock)+' 秒':'');
+    if(entered&&phase==='interval'&&game.wave===1){
+      heading.textContent=c.spec.name+' · 转入中段';
+      copy.textContent=c.spec.guide;
+      if(!c.count){action.disabled=true;hint='先操作'+c.spec.name+'，再开第三轮。';}
+    }
+    if(phase==='wave'&&game.wave>=2){
+      copy.textContent=c.spec.guide;hint=c.active>0?c.spec.used:'本段已处理 '+game.served+' 批';
+      if(c.day==='1202')hint=c.linked?'接力灯守护 '+(Math.floor(c.focus/2)+1)+' 号灯段':'在同段架一风一水，准备接灯。';
+      if(c.day==='1203')hint=c.side?'通行灯朝向东口':'通行灯朝向西口';
+      if(c.day==='1204')hint=c.focus%2?'探照灯正对远场':'探照灯正对近场';
+      if(c.day==='1205')hint='待放行回执 '+c.reserve+' / 4';
+      if(c.day==='1207')hint='等待带签的云团 · 已回传 '+c.hits+' 批';
+      if(c.day==='1208')hint=c.focus%2?'瞄准后半坡':'瞄准前半坡';
+      if(c.day==='1209')hint=c.active>0?'水门已开 · 水塔等待引导标记':'让风塔先做航道标记';
+      if(c.day==='1210')hint=c.side?'北天值班':'南天值班';
+      if(c.day==='1211')hint=c.focus%2?'曝光窗在远景':'曝光窗在近景';
+      if(c.day==='1212')hint='渠首水池 '+c.reserve+' / 3 格';
+      if(c.day==='1213')hint=c.focus%2?'相机看守后窗':'相机看守前窗';
+      if(c.day==='1214')hint='先用风塔标出中段的阴影';
+      if(c.day==='1215')hint=c.reserve?'已存月车底片，等另一团来时回拍':'月车等待第一张底片';
+      if(c.day==='0102')hint=c.reserve===0?'两港均可先上客':'下一次开桥请等'+(c.reserve===1?'铜':'蓝')+'角票';
+      if(c.day==='0103')hint='金环越过前铜标、离开后铜标前可接收';
+      if(c.day==='0104')hint='等一张带凸点的页盘与一张空盘同时到场';
+      if(c.day==='0105')hint='当前塔位可配'+(c.focus%2?'金色暖罩':'蓝色冷罩');
+      if(januaryWeekDefense(c.day))hint=januaryDefenseStatus(c.day,c,readyPackets);
+      if(c.day==='1222')hint=(c.side?'金':'蓝')+'旗等同色票角';
+      if(c.day==='1223')hint='竹架有 '+c.reserve+' / 3 节可分';
+      if(c.day==='1224')hint=c.focus%2?'双号浮标守后半程':'单号浮标守前半程';
+      if(c.day==='1225')hint='等青、金两色票同时在场';
+      if(c.day==='1226')hint='下一站收'+['蓝','金','绿'][c.reserve]+'色行李';
+      if(c.day==='1227')hint=c.side?'下一标在后段铜窗':'下一标在前段铜窗';
+      if(c.day==='1228')hint='等金戳上坡，身后留一只邮袋';
+      if(c.day==='1229')hint=c.reserve?'已存'+(c.reserve===1?'西':'东')+'岸电，换另一岸接线':'先选择单号西岸或双号东岸';
+      if(c.day==='1230')hint='等金色温标离开风窗恢复常速';
+      if(c.day==='1231')hint='同线两个承点须靠近到四分之一路段内';
+      if(c.day==='1217')hint='金点越过本线半程后再读一次';
+      if(c.day==='1218')hint='看金色纸角，夹住后接送风台';
+      if(c.day==='1219')hint=c.reserve?'待换文本正等'+(c.reserve===1?'金':'蓝')+'签':'任选蓝、金一份先收';
+      if(c.day==='1220')hint='当前分送至第'+(1+Math.floor(c.focus/2))+'站，留意'+['蓝','金','绿'][Math.floor(c.focus/2)]+'章';
+      if(c.day==='1221')hint='金样带的两侧都须没有灰云';
+      if(c.day==='1216')hint='等同路的两团信号同时出现';
+      if(c.day==='1206')hint='留意风塔照亮的校姿目标。';
+    }
+    if(phase==='lost'){action.textContent='在本轮重新布防';copy.textContent='本轮开始前的进度已留好。可换塔位，或在波次中使用'+c.spec.name+'。';}
+  }
+  const showLanding=directLanding&&(phase==='finale'||phase==='won');
+  tip.textContent=messageTimer>0&&!showLanding?lastMessage:hint;panel.dataset.phase=!entered?'intro':phase;
 }
 function claim(){
   if(claimed)return;claimed=true;
   const save=new Save(),record=save.data.life.records;
-  if(game.errors===0)record[recordKey+'-clean']=1;
+  if(game.errors===0 && !game.retries)record[recordKey+'-clean']=1;
   if(game.assists===0)record[recordKey+'-unassisted']=1;
   record[recordKey+'-plates']=Math.max(record[recordKey+'-plates']??0,game.plates.filter(Boolean).length);
+  if(game.control&&game.control.hits>0)record[recordKey+'-machine']=Math.max(record[recordKey+'-machine']??0,game.control.hits);
   save.write();session.finish();
 }
 action.onclick=()=>{
   messageTimer=0;
-  if(!entered){if(!scene.actor.ready)return;entered=true;session.start();}
+  if(!entered){if(!scene.actor.ready)return;entered=true;panel.querySelector('.season-preview')?.remove();scene.enter();markPositions();session.start();}
   else if(paused)paused=false;
-  else if(game.phase==='lost'){location.reload();return;}
-  else if(game.phase==='finale'){game.finish();scene.react('water');}
+  else if(game.phase==='lost'){if(!game.retryCorner()){location.reload();return;}}
+  else if(game.phase==='finale'){if(game.parade){if(game.wheel==='free')scene.castWheel();else scene.crossWheel();}else exhibit.finish(()=>{game.finish();refresh();});scene.react('water');}
   else if(game.phase==='won'){if(finalTime>=1.75)claim();}
   else game.start();
   refresh();
@@ -123,14 +207,22 @@ addEventListener('keydown',e=>{
   if(!setupToolsVisible())return;
   if(/^Digit[1-6]$/.test(e.code))place(Number(e.code.slice(-1))-1);
 });
+bindHelpHint(()=>[heading.textContent,copy.textContent,game.phase==='wave'?game.control?.spec.guide:tip.textContent,game.phase==='wave'&&game.control&&januaryWeekDefense(game.day)?januaryDefenseStatus(game.day,game.control,readyPackets):''].filter(Boolean).join('　'));
 function step(raw:number){
+  if(readingHelp())return;
   const dt=Math.min(.12,Math.max(0,raw));time+=dt;
   if(!paused){
     for(let left=dt*multiplier;left>1e-8;left-=1/30)game.tick(Math.min(left,1/30));
     if(game.phase==='won')finalTime+=dt;
+    if(recallControl>0){
+      recallControl=Math.max(0,recallControl-dt);
+      if(!recallControl)scene.actor.keys.add('KeyX');
+    }else if(game.control&&!scene.actor.latest?.shots?.length)scene.actor.keys.delete('KeyX');
     messageTimer=Math.max(0,messageTimer-dt);scene.update(dt);
   }
-  const key=[scene.actor.ready,game.phase,game.wave,game.released,game.served,game.errors,game.canAssist,messageTimer>0,finalTime>=1.75].join('/');
+  if(!entered&&scene.actor.ready){entered=true;panel.querySelector('.season-preview')?.remove();scene.enter();markPositions();session.start();refresh();}
+  if(game.control&&januaryWeekDefense(game.day)&&game.phase==='wave')readyPackets=januaryPacketCount(game.day,game.control,game.packets,game.tracks);
+  const key=[readyPackets,scene.actor.ready,game.wheel,scene.wheelReady,scene.crossing,game.phase,game.wave,game.control?.count,game.control?.focus,game.control?.reserve,Math.ceil(game.control?.lock??0),game.released,game.served,game.errors,game.canAssist,messageTimer>0,finalTime>=1.75].join('/');
   if(key!==lastKey){lastKey=key;refresh();}
 }
 let previous=performance.now();
@@ -140,6 +232,7 @@ function frame(timestamp:number){
   if(!document.hidden)scene.stage.render(dt||.016,scene.actor);requestAnimationFrame(frame);
 }
 window.addEventListener('resize',markPositions);markPositions();refresh();
+exhibit.preview(panel);
 (window as any).__level={game,step,actor:scene.actor,collision:scene.collision,setView(view:'play'|'low'|'far'){scene.setView(view);markPositions();},
   get phase(){return game.phase;},get time(){return time;}};
 (window as any).__slime=scene.actor;

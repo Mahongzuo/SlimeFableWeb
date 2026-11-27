@@ -98,9 +98,9 @@ export const dailyModes = [
  }),
  challenge('0101','match',{
    storyId:'euro-cash',year:2002,fact:'2002 年 1 月 1 日，欧元纸币和硬币在欧元区十二个国家投入流通。',
-   source:'https://www.ecb.europa.eu/press/pr/date/2002/html/pr020102.en.html',souvenir:'首日零钱盘',title:'新年的第一盘欧元',
-   goal:'把三枚硬币送进各自的零钱槽',choice:'横移硬币对准槽口，再消去下方承托的凝露',
-   layout:'有三个出币槽的零钱柜台',memory:'你接住最后一枚欧元，把满盘新币推到了柜台前。'
+   source:'https://www.ecb.europa.eu/press/pr/date/2002/html/pr020102.en.html',souvenir:'首日零钱盘',title:'新年的第一盘零钱',
+   goal:'消去承托格，把三枚硬币送进各自的零钱槽',choice:'看刻纹和落点对准槽口，再决定何时消去硬币脚下的支撑。',
+   layout:'嵌在木钱屉中的棋盘与三座金属分币槽',memory:'三枚硬币沿铜槽滚进找零盘，你从柜边顶出了钱屉。'
  }),
  challenge('0101','shot',{
    storyId:'ceres',year:1801,fact:'1801 年 1 月 1 日，天文学家朱塞佩·皮亚齐在巴勒莫发现了谷神星。',

@@ -1,7 +1,7 @@
 import {SlimeSolver} from './solver';
 import {SurfaceBuilder} from './surface';
 import {Box,FrameInput,MeshFrame,Vec} from './types';
-import {createWorld,GroundSurface,WorldDefinition} from './world';
+import {createWorld,FluidVolume,GroundSurface,WorldDefinition} from './world';
 let solver=new SlimeSolver();
 let baseBoxCount=0;
 let baseSurfaceCount=0;
@@ -11,22 +11,24 @@ type WorkerMsg=
   | {input:FrameInput;world?:WorldDefinition;recycle?:Pick<MeshFrame,'positions'|'normals'|'slots'>}
   | {boxUpdate:{index:number;min:Vec;max:Vec}}
   | {dynamicBoxes:Box[]}
-  | {dynamicSurfaces:{surfaces:GroundSurface[];bounds?:{min:Vec;max:Vec}}};
+  | {dynamicSurfaces:{surfaces:GroundSurface[];fluids?:FluidVolume[];bounds?:{min:Vec;max:Vec}}};
 self.onmessage=(event:MessageEvent<WorkerMsg>)=>{
  try{
   if('boxUpdate' in event.data){
    const {index,min,max}=event.data.boxUpdate;
    const box=solver.world.boxes[index];
-   if(box){box.min=min;box.max=max;}
+   if(box){box.min=min;box.max=max;solver.world.refreshBoxes();}
    return;
   }
   if('dynamicBoxes' in event.data){
    solver.world.boxes.length=baseBoxCount;
    for(const b of event.data.dynamicBoxes)solver.world.boxes.push(b);
+   solver.world.refreshBoxes();
    return;
   }
   if('dynamicSurfaces' in event.data){
-   const {surfaces,bounds}=event.data.dynamicSurfaces;
+   const {surfaces,bounds,fluids}=event.data.dynamicSurfaces;
+   if(fluids)solver.world.definition.fluids=fluids;
    solver.world.definition.surfaces.length=baseSurfaceCount;
    for(const s of surfaces)solver.world.definition.surfaces.push(s);
    if(bounds)solver.world.definition.bounds=bounds;

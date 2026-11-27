@@ -46,7 +46,7 @@ function selectReturnDay(){
 el('[data-home]').onclick=selectReturnDay;
 const actor=new SlimeCharacter({THREE:T,renderer:stage.renderer,scene:stage.scene,camera:stage.camera,sun:stage.sun,controls:stage.controls},{
   world:{boxes:[],surfaces:[{min:[-7,-course.finish-10],max:[7,10],height:.025}]},spawn:[0,.025,0],input:false,ui:false,trainingTargets:[],title:spec.title,onToast:()=>{},
-  onReady:()=>{if(phase==='intro')panel();},
+  onReady:()=>{if(phase==='intro')start();},
 }).attach();
 actor.forward=[0,0,1];applyLevelQuality(stage,actor,save.data.quality);
 let audio:AudioContext|null=null;

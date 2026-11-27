@@ -57,12 +57,12 @@ test('ink court banks, bridges and scroll stay single-faced from above and at a 
   }
 });
 
-test('January 1 history workshops have clean deck sides and distinct gate joints',()=>{
-  const ability=abilityLevels.find(v=>v.id==='0101-1823')!,workshop=stage();
+test('history workshops have clean deck sides and distinct gate joints',()=>{
+  const ability=abilityLevels.find(v=>v.mode==='climb')!,workshop=stage();
   workshopArt(workshop,ability,abilityLayout(ability));
   checkFace(workshop,[8,-.075,1.23],[5,-.075,1.23],'stone side wall');
   checkFace(workshop,[7,.36,2.4],[5,-.075,1.23],'stone side wall at an angle');
-  const spec=atlasLevels.find(v=>v.id==='0101-1864')!,s=stage(),c=atlasCourse(spec),run=freshRun();
+  const spec=atlasLevels.find(v=>v.kind==='atelier')!,s=stage(),c=atlasCourse(spec),run=freshRun();
   const art=buildAtlas(s,spec,c);art.paint(run,0,0);
   const gate=c.gates.find(g=>g.sign==='fold'||g.sign==='leap')!;
   const h=gate.sign==='fold'?.86:.34;

@@ -1,0 +1,46 @@
+#match-lab[data-theme=euro]{
+  --frame:#805637;--dark:#422f23;--accent:#f5d9a1;
+}
+[data-theme=euro] .ml-haze{background:linear-gradient(180deg,#20272196,transparent 24%,transparent 67%,#242a22b8)}
+[data-theme=euro] .ml-console{
+  border:7px ridge #a47c50;border-radius:10px 10px 14px 14px;
+  background:repeating-linear-gradient(4deg,#ffffff06 0 1px,transparent 2px 7px),linear-gradient(105deg,#765133,#553825 47%,#744a30);
+  box-shadow:0 8px 0 #433323,0 11px 0 #bb985f,0 22px 42px #251d195e;
+  width:min(41vw,53vh,510px);padding:clamp(9px,1vw,16px);
+}
+[data-theme=euro] .ml-console::before,[data-theme=euro] .ml-console::after{
+  content:'';position:absolute;bottom:-7px;width:28px;height:18px;pointer-events:none;
+  background:radial-gradient(circle at 25% 55%,#564029 0 1px,transparent 2px),linear-gradient(120deg,#ac8448,#f5dca7,#9e763e);
+  border-radius:2px;
+}
+[data-theme=euro] .ml-console::before{left:-7px}[data-theme=euro] .ml-console::after{right:-7px}
+[data-theme=euro] .ml-grid{
+  background:#b58b60;border:4px ridge #a37d50;border-radius:4px;gap:2px;
+}
+[data-theme=euro] .ml-cell{background:linear-gradient(140deg,#544539,#383c31);border-radius:2px;box-shadow:inset 1px 2px 3px #241a1780}
+[data-theme=euro] .ml-cell.target{box-shadow:inset 0 0 0 2px #edcc80}
+[data-theme=euro] .ml-cell.coin b{font-family:Georgia,serif;font-weight:900}
+[data-theme=euro] .ml-cell.coin em{display:none}
+[data-theme=euro] .ml-cell.coin-path{background:linear-gradient(90deg,#4d4436,#94825d 47%,#c6a66a 51%,#514435 56%)}
+[data-theme=euro] .ml-cell.coin-landing{box-shadow:inset 0 -5px #ffd885,inset 0 0 0 2px #e8c97f}
+.coin-rail{display:grid;grid-template-columns:repeat(8,1fr);align-items:start;height:clamp(16px,2.7vh,25px);padding:0 4px;background:linear-gradient(#422f24,#8d683f 43%,#e1b878 48%,#a07949 60%,#654a32 85%);border:1px solid #4b382c;border-radius:0 0 9px 9px}
+.coin-rail span{grid-row:1;margin:0 6%;text-align:center;color:#c8a36f;background:#483527;border:2px ridge #bb9760;border-top:0;border-radius:0 0 50% 50%;font:bold clamp(11px,1.6vh,18px)/1.1 Georgia,serif}
+.coin-rail .awaiting{background:#29574e;color:#ffdf9a}.coin-rail .filled,.coin-rail .aligned{background:#e5c17c;color:#58462b}
+[data-theme=euro] .ml-caption{color:#352e28;text-shadow:none;background:#fff2d4;padding:12px 18px 18px;border-top:2px dashed #86664d;border-radius:2px;box-shadow:0 5px 16px #2e211b40;width:min(31vw,340px);transform:rotate(-2deg)}
+[data-theme=euro] .ml-caption small{color:#7e5137}
+[data-theme=euro] .ml-caption h2{font-size:clamp(18px,2vw,28px)}
+[data-theme=euro] .ml-caption p{font-size:clamp(12px,1.1vw,16px)}
+[data-theme=euro] .ml-meter{display:none}
+[data-theme=euro].drawer-open .ml-console{animation:pull-coin-drawer .48s ease-out}
+[data-theme=euro].complete .ml-console{translate:9px 0;transition:translate .7s cubic-bezier(.23,.8,.36,1)}
+@keyframes pull-coin-drawer{from{translate:0 -12px;filter:brightness(.65)}to{translate:0 0;filter:brightness(1)}}
+@media(max-width:759px){
+  [data-theme=euro] .ml-console{width:min(84vw,49vh);padding:8px 10px}
+  [data-theme=euro] .ml-caption{width:min(77vw,300px);font-size:11px;padding:5px 12px;transform:none}
+  [data-theme=euro] .ml-caption h2{display:none}
+  [data-theme=euro].complete .ml-console{translate:0 5px}
+}
+@media(max-height:550px) and (orientation:landscape){
+  [data-theme=euro] .ml-console{width:min(36vw,49vh);padding:5px 8px}
+}
+@media(prefers-reduced-motion:reduce){[data-theme=euro].drawer-open .ml-console{animation:none}}

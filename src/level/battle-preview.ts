@@ -223,6 +223,7 @@ function checkSkirmishPropAndElement(point:Vec,element:number,onScenery:boolean)
 
 const actor=new SlimeCharacter(stage,{spawn,world:ship?fleetWorld():fieldWorld(),trainingTargets:[],battleTargets:cast.map(x=>x[1]),
  defaultAim:ship,burstOnEnemy:ship,onDodgePress:startDodge,input:true,ui:false,onToast:()=>{},
+ onReady:()=>{if(phase==='intro')startMission();},
  onFire:()=>{
   if(phase!=='play')return;
   shotsFired++;
@@ -512,25 +513,28 @@ function panel(kicker:string,title:string,body:string,action:string){
  get('output').textContent='';
 }
 
-panel('历史场景演绎',ship?'寻回两列舰队的航迹图':'越过山道，击败阵旗守将',spec.fact+'　'+controls,'开始任务');
+card.hidden=true;
 
 function play(){
  phase='play';card.hidden=true;primary.blur();actor.play();
  audio.startAmbient(ship?'ship':'field');audio.resume();
 }
 
+function startMission(){
+ if(phase!=='intro'||!actor.ready)return;
+ session.start();play();actor.pitch=ship?.04:.17;
+ if(!ship){
+  enemies[0].spawn();
+  enemies[4].spawn();
+ }
+ saveCheckpoint(checkpointName);
+}
+
 primary.onclick=()=>{
  if(phase==='won'){session.finish();return;}
  if(!actor.ready)return;
  if(phase==='lost'){restoreCheckpoint();play();return;}
- if(phase==='intro'){
-  session.start();play();actor.pitch=ship?.04:.17;
-  if(!ship){
-   enemies[0].spawn();
-   enemies[4].spawn();
-  }
-  saveCheckpoint(checkpointName);return;
- }
+ if(phase==='intro'){startMission();return;}
  if(phase==='pause')play();
 };
 

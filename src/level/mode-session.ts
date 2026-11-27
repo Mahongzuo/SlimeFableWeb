@@ -1,3 +1,4 @@
+import {playingNow} from './help-state';
 import {historyDetails} from '../ui/battle-history';
 import './mode-session.css';
 import {modeById,modeNames,imprintShapes} from '../../content/daily-modes';
@@ -23,7 +24,7 @@ function home(){
 }
 function start(){
  if(began!==null)return;
- began=performance.now();
+ began=playingNow();
  if(!practice)new Save().add('visited',spec.saveId);
 }
 function recordWin(defense?:{perfect:boolean;untaped:boolean}){
@@ -36,7 +37,7 @@ function recordWin(defense?:{perfect:boolean;untaped:boolean}){
   if(defense.untaped)record[key+'-untaped']=1;
  }
  record[key+'-wins']=(record[key+'-wins']??0)+1;
- const ms=Math.max(1,Math.round(performance.now()-began));
+ const ms=Math.max(1,Math.round(playingNow()-began));
  record[key+timeSuffix]=Math.min(record[key+timeSuffix]??Infinity,ms);
  if(!practice){save.add('completed',spec.saveId);save.add('souvenirs',spec.saveId);}
  save.write();

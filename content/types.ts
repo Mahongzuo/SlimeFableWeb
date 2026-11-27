@@ -1,6 +1,6 @@
 /** One chapter = one year behind one time portal. Facts come only from the project's reviewed historical records. */
 export type ChapterStatus = 'web' | 'ue' | 'design';
-export type Template = 'explore-quest' | 'runner' | 'grid-push' | 'ascent' | 'herding' | 'sort-rush' | 'arena' | 'escort' | 'light-up' | 'lander' | 'flyby' | 'landmark' | 'almanac' | 'solstice' | 'folio' | 'atlas' | 'ability' | 'chronicle';
+export type Template = 'explore-quest' | 'runner' | 'grid-push' | 'ascent' | 'herding' | 'sort-rush' | 'arena' | 'escort' | 'light-up' | 'lander' | 'flyby' | 'landmark' | 'almanac' | 'solstice' | 'folio' | 'atlas' | 'ability' | 'chronicle' | 'jan01-seal' | 'jan01-book';
 export interface ChapterMeta {
   id: string; day: string; year: number;
   event: string; quest: string; steps: string[]; souvenir: string;
@@ -9,6 +9,7 @@ export interface ChapterMeta {
 }
 export interface DayMeta { day: string; theme: string; chapters: ChapterMeta[] }
 export const templateNames: Record<Template, string> = {
+  'jan01-seal':'案头钤印', 'jan01-book':'折页滑翔',
   chronicle:'岁月拾光', ability:'元素工坊', atlas:'历史航道',
   almanac:'时光剧场', solstice: '冬至奇境', folio: '秋夜长卷',
   'explore-quest': '探索任务', landmark: '地标攀爬', runner: '横版跑酷', 'grid-push': '推轨解谜', ascent: '竖版上升',

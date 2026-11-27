@@ -23,7 +23,7 @@ let rejectedChecks=0;
 const workshopName=s.kind==='memorial'?'和平庭院':recipe.name;
 const element=elementNames[s.element],padCount=s.mode==='relay'?1:2;
 const shootable=s.mode==='relay'||s.mode==='duet';
-const actor=new SlimeCharacter(stage,{world:l.world,spawn:l.spawn,input:false,ui:false,trainingTargets:s.mode==='combo'?[l.target]:[],title:s.title,onToast:()=>{},onReady:()=>{if(phase==='intro')panel();}}).attach();
+const actor=new SlimeCharacter(stage,{world:l.world,spawn:l.spawn,input:false,ui:false,trainingTargets:s.mode==='combo'?[l.target]:[],title:s.title,onToast:()=>{},onReady:()=>{if(phase==='intro')start();}}).attach();
 const characterHud = mountSlimeHud(actor, {elements:true, skills:false});
 applyLevelQuality(stage,actor,save.data.quality);actor.forward=[0,0,1];
 const ui=document.createElement('main');ui.id='ability-ui';

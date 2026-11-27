@@ -26,10 +26,10 @@ export const novemberLevels: AlmanacSpec[] = [
   {id:'1124-1859', template:'almanac', title:'让这一页见光', fact:'达尔文的《物种起源》出版。', theme:'press', activity:'align', stops:['字盘','墨辊','校样台'], souvenir:'初版书签', finale:'印出扉页'},
   {id:'1125-1915', template:'almanac', title:'星光弯过网格', fact:'爱因斯坦向普鲁士科学院报告广义相对论场方程。', theme:'observatory', activity:'align', stops:['标尺','曲面网','观测屏'], souvenir:'曲线描图', finale:'汇合光束'},
   {id:'1126-2011', template:'almanac', title:'红沙的来信', fact:'搭载好奇号火星车的火星科学实验室发射升空。', theme:'mars', activity:'drive', stops:['发射台','沙丘','遥测台'], souvenir:'红沙试车章', finale:'接通遥测'},
-  {id:'1127-1895', template:'almanac', title:'烛光下的签名', fact:'阿尔弗雷德·诺贝尔在巴黎签署遗嘱，为设立诺贝尔奖留下资金。', theme:'library', activity:'align', stops:['长桌','笔架','落款处'], souvenir:'封缄压印', finale:'封好手稿'},
-  {id:'1128-1964', template:'almanac', title:'水手驶向火星', fact:'水手四号探测器启程飞向火星。', theme:'probe', activity:'dock', stops:['展开翼','导航星','火星窗'], souvenir:'航行邮戳', finale:'穿越转移窗'},
-  {id:'1129-1972', template:'almanac', title:'荧屏上的来回球', fact:'雅达利推出电子游戏《Pong》。', theme:'arcade', activity:'pong', stops:['发球台','反弹区','终局线'], souvenir:'像素代币', finale:'点亮街机'},
-  {id:'1130-1872', template:'almanac', title:'格拉斯哥的开球', fact:'苏格兰与英格兰在格拉斯哥举行国际足球比赛。', theme:'stadium', activity:'kick', stops:['边线','禁区角','球门线'], souvenir:'条纹围巾', finale:'终场致意'},
+  {id:'1127-1895', template:'almanac', title:'烛光下的三折手稿', fact:'阿尔弗雷德·诺贝尔在巴黎签署遗嘱，为设立诺贝尔奖留下资金。', theme:'library', activity:'align', stops:['分身扣铜夹','摊开压长折痕','压实侧翼'], souvenir:'封缄压印', finale:'封好手稿'},
+  {id:'1128-1964', template:'almanac', title:'透过舷窗认一颗星', fact:'水手四号探测器启程飞向火星。', theme:'probe', activity:'dock', stops:['沿滑轨找双星','摊开稳寻星架','校准转移窗'], souvenir:'航行邮戳', finale:'锁定导航星'},
+  {id:'1129-1972', template:'almanac', title:'钻进发光的球桌', fact:'雅达利推出电子游戏《Pong》。', theme:'arcade', activity:'pong', stops:['近侧发球','横移接反弹','摊开接快球'], souvenir:'像素代币', finale:'接回三球'},
+  {id:'1130-1872', template:'almanac', title:'边线外的接应人', fact:'苏格兰与英格兰在格拉斯哥举行国际足球比赛。', theme:'stadium', activity:'kick', stops:['边线开球','跟上接应人','送球到门前'], souvenir:'条纹围巾', finale:'送出最后一传'},
 ];
 export const novemberDays: DayMeta[] = novemberLevels.map(s=>{
   const [day, year]=s.id.split('-');

@@ -1,0 +1,14 @@
+SimPond Assets Attribution & License Notice
+===========================================
+
+1. Marine Fish Kit (madai_lo.glb, kurodai_lo.glb, aji_lo.glb, saba_lo.glb, kasago_lo.glb, suzuki_lo.glb):
+   - Source: Fish Kit (https://cda-social.github.io/fish/kit/fish-kit.zip) via SimPond
+   - License: CC0 1.0 Universal (Public Domain Dedication)
+
+2. Pond Creatures & Wing Textures (common-frog.glb, smooth-newt.glb, koi-*, goldfish-*, golden-orfe_lo, perch_lo,
+   bluegill_lo, dragonfly-*, water-strider_lo, whirligig-beetle_lo, shore-crab_lo, hermit-crab_lo,
+   crayfish-signal_lo, pond-snail_lo, dragonfly-wings.webp, damselfly-wings.webp):
+   - Required Notice: Copyright 2026 Hype Driven Development Inc. (https://hypedriven.com)
+   - License: PolyForm Noncommercial License 1.0.0 (https://polyformproject.org/licenses/noncommercial/1.0.0)
+   - Note: Generated with FLUX.2 [klein] (FLUX non-commercial license) & Microsoft TRELLIS (MIT); check licensing
+     terms before any commercial distribution.

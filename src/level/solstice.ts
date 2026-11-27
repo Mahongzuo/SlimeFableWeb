@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {seasonExhibit} from './season-entry';
 import {Stage} from './stage';
 import {levels} from '../../content/levels/registry';
 import type {SolsticeSpec} from '../../content/levels/types';
@@ -27,6 +28,7 @@ const [day, year] = id.split('-');
 const stage = new Stage(biomeLooks[spec.biome]);
 const worldArt = buildSolsticeWorld(stage, spec, layout);
 const save = new Save();
+const exhibit=seasonExhibit(id);
 
 // Reserve dynamic collision box for the split-bridge rainbow planks (moved up into place when both pads hold)
 const boxes: Box[] = layout.boxes.map(b => ({name: b.name, min: [...b.min] as Vec, max: [...b.max] as Vec}));
@@ -102,7 +104,7 @@ const slime = new SlimeCharacter(ctx, {
   title: spec.title,
   onToast: () => {},
   onReady: () => {
-    if (phase === 'intro') showIntro();
+    if (phase === 'intro') start();
   },
 }).attach();
 ui.bindCharacter(slime);
@@ -123,6 +125,7 @@ function showIntro() {
   ];
   if (best) steps.push(`最佳纪录 ${(best / 1000).toFixed(1)} 秒 · 金牌目标 ${spec.medals.gold} 秒`);
   ui.intro(spec.title, spec.fact, steps, slime.ready);
+  exhibit.preview(ui.root.querySelector('.intro .row'));
 }
 
 function updateQuestHud() {
@@ -194,6 +197,9 @@ function activateNode(i: number) {
 
 function triggerFinale() {
   if (phase !== 'play' || !doneNodes.every(Boolean)) return;
+  exhibit.finish(startFinale);
+}
+function startFinale(){
   phase = 'finale';
   finaleT = 0;
   slime.pause();
@@ -210,15 +216,16 @@ function finishLevel() {
   const medal = medalFor(spec, elapsed);
   const stars = collectedStars.filter(Boolean).length;
   const allStars = stars === layout.stars.length;
-  const rec = save.data.life.records;
+  const current=exhibit.enabled?new Save():save;
+  const rec = current.data.life.records;
   rec[id + '-ms'] = Math.min(rec[id + '-ms'] || Infinity, ms);
   rec[id + '-stars'] = Math.max(rec[id + '-stars'] || 0, stars);
-  if (allStars) save.add('souvenirs', id);
-  save.add('completed', id);
-  save.write();
+  if (allStars) current.add('souvenirs', id);
+  current.add('completed', id);
+  current.write();
 
   const summary = `${spec.outro}　用时 ${elapsed.toFixed(1)} 秒（${medal}） · 星尘 ${stars} / ${layout.stars.length}。`;
-  ui.complete(spec.title, summary, spec.souvenir, save.data.souvenirs.includes(id));
+  ui.complete(spec.title, summary, spec.souvenir, current.data.souvenirs.includes(id));
   const replay = ui.root.querySelector<HTMLButtonElement>('.complete [data-act="resume"]');
   if (replay) replay.textContent = allStars ? '再玩一次 · 刷新金牌纪录' : '再玩一次 · 集齐全部星尘';
 }
@@ -267,8 +274,6 @@ addEventListener('keydown', e => {
   if (e.code === 'Enter' && phase === 'intro') start();
   if (e.code === 'KeyF' && !e.repeat && phase === 'play') handleContextAction();
 });
-
-showIntro();
 
 const clock = new T.Clock();
 let time = 0;
@@ -417,7 +422,7 @@ function step(rawDt: number) {
         slime.setMood('Happy', 0.65, 55);
         const total = collectedStars.filter(Boolean).length;
         if (total === layout.stars.length) {
-          save.add('souvenirs', id);
+          (exhibit.enabled?new Save():save).add('souvenirs', id);
           ui.toast(`✦ 集齐全部星尘！获得纪念品：${spec.souvenir}`, 3400);
         } else {
           ui.toast(`✦ 流光星尘 ${total} / ${layout.stars.length}`, 1500);

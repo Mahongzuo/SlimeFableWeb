@@ -429,3 +429,68 @@ body:has(#game-ui .overlay) #life-ui .coins {visibility:hidden}
 .home-weather select{pointer-events:auto;font:700 12px var(--sans);color:var(--ink);background:var(--paper);border:1.5px solid var(--ink);border-radius:999px;padding:5px 10px}
 .pause .home-weather{display:flex;align-items:center;gap:8px;margin:3px 0 8px}
 .pause.card{max-height:92dvh;overflow-y:auto}
+
+/* ---- Home Long-Term Systems: Voxel-Craft, Museum, Ranch, Market & Stardew Fishing ---- */
+#build-ui .vx-bar{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}
+#build-ui .vx-dyes{display:flex;gap:5px;align-items:center;margin:6px 0 8px;flex-wrap:wrap}
+#build-ui .vx-dye{width:22px;height:22px;border-radius:50%;border:2px solid rgba(47,42,36,.35);cursor:pointer;padding:0}
+#build-ui .vx-dye.sel{border-color:#2f2a24;box-shadow:0 0 0 2px #496957;transform:scale(1.12)}
+#build-ui .vx-swatch{width:100%;height:34px;border-radius:6px;display:grid;place-items:center;font-size:18px;border:1px solid rgba(47,42,36,.18)}
+#build-ui .vx-bp-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(47,42,36,.22)}
+#build-ui .b-sandbox-note{margin-top:6px;padding-top:6px;border-top:1px dashed rgba(47,42,36,.2);display:flex;align-items:center;justify-content:space-between;gap:6px;font:600 11px var(--sans);color:var(--ink-2)}
+
+#life-ui .dex-tabs{flex-wrap:wrap}
+#life-ui .buff-strip{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+#life-ui .buff-pill{padding:3px 9px;border-radius:999px;background:#e5f5ee;border:1px solid var(--sea-deep);color:var(--sea-deep);font:700 11.5px var(--sans)}
+#life-ui .blessing-card{padding:9px 12px;border:1.5px solid #c9923d;border-radius:11px;background:#fff8e8;margin-bottom:10px;font:600 12.5px/1.45 var(--sans)}
+#life-ui .blessing-card b{color:#8a4f13;display:block;margin-bottom:2px}
+
+#life-ui .museum-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:10px}
+#life-ui .museum-hall{padding:11px 13px;border:1.5px solid var(--ink);border-radius:12px;background:#fffaf0;display:flex;flex-direction:column;gap:7px}
+#life-ui .museum-hall.done{border-color:var(--sea-deep);background:#eef9f3}
+#life-ui .museum-hall header{display:flex;justify-content:space-between;align-items:center;border:none;padding:0;margin:0}
+#life-ui .museum-slots{display:flex;flex-direction:column;gap:5px}
+#life-ui .museum-slot{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 8px;border-radius:8px;background:rgba(47,42,36,.05);font:600 12px var(--sans)}
+#life-ui .museum-slot.ok{background:#d7f1e3;color:var(--sea-deep)}
+#life-ui .hall-reward{font:700 11.5px/1.35 var(--sans);color:#7c521c;background:#fcf1d6;padding:5px 8px;border-radius:8px}
+
+#life-ui .ranch-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;border:1.5px solid var(--ink);border-radius:10px;background:#fffaf0;margin-bottom:10px;font:700 12.5px var(--sans)}
+#life-ui .market-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px;margin-bottom:12px}
+#life-ui .market-card{display:flex;flex-direction:column;gap:5px;padding:9px 11px;border:1.5px solid rgba(47,42,36,.35);border-radius:10px;background:#fffaf0;font:600 12px var(--sans)}
+#life-ui .market-card .m-row{display:flex;justify-content:space-between;align-items:center;gap:6px}
+
+#life-ui .fish-meter{position:relative}
+#life-ui .fish-meter .fish-marker{position:absolute;top:50%;transform:translate(-50%,-50%);font-size:15px;line-height:1;z-index:3;pointer-events:none;transition:left .04s linear}
+#life-ui .fish-meter .fish-treasure{position:absolute;top:-16px;transform:translateX(-50%);font-size:13px;line-height:1;z-index:4;pointer-events:none}
+#life-ui .fish-meter .fish-treasure.got{filter:drop-shadow(0 0 4px #ffd166)}
+
+/* ---- Deep-Sea Boat Summon & Underwater Diving HUD ---- */
+.ocean-hud{position:fixed;left:50%;bottom:124px;transform:translateX(-50%);z-index:26;pointer-events:none}
+.ocean-hud.hidden{display:none}
+.ocean-pill{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 13px;border:2px solid var(--ink);border-radius:999px;background:rgba(255,250,240,.94);box-shadow:0 4px 16px rgba(20,38,44,.18);pointer-events:auto;font:700 13px/1.2 var(--sans);color:var(--ink)}
+.ocean-pill.dive{background:rgba(14,48,68,.86);border-color:#7ad9ea;color:#e8fbff;box-shadow:0 6px 22px rgba(5,24,42,.42)}
+.ocean-badge{font:800 12.5px var(--sans);padding:2px 8px;border-radius:999px;background:rgba(45,138,108,.14);color:#1d6b57;white-space:nowrap}
+.ocean-pill.dive .ocean-badge{background:rgba(122,217,234,.22);color:#9bf0ff}
+.ocean-hint{font:600 12px var(--sans);opacity:.92;white-space:nowrap}
+.ocean-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border:1.5px solid var(--ink);border-radius:999px;background:#fffaf0;color:var(--ink);font:700 12.5px var(--sans);cursor:pointer;transition:transform .12s,background .12s}
+.ocean-btn:hover{transform:translateY(-1px);background:#e8f7f1}
+.ocean-btn.primary{background:#1b6b64;border-color:#134c47;color:#fffaf0}
+.ocean-btn.primary:hover{background:#227d75}
+.ocean-btn.ghost{background:transparent;border-color:rgba(47,42,36,.35);color:var(--ink-2)}
+.ocean-pill.dive .ocean-btn{background:#1b6c88;border-color:#8ee6f7;color:#f2fdff}
+.ocean-pill .key{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:6px;background:#f2d16b;border:1.5px solid #2f2a24;color:#2f2a24;font:800 11px/1 var(--sans)}
+
+.voyage-controls{position:fixed;z-index:32;bottom:clamp(72px,12vh,120px);left:50%;transform:translateX(-50%);max-width:min(740px,95vw);width:max-content;padding:9px 12px;background:#13383ced;color:#fff2cf;border:1px solid #c9a665;border-radius:12px;font:600 13px/1.5 var(--sans);box-shadow:0 5px 18px #12252b48;pointer-events:auto}
+.voyage-readout{display:block;text-align:center;font-variant-numeric:tabular-nums}
+.voyage-actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.voyage-controls button{border:1px solid #a8b6a4;border-radius:6px;background:#245053;color:#fff3ce;padding:5px 8px;cursor:pointer;font:inherit;touch-action:none}
+.voyage-controls button.ready{background:#f5ce7c;color:#273b39}
+.voyage-controls [hidden],.voyage-controls[hidden]{display:none}
+.voyage-guide{overflow:auto;max-height:55dvh;max-width:34rem;padding:0 8px 6px;overscroll-behavior:contain}
+.voyage-guide h2,.voyage-guide h3{color:#f8d69c;margin:.55em 0 .18em}.voyage-guide p{margin:.15em 0 .65em;line-height:1.6}
+@media (max-width:650px){.voyage-controls{width:94vw;box-sizing:border-box;font-size:12px;bottom:max(48px,env(safe-area-inset-bottom));padding:5px}.voyage-controls button{min-height:32px}.voyage-guide{max-height:62dvh}}
+
+.sailing-voyage #game-ui .keys,.sailing-voyage #game-ui .objective,.sailing-voyage #game-ui .shards,.sailing-voyage [data-act=build]{display:none}
+
+.sailing-voyage .slime-hud,.sailing-voyage .hud-day{display:none}
+.sailing-voyage .voyage-controls{bottom:max(16px,env(safe-area-inset-bottom))}

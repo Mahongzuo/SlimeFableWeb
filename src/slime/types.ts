@@ -1,7 +1,7 @@
 export type Vec = [number, number, number];
 export type Quality = 'high' | 'balanced';
 export type BodyShape = 'dome' | 'ball';
-export interface Box {min:Vec; max:Vec; camera?:boolean; name:string}
+export interface Box {min:Vec; max:Vec; yaw?:number; camera?:boolean; climbable?:boolean; name:string}
 export interface CannonLaunchSpec {muzzle:Vec; start:Vec; target:Vec; velocity:Vec; flightTime:number; gravity:number; element?:number; burstOnEnemy?:boolean}
 export interface BattleCollider {id:number; center:Vec; radius:number}
 export interface CannonImpact {shotId:number; targetId:number|null; point:Vec; element:number}
@@ -36,6 +36,14 @@ export interface FrameInput {
   airBounce?:number;
   /** Fraction of the glide unfold animation, including the return to the resting shape. */
   glideAmount?:number;
+  /** World-space ocean wave surface normal when floating on sea waves. */
+  waterNormal?:Vec|null;
+  /** Instantaneous ocean wave vertical displacement & velocity hint for soft-body bobbing. */
+  waterWaveVelY?:number;
+  /** True while freely swimming underwater (3D neutral buoyancy). */
+  submerged?:boolean;
+  /** Moving/tilted support plane (e.g. swinging seat plank) so PBF particles stay flush on top with zero clipping. */
+  ridePlane?:{point:Vec;normal:Vec}|null;
   battleTargets?:BattleCollider[];
 }
 export interface ShotView {id:number; phase:'separating'|'flying'|'active'|'returning'|'merging'; center:Vec; radius:number; age:number; mergeProgress:number; umbrella?:boolean}

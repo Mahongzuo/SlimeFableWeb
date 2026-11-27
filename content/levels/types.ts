@@ -129,5 +129,10 @@ export interface ChronicleSpec {
   palette: [string, string];
   medals: {gold: number; silver: number};
 }
-export type AnyLevel = AbilitySpec | ChronicleSpec | LevelSpec | RunnerSpec | LanderSpec | FlybySpec | LandmarkSpec | AlmanacSpec | SolsticeSpec | FolioSpec | AtlasSpec;
+export interface Jan01ChapterSpec {
+  id: string; template: 'jan01-seal' | 'jan01-book'; title: string; fact: string;
+  source: string; souvenir: string; steps: string[]; palette: [string, string];
+  requiredAbilities: string[]; optionalAbilities: string[];
+}
+export type AnyLevel = Jan01ChapterSpec | AbilitySpec | ChronicleSpec | LevelSpec | RunnerSpec | LanderSpec | FlybySpec | LandmarkSpec | AlmanacSpec | SolsticeSpec | FolioSpec | AtlasSpec;
 export const defineRunner = (spec: RunnerSpec) => spec;

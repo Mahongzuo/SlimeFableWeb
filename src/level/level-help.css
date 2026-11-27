@@ -1,0 +1,36 @@
+.gate-help-launch{pointer-events:auto;flex:none;white-space:nowrap;min-height:32px;cursor:pointer;line-height:1.2}
+.gate-help-launch.in-modal{display:block;margin:.6rem auto 0;border:1px solid #bda87e;border-radius:5px;padding:.35rem .7rem;background:#fff5d9;color:#473728}
+#gate-help{font:15px/1.6 system-ui,"Microsoft YaHei",sans-serif;box-sizing:border-box;width:min(440px,calc(100vw - 24px));max-height:min(84dvh,700px);padding:0;border:1px solid #ad9676;border-radius:12px;background:#faf5e8;color:#2d3937;box-shadow:0 12px 50px #14202363;overflow:hidden;pointer-events:auto}
+#gate-help[open]{display:flex;flex-direction:column}
+#gate-help::backdrop{background:#13212db3}
+#gate-help .gh-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px 12px;background:#264b49;color:#fff6de}
+#gate-help small{font-size:12px;color:#d1e1cd}
+#gate-help h2{font-size:21px;line-height:1.4;margin:2px 0 0}
+#gate-help h3{font-size:14px;line-height:1.4;margin:0 0 4px;color:#315b51}
+#gate-help p{margin:0}
+#gate-help .gh-scroll{padding:16px 20px;overflow:auto;overscroll-behavior:contain}
+#gate-help section+section,#gate-help details{margin-top:14px}
+#gate-help details{border-top:1px solid #d7c9b1;padding-top:10px}
+#gate-help summary{cursor:pointer;font-weight:650;color:#315b51;padding:3px 0}
+#gate-help ol{padding-left:1.45rem;margin:8px 0}
+#gate-help li{padding-left:.15em;margin:6px 0}
+#gate-help li::marker{font-weight:700;color:#9b6437}
+#gate-help .gh-move{background:#e4eddb;padding:8px 10px;border-radius:4px;margin-top:8px}
+#gate-help .gh-optional{color:#685c4d;font-size:13px}
+#gate-help footer{padding:9px 20px 12px;border-top:1px solid #d7c9b1;display:flex;justify-content:flex-end}
+#gate-help button{font:inherit;cursor:pointer}
+#gate-help .gh-back{background:#315b51;color:white;border:0;padding:6px 18px;border-radius:5px}
+#gate-help .gh-close{background:transparent;color:#fff1ce;border:1px solid #739491;width:34px;height:34px;border-radius:5px;font-size:22px;line-height:1}
+#gate-help button:focus-visible,#gate-help summary:focus-visible{outline:3px solid #db9d51;outline-offset:2px}
+@media(max-width:520px){main header .gate-help-launch{font-size:12px;padding:5px;min-height:30px}#gate-help .gh-heading{padding:13px 15px 10px}#gate-help .gh-scroll{padding:13px 15px}}
+
+#gate-help .gh-touch{display:none}
+@media (pointer:coarse),(max-width:520px){#gate-help .gh-touch{display:block;margin-top:8px;color:#4b655f;font-size:13px}}
+
+#gate-help .gh-diagram{margin:.55rem 0 1rem}
+#gate-help .gh-grid{display:grid;grid-template-columns:repeat(8,1fr);width:min(100%,13rem);gap:2px;background:#293d3c;padding:4px;border-radius:3px}
+#gate-help .gh-grid span{display:grid;place-items:center;aspect-ratio:1;font:bold 13px system-ui;color:#152522;border-radius:2px;line-height:1}
+#gate-help .gh-grid .gh-hole{background:transparent}
+#gate-help .gh-grid .gh-target{box-shadow:inset 0 0 0 3px #f1b951}
+#gate-help .gh-grid .gh-pair b{display:grid;place-items:center;border-radius:50%;background:#213c3a;color:white;width:1.1rem;height:1.1rem;font:700 13px/1 system-ui}
+#gate-help .gh-diagram figcaption{margin-top:.4rem;font-size:13px;color:#4b5853}

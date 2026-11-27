@@ -5,7 +5,7 @@ import {plazaCenter, ShardSpot} from './layout';
 export class Lectern {
   readonly position: Vec = [...plazaCenter]; private glyph: any; private book: any;
   constructor(ctx: any) {
-    const T = ctx.THREE, toon = ctx.mats.toon, g = new T.Group(); g.name = 'history-lectern';
+    const T = ctx.THREE, toon = ctx.mats.toon, g = new T.Group(); g.name = 'history-lectern'; g.userData.skipHeightBake = true;
     g.position.fromArray(plazaCenter); g.rotation.y = -Math.PI / 2; // book faces west, towards arrivals
     const stone = toon(0xe9e0cc), dark = toon(0xb9ad97);
     const base = new T.Mesh(new T.CylinderGeometry(.42, .55, .16, 24), dark); base.position.y = .08; g.add(base);

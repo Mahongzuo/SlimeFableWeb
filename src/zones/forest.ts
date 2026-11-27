@@ -1,5 +1,8 @@
 import {pathDistance} from '../world/map';
+import {getNativeTreeSpots} from '../home/garden-regions';
 import {signpost, trees, tufts, windy} from './kit';
+import {createLeafCardMaterial, getSharedPineBoughGeometry, buildBroadleafCanopyGeometry} from '../home/foliage/tree-ism';
+import type {Box} from '../slime/types';
 import type {ZoneBuilder} from './types';
 import {critterField} from './critter-field';
 
@@ -91,25 +94,46 @@ export const forest: ZoneBuilder = z => {
       tips.push([x + dx * 1.12, y + .38 * size, zz + dz * 1.12, width * 1.08, size * .37, width * .92, angle]);
     }
   }
-  beam('pine-branches', 0x6b5946, limbs);
-  const needles = new T.IcosahedronGeometry(1, 1);
-  batch('pine-foliage-shadow', needles, 0x426a56, shaded);
-  batch('pine-foliage-tips', needles, 0x628566, tips);
+  const pineBranches = beam('pine-branches', 0x6b5946, limbs);
+  pineBranches.userData.walkThrough = true;
+  pineBranches.userData.skipHeightBake = true;
+  const needles = getSharedPineBoughGeometry();
+  const pineLeafMat = createLeafCardMaterial(z, 0.045, true);
+  const pineShadow = batch('pine-foliage-shadow', needles, 0x3b664b, shaded);
+  pineShadow.material = pineLeafMat;
+  const pineTips = batch('pine-foliage-tips', needles, 0x56825c, tips);
+  pineTips.material = pineLeafMat;
 
+  const zoneBoxes: Box[] = [];
   const base = z.ground(-70, 95), deck = base + 4;
   batch('treehouse-trunk', new T.CylinderGeometry(.65, .95, 8.5, 9).translate(0, 4.25, 0), 0x624832, [[-70, base, 95, 1, 1, 1]]);
-  batch('treehouse-foliage', new T.IcosahedronGeometry(1, 1), 0x365e3c, [[-70, base + 9, 95, 4, 2.8, 3.6]]);
-  beam('treehouse-platform', 0x94704a, [[-70, deck - .16, 95, 6, .32, 5.6]]);
+  const thCanopy = batch('treehouse-foliage', buildBroadleafCanopyGeometry(), 0x3f6e44, [[-70, base + 1.4, 95, 2.5, 2.3, 2.5]]);
+  thCanopy.material = pineLeafMat;
+  const thDeck = beam('treehouse-platform', 0x94704a, [[-70, deck - .16, 95, 6, .32, 5.6]]);
+  thDeck.userData.skipHeightBake = true;
+  zoneBoxes.push({name: 'treehouse-deck', min: [-73, deck - .32, 92.2], max: [-67, deck, 97.8], camera: false});
   beam('treehouse-supports', 0x624832, [-72.5, -67.5].flatMap(x => [92.7, 97.3].map(zz => {
-    const ground = z.ground(x, zz); return [x, (ground + deck) / 2, zz, .22, deck - ground, .22] as Pose;
+    const ground = z.ground(x, zz);
+    zoneBoxes.push({name: `treehouse-sup-${x}-${zz}`, min: [x - .11, ground, zz - .11], max: [x + .11, deck, zz + .11], camera: true});
+    return [x, (ground + deck) / 2, zz, .22, deck - ground, .22] as Pose;
   })));
   // Small cabin at the back: open doorway faces the ladder and viewing deck.
-  beam('treehouse-cabin', 0x80613f, [
+  const thCabin = beam('treehouse-cabin', 0x80613f, [
     [-70, deck + 1.2, 97.4, 3.2, 2.4, .16], [-71.6, deck + 1.2, 96.4, .16, 2.4, 2],
     [-68.4, deck + 1.2, 96.4, .16, 2.4, 2], [-71.15, deck + 1.2, 95.4, .9, 2.4, .16],
     [-68.85, deck + 1.2, 95.4, .9, 2.4, .16], [-70, deck + 2.2, 95.4, 1.4, .4, .16],
     [-70, deck + 2.5, 96.4, 3.7, .24, 2.6],
   ]);
+  thCabin.userData.skipHeightBake = true;
+  zoneBoxes.push(
+    {name: 'th-wall-back', min: [-71.6, deck, 97.32], max: [-68.4, deck + 2.4, 97.48], camera: true},
+    {name: 'th-wall-l', min: [-71.68, deck, 95.4], max: [-71.52, deck + 2.4, 97.4], camera: true},
+    {name: 'th-wall-r', min: [-68.48, deck, 95.4], max: [-68.32, deck + 2.4, 97.4], camera: true},
+    {name: 'th-wall-fl', min: [-71.6, deck, 95.32], max: [-70.7, deck + 2.4, 95.48], camera: true},
+    {name: 'th-wall-fr', min: [-69.3, deck, 95.32], max: [-68.4, deck + 2.4, 95.48], camera: true},
+    {name: 'th-lintel', min: [-70.7, deck + 2.0, 95.32], max: [-69.3, deck + 2.4, 95.48], camera: true},
+    {name: 'th-roof', min: [-71.85, deck + 2.38, 95.1], max: [-68.15, deck + 2.62, 97.7], camera: true},
+  );
   const railing: Pose[] = [];
   for (const x of [-72.85, -67.15]) {
     railing.push([x, deck + .85, 95, .12, .12, 5.5]);
@@ -128,8 +152,12 @@ export const forest: ZoneBuilder = z => {
   const ladderBase = z.ground(-70, 92), ladderHeight = deck - ladderBase;
   beam('treehouse-ladder-rails', 0x6c5035, [-70.55, -69.45].map(x => [x, ladderBase + (ladderHeight + .8) / 2, 92, .14, ladderHeight + .8, .18]));
   const rungs: Pose[] = [];
-  for (let h = .2; h < ladderHeight + .1; h += .3) rungs.push([-70, ladderBase + h, 91.9, 1.15, .16, .28]);
-  beam('treehouse-ladder-rungs', 0xaf8858, rungs);
+  for (let h = .2; h < ladderHeight + .1; h += .3) {
+    rungs.push([-70, ladderBase + h, 91.9, 1.15, .16, .28]);
+    zoneBoxes.push({name: `th-rung-${rungs.length}`, min: [-70.58, ladderBase + h - .08, 91.76], max: [-69.42, ladderBase + h + .08, 92.04], camera: false});
+  }
+  const rungMesh = beam('treehouse-ladder-rungs', 0xaf8858, rungs);
+  rungMesh.userData.skipHeightBake = true;
   z.interact({id: 'forest-treehouse', position: [-70, deck + .25, 93.5], radius: 2, prompt: () => ({title: '树屋', sub: '夜里能看到萤火虫'}), act: () => {}});
 
   // Low stepped planks follow the path's slope; the full walking width stays open.
@@ -166,7 +194,11 @@ export const forest: ZoneBuilder = z => {
     }
   });
   batch('mushroom-stems-fx', new T.CylinderGeometry(.045, .065, .28, 6), 0xe4d6af, stems);
-  batch('mushroom-caps-fx', new T.SphereGeometry(.19, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), 0xb87a49, caps);
+  // Strictly bottom-to-top LatheGeometry points so forest mushroom caps face outward (never inverted)
+  const fCapPts = [new T.Vector2(.001, -.012), new T.Vector2(.15, -.018), new T.Vector2(.19, 0), new T.Vector2(.17, .095), new T.Vector2(.10, .165), new T.Vector2(.001, .19)];
+  const fCapGeo = new T.LatheGeometry(fCapPts, 14);
+  fCapGeo.computeVertexNormals();
+  batch('mushroom-caps-fx', fCapGeo, 0xb87a49, caps);
   scatter(500, .25, (x, zz) => leaves.push([x, z.ground(x, zz) + .06, zz, .6 + z.rand() * .5, .12, .4 + z.rand() * .4, z.rand() * 6]));
   batch('forest-leaf-piles', new T.IcosahedronGeometry(1, 0), 0x877340, leaves);
 
@@ -246,8 +278,15 @@ export const forest: ZoneBuilder = z => {
   root.add(signpost(z, -86, 73, 0, '护林小屋', '护林防火 · 请勿采菇'));
   root.add(signpost(z, -62, 96, -.6, '往东·凝露港', '沿石板路出林'));
 
+  const forestNativeTrees = getNativeTreeSpots('forest');
   root.add(signpost(z, -33, 53, -Math.PI / 2, '松果林', '轻手轻脚，小动物会躲'));
-  root.add(tufts(z, 7000, {min: [-105, 31], max: [-31, 141]}, (x, zz) => pathDistance(x, zz) < 2.4 || creekDistance(x, zz) < 1, [0x5c814c, 0xa69a56, 0xc98fb8, 0xe3dcc0]));
+  root.add(tufts(z, 7000, {min: [-105, 31], max: [-31, 141]}, (x, zz) => pathDistance(x, zz) < 2.4
+    || creekDistance(x, zz) < 1
+    || Math.hypot(x + 70, zz - 95) < 1.65 // giant treehouse trunk
+    || (Math.abs(x + 89) < 2.6 && Math.abs(zz - 77) < 2.2) // ranger cabin footprint
+    || spots.some(([tx, tz, ts]) => Math.hypot(x - tx, zz - tz) < Math.max(0.80, ts * 0.56 + 0.36))
+    || forestNativeTrees.some(([tx, tz, r]) => Math.hypot(x - tx, zz - tz) < r),
+    [0x5c814c, 0xa69a56, 0xc98fb8, 0xe3dcc0]));
   // kit signposts use identical edge materials and the same texture on both faces.
   root.traverse((node: any) => {
     if (node.parent?.name !== 'signpost' || !Array.isArray(node.material)) return;
@@ -280,7 +319,7 @@ export const forest: ZoneBuilder = z => {
     group.mesh.castShadow = true; root.add(group.mesh);
   }
   const critterMatrix = new T.Matrix4();
-  return {root, update(t, dt, player) {
+  return {root, boxes: zoneBoxes, update(t, dt, player) {
     updateCritters(t, dt, player);
     wheel.rotation.z = -t * .22;
     const night = (z.ctx.U.uSun?.value ?? 1) < .2;

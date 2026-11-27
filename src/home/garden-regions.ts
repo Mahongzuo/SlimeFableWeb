@@ -17,7 +17,7 @@ const lanes=gardenLayouts.canal.strokes.filter(([id])=>id==='stonepath'||id==='d
 }));
 export const gardenRoads=createRoadCoverage([...lanes,
   {type:'stonepath',p:[[-17,0],[-18,8],[-14,16],[-7,21],[1,19],[10,17]],w:1.8},
-  {type:'stonepath',p:[[2,17],[6,21],[8,24],[8,34]],w:2},
+  {type:'stonepath',p:[[2,17],[6,21],[8,24],[8.2,28.5],[10.4,33.5],[12.4,37.5]],w:2.1},
   {type:'dirtpath',p:[[-27,5],[-19,3],[-15,-3]],w:1.9},
   {type:'dirtpath',p:[[17,13],[21,6],[20,-6],[15,-15],[13,-23]],w:1.65}
 ]);
@@ -35,8 +35,8 @@ const scenery:Record<string,Spot[]>={
     ['pack-pavilion',13,-23,4],['pack-ginkgo',11,-21,3.8],['build-red-pagoda',-21,-21,5.1,.3],
     ['nature-bamboo',-19,-18,3.4],['nature-willow',-11,12,4.6],['waterside-reeds',-9,14,1.5],
     ['build-huizhou',-21,16,5.7,.27],['nature-wisteria',-23,12,3.3],['nature-bamboo',25,8,3.6]],
-  park:[['pack-windmill',20,64,5.5,Math.PI],['pack-pavilion',-18,59,4.5,.6],['nature-wisteria',-21,57,3],['build-moon-gate',2,77,3.9],
-    ['nature-bamboo',5,77,2.9],['pack-ginkgo',-8,72,3.7],['build-teahall',23,54,4.9,-1.4]],
+  park:[['pack-windmill',20,64,5.5,Math.PI],['pack-pavilion',-18.5,65.0,4.5,.45],['nature-wisteria',-22.5,63.5,3],['build-moon-gate',2,77,3.9],
+    ['nature-bamboo',5,77,2.9],['pack-ginkgo',-8,74,3.7],['build-teahall',24.8,52.6,4.9,-1.4]],
   lake:[['waterside-stilt-house',-19,102,5.9,.8],['build-teahall',-22,98,5.5,-.4],
     ['pack-pavilion',20,123,4.3,-.6],['nature-willow',18,121,4.2],['nature-willow',-16,102,4.8],
     ['waterside-reeds',-15,104,2],['waterside-lily',-11,104,1.8],['nature-wisteria',20,130,3.2],
@@ -50,6 +50,24 @@ const scenery:Record<string,Spot[]>={
     ['nature-bamboo',-48,74,4],['nature-bamboo',-52,72,3.3],['build-moon-gate',-92,102,3.5,1.2],
     ['pack-ginkgo',-94,99,4],['nature-wisteria',-89,104,3.4],['waterside-shore-stones',-98,108,3.9]],
 };
+/** Native tree/bamboo trunk centers per zone so meadow grass & wildflowers never poke through bark. */
+const QUAY_TREES: [number, number, number][] = [
+  [-0.4, 25.5, 1.05], [0.7, 30.3, 0.95], [2.2, 11.3, 1.05],
+  [24.8, 12.2, 1.1], [25.4, 17.2, 1.15], [25.4, 23.3, 1.15], [24.7, 28.8, 1.05],
+];
+
+export function getNativeTreeSpots(zoneId: string): [number, number, number][] {
+  const out: [number, number, number][] = zoneId === 'harbor' ? [...QUAY_TREES] : [];
+  const spots = scenery[zoneId] ?? [];
+  for (const [asset, x, z, width] of spots) {
+    if (/willow|ginkgo|bamboo|wisteria|palm/.test(asset)) {
+      const trunkR = /bamboo/.test(asset) ? Math.max(1.0, width * 0.36) : Math.max(0.85, width * 0.24);
+      out.push([x, z, trunkR]);
+    }
+  }
+  return out;
+}
+
 export function buildGardenRegions(ctx:any,roots:any[],occupied:{x:number;z:number}[]){
   const T=ctx.THREE,boxes:Box[]=[], footprints:PlacedProp[]=[];
   for(const [id,spots] of Object.entries(scenery)){
@@ -65,37 +83,11 @@ export function buildGardenRegions(ctx:any,roots:any[],occupied:{x:number;z:numb
       if (def?.solid) {
         const prop = {id:`native-${id}-${asset}-${x}-${z}`,itemId:asset,x,y,z,yaw,scale:width/Math.max(def.width,def.depth)};
         footprints.push(prop);
-        if (bridge) boxes.push({name:'covered-footbridge',min:[x-width*.49,-.48,z-1.02],max:[x+width*.49,.17,z+1.02],camera:false});
-        else boxes.push(...propCollisionParts(prop));
+        boxes.push(...propCollisionParts(prop));
       }
     }
   }
-  const river=valleyWater(ctx,new T.PlaneGeometry(19,54),-7.5,riverLevel,-4);ctx.scene.add(river);
-  // Low silhouettes layer the horizon without procedural buildings on the sky itself.
-  const mount=new T.Group();mount.name='garden-distant-ridges';mount.userData.walkThrough=true;
-  for (let layer=0;layer<2;layer++) {
-    const vertices:number[]=[], indices:number[]=[];
-    for (let i=0;i<=144;i++) {
-      const a=(i%144)*Math.PI/72, r=118+layer*25+5*Math.sin(3*a+.4);
-      const x=r*Math.cos(a), z=(r+21)*Math.sin(a);
-      const y=5+layer*5+3*Math.sin(5*a+layer)+2.6*Math.sin(9*a+1.3*layer)+1.7*Math.cos(17*a+layer);
-      vertices.push(x,-9,z,x,y,z);
-      if (i) {const j=(i-1)*2;indices.push(j,j+1,j+2,j+1,j+3,j+2);}
-    }
-    const geom=new T.BufferGeometry();
-    geom.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
-    geom.setIndex(indices);
-    const ridge=new T.Mesh(geom,new T.MeshBasicMaterial({color:layer?0xa9bbb5:0x93aaa0,side:T.DoubleSide}));
-    ridge.layers.set(1);mount.add(ridge);
-  }
-  // The silhouette belongs to the sky. Keep it beyond purchased plots as the world grows.
-  ctx.scene.add(mount);
-  const ridgeDay=[0x93aaa0,0xa9bbb5].map(color=>new T.Color(color));
-  const ridgeNight=[0x394c58,0x415767].map(color=>new T.Color(color));
-  ctx.onUpdate(()=>{
-    mount.position.set(ctx.camera.position.x,0,ctx.camera.position.z);
-    const light=Math.min(1,Math.max(0,(ctx.weather.sun-.14)/.45));
-    mount.children.forEach((ridge:any,i:number)=>ridge.material.color.copy(ridgeNight[i]).lerp(ridgeDay[i],light));
-  });
+  const river=valleyWater(ctx,new T.PlaneGeometry(19,54),-7.5,riverLevel,-4,.08,.93);ctx.scene.add(river);
+  // Open 360-degree ocean horizon: distant 2D mountain rings are replaced by the infinite FFT ocean & physical atmosphere.
   return {boxes,footprints};
 }

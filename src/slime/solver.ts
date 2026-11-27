@@ -22,13 +22,14 @@ const DOME = {widthScale: 1.14, heightScale: 0.86, upwardRestore: 0.72, anchorHe
 export class SlimeSolver {
  particles:Particle[]=[]; shots:Shot[]=[];center:Vec=[0,.2,0];centerVelocity:Vec=[0,0,0];nextId=1;time=0;spread=0;grounded=true;foot:Vec=[3,0,19];
  shapeBlend=1;
+ ridePlane:{point:Vec;normal:Vec}|null=null;
  private impacts:CannonImpact[]=[];
  takeImpacts(){return this.impacts.splice(0)}
  private inertiaForward:Vec=[0,0,-1];private inertiaAmount=0;
  private neighbors:number[][]=[];private grid=new Map<number,number[]>();private restCenterY=.20;
  constructor(foot:Vec=[0,0,0],public readonly world:CollisionWorld=flatWorld){this.reset(foot)}
  private lattice(count:number):Vec[]{const candidates:{p:Vec;d:number}[]=[];for(let x=-10;x<=10;x++)for(let y=-10;y<=10;y++)for(let z=-10;z<=10;z++){let p:Vec=[x*SPACING,y*SPACING*.92,z*SPACING];candidates.push({p,d:p[0]**2+p[2]**2+(p[1]*1.05)**2})}candidates.sort((a,b)=>a.d-b.d);let pts=candidates.slice(0,count).map(v=>v.p);let cy=pts.reduce((s,p)=>s+p[1],0)/count;return pts.map(p=>[p[0],p[1]-cy,p[2]] as Vec)}
- reset(foot:Vec){this.shots=[];this.impacts.length=0;this.foot=[...foot];this.spread=0;this.shapeBlend=1;this.restCenterY=.20;const startY=this.restCenterY*DOME.anchorHeightScale;this.center=[foot[0],foot[1]+startY,foot[2]];this.centerVelocity=[0,0,0];this.inertiaForward=[0,0,-1];this.inertiaAmount=0;this.particles=this.lattice(384).map((rest,index)=>{const p=rest.map((v,i)=>v+this.center[i]) as Vec;const r=1.30*Math.sqrt((index+.5)/384),angle=index*2.399963229728653;return {p,old:[...p],v:[0,0,0],rest,flat:[Math.cos(angle)*r,0,Math.sin(angle)*r] as Vec,group:0,lambda:0}});this.nextId=1;this.time=0}
+ reset(foot:Vec){this.shots=[];this.impacts.length=0;this.foot=[...foot];this.spread=0;this.shapeBlend=1;this.ridePlane=null;this.restCenterY=.20;const startY=this.restCenterY*DOME.anchorHeightScale;this.center=[foot[0],foot[1]+startY,foot[2]];this.centerVelocity=[0,0,0];this.inertiaForward=[0,0,-1];this.inertiaAmount=0;this.particles=this.lattice(384).map((rest,index)=>{const p=rest.map((v,i)=>v+this.center[i]) as Vec;const r=1.30*Math.sqrt((index+.5)/384),angle=index*2.399963229728653;return {p,old:[...p],v:[0,0,0],rest,flat:[Math.cos(angle)*r,0,Math.sin(angle)*r] as Vec,group:0,lambda:0}});this.nextId=1;this.time=0}
 
  launch(target:Vec,forward:Vec,cannon?:CannonLaunchSpec):boolean {
   if(this.shots.length>=5)return false;
@@ -126,10 +127,14 @@ export class SlimeSolver {
  private buildNeighbors(){this.grid.clear();const ps=this.particles;for(let i=0;i<ps.length;i++){const p=ps[i].p,x=Math.floor(p[0]/H),y=Math.floor(p[1]/H),z=Math.floor(p[2]/H),key=gridKey(x,y,z);let bucket=this.grid.get(key);if(!bucket)this.grid.set(key,bucket=[]);bucket.push(i)}this.neighbors.length=ps.length;for(let i=0;i<ps.length;i++){const a=ps[i];let list=this.neighbors[i];if(!list)this.neighbors[i]=list=[];list.length=0;const x=Math.floor(a.p[0]/H),y=Math.floor(a.p[1]/H),z=Math.floor(a.p[2]/H);for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++){const cell=this.grid.get(gridKey(x+dx,y+dy,z+dz));if(!cell)continue;for(const j of cell){if(a.group!==ps[j].group)continue;const b=ps[j].p,r2=(a.p[0]-b[0])**2+(a.p[1]-b[1])**2+(a.p[2]-b[2])**2;if(r2<H2)list.push(j)}}}}
  /** UE SetClingPlane: the wall plane replaces the floor; particles near it are drawn into a flat contact patch. */
  private clingPlane(p:Vec,cl:{point:Vec;normal:Vec}){const n=cl.normal,d=(p[0]-cl.point[0])*n[0]+(p[2]-cl.point[2])*n[2],r=SPACING*.48;if(d<r){p[0]+=n[0]*(r-d);p[2]+=n[2]*(r-d)}else if(d<r+.1){const pull=(d-r)*.35;p[0]-=n[0]*pull;p[2]-=n[2]*pull}}
+ /** Hard one-sided plane constraint for moving/tilted seats (e.g. swing plank) so jelly sits flush and never clips underneath. */
+ private ridePlaneProject(p:Vec,rp:{point:Vec;normal:Vec}){const n=rp.normal,d=(p[0]-rp.point[0])*n[0]+(p[1]-rp.point[1])*n[1]+(p[2]-rp.point[2])*n[2],r=SPACING*.48;if(d<r){const push=r-d;p[0]+=n[0]*push;p[1]+=n[1]*push;p[2]+=n[2]*push}}
 
  step(dt:number,input:FrameInput){
   dt=Math.min(dt,1/60);
   const cl=input.cling??null;
+  const rp=input.ridePlane??null;
+  this.ridePlane=rp?{point:[...rp.point],normal:[...rp.normal]}:null;
   this.time+=dt;this.spread=input.spread;this.grounded=input.grounded;this.foot=[...input.anchor];
   const rawShape=input.shapeBlend??1;
   this.shapeBlend=clamp(rawShape,0,1);
@@ -144,17 +149,30 @@ export class SlimeSolver {
 
   const ps=this.particles;
   const domeAnchorY=this.restCenterY*mix(1,DOME.anchorHeightScale,effectiveDome);
-  const desired:Vec=[input.anchor[0],input.anchor[1]+mix(domeAnchorY,.035,input.spread),input.anchor[2]];
-  // Snappier spring eliminates perceived lag while preserving jelly follow-through.
-  const freq=input.grounded?5.4:6.8;
-  const w=2*Math.PI*freq;
-  for(let k=0;k<3;k++){
-   const damp=k===1&&!input.grounded?1.05:.92;
-   this.centerVelocity[k]+=(w*w*(desired[k]-this.center[k])-2*damp*w*this.centerVelocity[k])*dt;
-   this.center[k]+=this.centerVelocity[k]*dt;
+  const rideOff=mix(domeAnchorY,.035,input.spread);
+  const desired:Vec=rp
+   ?[input.anchor[0]+rp.normal[0]*rideOff,input.anchor[1]+rp.normal[1]*rideOff,input.anchor[2]+rp.normal[2]*rideOff]
+   :[input.anchor[0],input.anchor[1]+rideOff,input.anchor[2]];
+  if(rp){
+   // Unconditionally stable exponential follow while riding a moving seat (zero Euler Nyquist jitter!)
+   const follow=1-Math.exp(-dt*24);
+   for(let k=0;k<3;k++){
+    const prev=this.center[k];
+    this.center[k]=mix(prev,desired[k],follow);
+    this.centerVelocity[k]=clamp((this.center[k]-prev)/Math.max(dt,1/240),-6,6);
+   }
+  }else{
+   // Snappier spring eliminates perceived lag while preserving jelly follow-through.
+   const freq=input.grounded?5.4:6.8;
+   const w=2*Math.PI*freq;
+   for(let k=0;k<3;k++){
+    const damp=k===1&&!input.grounded?1.05:.92;
+    this.centerVelocity[k]+=(w*w*(desired[k]-this.center[k])-2*damp*w*this.centerVelocity[k])*dt;
+    this.center[k]+=this.centerVelocity[k]*dt;
+   }
+   const maxLag=.18;
+   for(let k=0;k<3;k++)this.center[k]=clamp(this.center[k],desired[k]-maxLag,desired[k]+maxLag);
   }
-  const maxLag=.18;
-  for(let k=0;k<3;k++)this.center[k]=clamp(this.center[k],desired[k]-maxLag,desired[k]+maxLag);
 
   // UE InertiaStretch (0.55) / InertiaResponse (10)
   const hSpeed=Math.hypot(input.velocity[0],input.velocity[2]);
@@ -182,6 +200,23 @@ export class SlimeSolver {
   const domeWidth=mix(1,DOME.widthScale,effectiveDome);
   const domeHeight=mix(1,DOME.heightScale,effectiveDome);
   const upwardRestore=mix(1,DOME.upwardRestore,effectiveDome);
+  const waveNorm=input.waterNormal??null;
+  const tiltNorm=rp?rp.normal:waveNorm;
+  const ignoreFluid=!!waveNorm||!!input.submerged;
+  // Build tilted surface orthonormal frame so the slime naturally pitches & rolls on swells or a swinging seat
+  let wUpX=0,wUpY=1,wUpZ=0,wRx=1,wRy=0,wRz=0,wFx=0,wFy=0,wFz=1;
+  const hasSurfaceTilt=!!tiltNorm&&(Math.abs(tiltNorm[0])>1e-4||Math.abs(tiltNorm[2])>1e-4);
+  if(hasSurfaceTilt&&tiltNorm){
+   const scale=rp?1.0:.85;
+   const tx=tiltNorm[0]*scale,tz=tiltNorm[2]*scale,ty=Math.max(.35,tiltNorm[1]),tl=Math.hypot(tx,ty,tz)||1;
+   wUpX=tx/tl;wUpY=ty/tl;wUpZ=tz/tl;
+   // Right = normalize(cross(wUp, [0,0,1])) = [wUpY, -wUpX, 0] / len
+   const rl=Math.hypot(wUpY,wUpX)||1;
+   wRx=wUpY/rl;wRy=-wUpX/rl;wRz=0;
+   // Forward = cross(wR, wUp)
+   wFx=wRy*wUpZ-wRz*wUpY;wFy=wRz*wUpX-wRx*wUpZ;wFz=wRx*wUpY-wRy*wUpX;
+  }
+  const waveHeave=waveNorm?clamp((input.waterWaveVelY??0)*.085,-.10,.10):0;
 
   for(const p of ps){
    p.old=[...p.p];
@@ -234,9 +269,20 @@ export class SlimeSolver {
     ry=mix(ry*sy,p.rest[1]*(.34-.10*Math.min(1,rim))+radius*(crown+lip),glide);
     sy=1;
    }
-   const target:Vec=[c[0]+rx*sx,c[1]+ry*sy,c[2]+rz*sx];
-   if(!s&&input.grounded){
-    const localFloor=this.world.support(target[0],target[2],input.anchor[1]+.05);
+   let ox=rx*sx,oy=ry*sy,oz=rz*sx;
+   if(!s&&tiltNorm){
+    // Soft vertical heave squash/stretch on waves + tilt along wave slope or swinging seat plane
+    if(waveNorm&&!rp){oy*=1-waveHeave;ox*=1+waveHeave*.42;oz*=1+waveHeave*.42;}
+    if(hasSurfaceTilt){
+     const nx=wRx*ox+wUpX*oy+wFx*oz;
+     const ny=wRy*ox+wUpY*oy+wFy*oz;
+     const nz=wRz*ox+wUpZ*oy+wFz*oz;
+     ox=nx;oy=ny;oz=nz;
+    }
+   }
+   const target:Vec=[c[0]+ox,c[1]+oy,c[2]+oz];
+   if(!s&&input.grounded&&!waveNorm&&!rp){
+    const localFloor=this.world.support(target[0],target[2],input.anchor[1]+.05,ignoreFluid);
     const drop=input.anchor[1]-(localFloor??input.anchor[1]-1);
     if(drop>.08){
      const lower=clamp((.18-ry)/.36,0,1);
@@ -249,12 +295,13 @@ export class SlimeSolver {
     let stiffness=(s?380:140)*(1+.72*glide);
     if(!s&&k===1&&p.p[1]<target[1])stiffness*=upwardRestore;
     const carrier=s?s.v[k]:this.centerVelocity[k];
-    const acc=(target[k]-p.p[k])*stiffness+(carrier-p.v[k])*(s?26:16)+(k===1&&!s?-2.2:0);
+    const acc=(target[k]-p.p[k])*stiffness+(carrier-p.v[k])*(s?26:16)+(k===1&&!s&&!input.submerged?-2.2:0);
     p.v[k]=clamp(p.v[k]+acc*dt,-16,16);
     p.p[k]+=p.v[k]*dt;
    }
-   if(!s||s.grounded)this.world.projectPoint(p.p,SPACING*.48);
+   if(!s||s.grounded)this.world.projectPoint(p.p,SPACING*.48,ignoreFluid);
    if(!s&&cl)this.clingPlane(p.p,cl);
+   if(!s&&rp)this.ridePlaneProject(p.p,rp);
   }
 
   // Spread lateral compression for density solve
@@ -265,9 +312,9 @@ export class SlimeSolver {
    for(let i=0;i<ps.length;i++){const a=ps[i];let density=0,gx=0,gy=0,gz=0,sum=0;for(const j of this.neighbors[i]){const b=ps[j],dx=a.p[0]-b.p[0],dy=a.p[1]-b.p[1],dz=a.p[2]-b.p[2],r2=dx*dx+dy*dy+dz*dz;density+=kernel(r2);if(i===j||r2<1e-10||r2>=H2)continue;const r=Math.sqrt(r2),g=-SPIKY*(H-r)**2/(r*restDensity),x=dx*g,y=dy*g,z=dz*g;gx+=x;gy+=y;gz+=z;sum+=x*x+y*y+z*z}sum+=gx*gx+gy*gy+gz*gz;const constraint=Math.max(density/restDensity-1,-.05);a.lambda=clamp(-constraint/(sum+1e-4),-.0006,.0006)}
    const deltas:Vec[]=new Array(ps.length);
    for(let i=0;i<ps.length;i++){const a=ps[i];let x=0,y=0,z=0;for(const j of this.neighbors[i]){if(j===i)continue;const b=ps[j],dx=a.p[0]-b.p[0],dy=a.p[1]-b.p[1],dz=a.p[2]-b.p[2],r2=dx*dx+dy*dy+dz*dz;if(r2<1e-10||r2>=H2)continue;const r=Math.sqrt(r2),ratio=kernel(r2)/pressureDenom,corr=-.0000064*Math.pow(ratio,4),g=-SPIKY*(H-r)**2/(r*restDensity)*(a.lambda+b.lambda+corr);x+=dx*g;y+=dy*g;z+=dz*g}const mag=Math.hypot(x,y,z),sc=mag>.012?.012/mag:1;deltas[i]=[x*sc,y*sc,z*sc]}
-   for(let i=0;i<ps.length;i++){for(let k=0;k<3;k++)ps[i].p[k]+=deltas[i][k];const s=shotMap.get(ps[i].group);if((!s&&lateral<=1.001)||s?.grounded)this.world.projectPoint(ps[i].p,SPACING*.48)}
+   for(let i=0;i<ps.length;i++){for(let k=0;k<3;k++)ps[i].p[k]+=deltas[i][k];const s=shotMap.get(ps[i].group);if((!s&&lateral<=1.001)||s?.grounded)this.world.projectPoint(ps[i].p,SPACING*.48,ignoreFluid);if(!s&&rp)this.ridePlaneProject(ps[i].p,rp);}
   }
-  if(lateral>1.001)for(const p of ps)if(!p.group){p.p[0]=this.center[0]+(p.p[0]-this.center[0])*lateral;p.p[2]=this.center[2]+(p.p[2]-this.center[2])*lateral;this.world.projectPoint(p.p,SPACING*.48)}
+  if(lateral>1.001)for(const p of ps)if(!p.group){p.p[0]=this.center[0]+(p.p[0]-this.center[0])*lateral;p.p[2]=this.center[2]+(p.p[2]-this.center[2])*lateral;this.world.projectPoint(p.p,SPACING*.48,ignoreFluid);if(rp)this.ridePlaneProject(p.p,rp);}
 
   // Hard ellipsoid membrane prevents spray while keeping the Dome/Ball silhouette.
   for(const p of ps){
@@ -280,11 +327,12 @@ export class SlimeSolver {
    const glide=s?smooth(s.glideAmount):bodyGlide;
    axes[0]*=1+glide;axes[2]*=1+glide;
    if(!s&&cl)axes[1]=Math.max(axes[1],.42);
-   if(!s&&input.grounded){const ground=this.world.support(p.p[0],p.p[2],input.anchor[1]+.05);if(ground===null||ground<input.anchor[1]-.08){axes[1]+=.35;p.p[1]=Math.max(p.p[1],input.anchor[1]-.35+.023)}}
+   if(!s&&input.grounded&&!waveNorm&&!rp){const ground=this.world.support(p.p[0],p.p[2],input.anchor[1]+.05,ignoreFluid);if(ground===null||ground<input.anchor[1]-.08){axes[1]+=.35;p.p[1]=Math.max(p.p[1],input.anchor[1]-.35+.023)}}
    const ell=Math.hypot((p.p[0]-c[0])/axes[0],(p.p[1]-c[1])/axes[1],(p.p[2]-c[2])/axes[2]);
    if(ell>1.18)for(let k=0;k<3;k++)p.p[k]=c[k]+(p.p[k]-c[k])*1.18/ell;
-   if(!s||s.grounded)this.world.projectPoint(p.p,SPACING*.48);
+   if(!s||s.grounded)this.world.projectPoint(p.p,SPACING*.48,ignoreFluid);
    if(!s&&cl)this.clingPlane(p.p,cl);
+   if(!s&&rp)this.ridePlaneProject(p.p,rp);
    for(let k=0;k<3;k++)p.v[k]=clamp((p.p[k]-p.old[k])/dt,-16,16);
   }
   const visc:Vec[]=new Array(ps.length);

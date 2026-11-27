@@ -1,4 +1,9 @@
 import * as T from 'three';
+import {isNewyearDay} from '../templates/newyear-defense';
+import {newyearGround,newyearBackdrop,januaryPacketColor} from './newyear-defense';
+import {isMonthendDay} from '../templates/monthend-defense';
+import {monthGround,monthBackdrop} from './monthend-defense';
+import {buildDefenseMachine,seasonDefensePalette} from './season-defense';
 import {Kit} from './folio-landmarks';
 import {Stage} from '../level/stage';
 import {bakeRegion} from '../world/bake';
@@ -38,7 +43,7 @@ function roses(k: Kit, g: Group, x: number, y: number, z: number, n: number) {
     k.ball(g, i % 4 === 0 ? '#ffe3a2' : i % 3 ? '#b44e60' : '#ec8a81', x + dx, y + dy, z + dz, 0.14, 0.11, 0.14);
   }
 }
-function carriage(k: Kit, g: Group) {
+function carriage(k: Kit, g: Group, horse = g, bouquet = g) {
   k.box(g, '#89513c', 0, 0.57, 0, 1.8, 0.2, 0.8); k.box(g, '#587c56', 0, 0.8, 0, 1.65, 0.34, 0.81);
   for (const x of [-0.63, 0.63]) for (const z of [-0.49, 0.49]) {
     k.ring(g, '#593b31', x, 0.33, z, 0.3); k.ball(g, '#bb8f53', x, 0.33, z, 0.08);
@@ -47,10 +52,10 @@ function carriage(k: Kit, g: Group) {
       k.beam(g, '#b78b5c', [x - dx, 0.33 - dy, z], [x + dx, 0.33 + dy, z], 0.018);
     }
   }
-  roses(k, g, 0, 0.98, 0, 34); k.box(g, '#c18f65', 0.78, 1.07, 0, 0.25, 0.54, 0.68);
-  k.ball(g, '#85563f', 1.75, 0.76, 0, 0.48, 0.27, 0.19); k.ball(g, '#966244', 2.1, 1.05, 0, 0.19, 0.3, 0.13);
-  for (const x of [1.5, 1.96]) for (const z of [-0.13, 0.13]) k.beam(g, '#694234', [x, 0.68, z], [x + 0.05, 0.09, z], 0.055);
-  k.beam(g, '#a87c52', [0.8, 0.65, 0], [1.64, 0.68, 0], 0.05);
+  roses(k, bouquet, 0, 0.98, 0, 34); k.box(g, '#c18f65', 0.78, 1.07, 0, 0.25, 0.54, 0.68);
+  k.ball(horse, '#85563f', 1.75, 0.76, 0, 0.48, 0.27, 0.19); k.ball(horse, '#966244', 2.1, 1.05, 0, 0.19, 0.3, 0.13);
+  for (const x of [1.5, 1.96]) for (const z of [-0.13, 0.13]) k.beam(horse, '#694234', [x, 0.68, z], [x + 0.05, 0.09, z], 0.055);
+  if(horse===g)k.beam(horse, '#a87c52', [0.8, 0.65, 0], [1.64, 0.68, 0], 0.05);
 }
 function train(k: Kit, g: Group) {
   for (let i = 0; i < 2; i++) {
@@ -120,7 +125,7 @@ function workshopCart(k: Kit, g: Group, accent: string) {
 }
 function boardTexture(game: JanuaryDefense) {
   const theme = game.map.theme;
-  const p = game.map.palette ?? colors[theme];
+  const p = game.control?seasonDefensePalette[game.control.day]:game.map.palette ?? colors[theme];
   const canvas = document.createElement('canvas'); canvas.width = 1344; canvas.height = 840;
   const g = canvas.getContext('2d')!, r = rng(theme + '-' + game.map.sectors.join('-'));
   const u = (x: number) => (x + 10) / 20 * canvas.width, v = (z: number) => (z + 6.25) / 12.5 * canvas.height;
@@ -129,7 +134,18 @@ function boardTexture(game: JanuaryDefense) {
     g.fillStyle = i % 2 ? '#fff4cf12' : '#151a2512';
     g.fillRect(r.next() * canvas.width, r.next() * canvas.height, r.range(1, 4), 1);
   }
-  if (theme === 'station' || theme === 'rail') {
+  if(isNewyearDay(game.day))newyearGround(g,game.day,canvas.width,canvas.height);
+  else if(isMonthendDay(game.day))monthGround(g,game.day,canvas.width,canvas.height);
+  else if(game.day==='1218'||game.day==='1219'){
+    const press=game.day==='1218',rows=press?16:12,w=press?252:122,h=canvas.height/rows;
+    for(let y=0;y<rows;y++){const offset=y%2?w/2:0;for(let x=-1;x*w<canvas.width;x++){
+      const px=x*w+offset,py=y*h;
+      g.fillStyle=press?(x+y)%2?'#92735035':'#cfb08b39':(x+y)%2?'#ab896940':'#d3b89945';
+      g.fillRect(px+1.6,py+1.6,w-3.2,h-3.2);g.strokeStyle=press?'#6b584c57':'#8c725549';g.lineWidth=2;g.strokeRect(px,py,w,h);
+      if(press){g.strokeStyle='#66514642';g.beginPath();g.moveTo(px+12,py+h*.68);g.bezierCurveTo(px+w*.4,py+h*.50,px+w*.6,py+h*.84,px+w-19,py+h*.61);g.stroke();}
+      else{g.lineWidth=1.4;g.beginPath();g.moveTo(px,py+h*.25);g.lineTo(px+w*.32,py+h*.56);g.lineTo(px+w*.67,py+h*.45);g.lineTo(px+w,py+h*.8);g.stroke();}
+    }}
+  }else if (theme === 'station' || theme === 'rail') {
     g.strokeStyle = '#d7d6c555'; g.lineWidth = 1.5;
     for (let i = 0; i < 23; i++) {g.beginPath(); g.moveTo(u(-10 + i * 0.93), 0); g.lineTo(u(-10 + i * 0.93), canvas.height); g.stroke();}
     for (let i = 0; i < 15; i++) {g.beginPath(); g.moveTo(0, v(-6.2 + i * 0.9)); g.lineTo(canvas.width, v(-6.2 + i * 0.9)); g.stroke();}
@@ -164,6 +180,77 @@ function boardTexture(game: JanuaryDefense) {
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + 7, y - 2); g.lineTo(x + 14, y + 1); g.stroke();
     }
   }
+  if(game.control){
+    const day=game.control.day;
+    if(day>='1202'){
+      for(const [i,[x,z]] of game.map.pads.entries()){
+        g.strokeStyle=['#cbd0a9','#e8b987'][i%2];g.lineWidth=1.6;
+        g.beginPath();g.moveTo(u(x),v(z+.59));g.lineTo(u(x),v(2.84+.12*(i%2)));g.lineTo(u(1.95),v(2.84+.12*(i%2)));g.stroke();
+      }
+      if(day>='1217'&&day<='1221'){
+        for(let j=0;j<36;j++){
+          const px=u(r.range(-9,9)),pz=v(r.range(-5.7,5.6));g.lineWidth=1.7;g.strokeStyle=day==='1217'?'#e4e9e3b8':day==='1218'?'#967e596a':'#d6c6a382';g.beginPath();
+          if(day==='1217'){g.moveTo(px-15,pz+4);g.quadraticCurveTo(px-4,pz-5,px+17,pz);}
+          else if(day==='1218'){for(let k=0;k<3;k++){g.moveTo(px-8,pz+k*4);g.lineTo(px+6-k*2,pz+k*4);}}
+          else if(day==='1219'){g.moveTo(px-8,pz);g.lineTo(px,pz-5);g.lineTo(px+8,pz);g.lineTo(px,pz+5);g.closePath();}
+          else if(day==='1220'){g.arc(px,pz,4+j%3,0,Math.PI*2);g.moveTo(px+7,pz);g.lineTo(px+20,pz-6);}
+          else{for(let i=0;i<4;i++){g.moveTo(px+i*5,pz);g.lineTo(px+i*5,pz+8-Math.sin(i+j)*3);}}
+          g.stroke();
+        }
+      }else if(day==='1212'||day==='1213'||day==='1214'||day==='1215'||day==='1216'){
+        for(let j=0;j<22;j++){
+          const x=r.range(-8.9,8.9),z=r.range(-5.2,5.2),px=u(x),pz=v(z);
+          g.lineWidth=1.7;g.strokeStyle=day==='1212'?'#c2dfcbaa':'#ddd0ab8a';g.beginPath();
+          if(day==='1212'){g.moveTo(px-22,pz+3);g.bezierCurveTo(px-12,pz-5,px+1,pz+8,px+27,pz);}
+          else if(day==='1213'){g.moveTo(px-8,pz-5);g.lineTo(px-8,pz-9);g.lineTo(px-2,pz-9);g.moveTo(px+5,pz+7);g.lineTo(px+12,pz+7);g.lineTo(px+12,pz+1);}
+          else if(day==='1214'){g.ellipse(px,pz,9+j%8,5+j%4,-.24,.2,6.08);}
+          else if(day==='1215'){for(let h=0;h<3;h++){g.moveTo(px+h*5,pz-4+h);g.lineTo(px+2+h*5,pz+2+h);}}
+          else{g.ellipse(px,pz,9+j%7,4+j%4,-.48,.1,5.5);g.moveTo(px-13,pz);g.lineTo(px+15,pz);}
+          g.stroke();
+        }
+      }else if(day==='1208'){
+        g.lineWidth=1.8;
+        for(let line=0;line<26;line++){g.beginPath();g.strokeStyle=line%4?'#c8d7cc77':'#dce3d8ac';
+          for(let i=0;i<=100;i++){const x=-10+i*.20,z=-6.6+.51*line+.32*Math.sin(x*.68+line*.13)+.68*Math.cos(x*.24-line*.16);
+            if(i)g.lineTo(u(x),v(z));else g.moveTo(u(x),v(z));}g.stroke();}
+      }else if(day==='1209'){
+        for(const z of [-4.7,3.65]){g.lineWidth=2.8;g.strokeStyle='#e8d3a3';g.beginPath();g.moveTo(u(-9.8),v(z));g.lineTo(u(-4.9),v(z));g.quadraticCurveTo(u(-2),v(z),u(-1.28),v(z-1.23));g.stroke();}
+        for(let i=0;i<12;i++){g.fillStyle='#dad7bd82';g.fillRect(u(-9.55+i*.16),v(2.87),5,30);}
+      }else if(day==='1210'||day==='1211'){
+        for(let n=0;n<8;n++){g.strokeStyle=n%3?'#b1cecd68':'#dbd4a88a';g.lineWidth=1.7;g.beginPath();g.ellipse(u(day==='1210'?-4.8:4.4),v(2.2),27+n*17,14+n*8,-.21,.18,5.84);g.stroke();}
+        for(let n=0;n<48;n++){const x=u(r.range(-9,9)),z=v(r.range(-5.8,5.8));g.fillStyle='#d1d8c1b0';g.fillRect(x,z,n%3?2:3,n%3?2:3);}
+      }else if(day==='1207'){
+        for(let n=0;n<6;n++){const x=-8+n*1.19,z=4+.20*Math.sin(n);
+          g.lineWidth=1.7;g.strokeStyle='#bfd0a490';g.strokeRect(u(x),v(z),42,29);
+          g.beginPath();g.moveTo(u(x)+3,v(z)+21);g.lineTo(u(x)+13,v(z)+8);g.lineTo(u(x)+27,v(z)+15);g.lineTo(u(x)+39,v(z)+4);g.stroke();}
+      }else if(day==='1203'){
+        for(let n=0;n<72;n++){g.strokeStyle=n%2?'#68866d':'#a8bc8d';g.lineWidth=2;
+          const x=r.range(-10,10),z=r.range(-6,6);g.beginPath();g.moveTo(u(x),v(z));g.quadraticCurveTo(u(x+.10),v(z-.26),u(x+.27),v(z-.30));g.stroke();}
+      }else if(day==='1205'){
+        for(let n=0;n<31;n++){const x=u(r.range(-10,10)),z=v(r.range(-6,6));g.strokeStyle='#a6c7b1';g.lineWidth=2;g.strokeRect(x,z,18+(n%4)*5,6);}
+      }else for(let n=0;n<41;n++){const x=u(r.range(-10,10)),z=v(r.range(-6,6)),s=4+n%13;g.beginPath();
+        g.strokeStyle=day==='1204'?'#bfd3dd5a':'#72768466';g.lineWidth=2;g.ellipse(x,z,s,s*.65,n,0.2,5.1);g.stroke();}
+    }else if(day==='1127'){
+      for(const [i,[x,z]] of game.map.pads.entries()){
+        const endX=-6+i*2.42,jointZ=2.47+(i%2)*.35;
+        for(const offset of [-.064,.064]){
+          g.lineWidth=2.2;g.strokeStyle=i%2?'#eaa357':'#c7d4aa';
+          g.beginPath();g.moveTo(u(x+offset),v(z));g.lineTo(u(x+offset),v(jointZ-.26));
+          g.lineTo(u(x+.25+offset),v(jointZ));g.lineTo(u(endX+offset),v(jointZ));g.lineTo(u(endX+offset),v(3.69));g.stroke();
+        }
+        g.fillStyle='#6a7766';g.fillRect(u(endX)-9,v(jointZ)-6,18,12);
+      }
+      g.lineWidth=2.5;g.strokeStyle='#e3b67895';
+      for(let i=0;i<5;i++){g.beginPath();g.moveTo(u(-8.7),v(4.8+i*.083));g.lineTo(u(-2.6+i*.22),v(4.8+i*.083));g.lineTo(u(-1.9+i*.22),v(3.45+i*.083));g.lineTo(u(6.2),v(3.45+i*.083));g.stroke();}
+    }else if(day==='1128'){
+      for(let i=0;i<140;i++){const x=r.range(-10,10),z=r.range(-6.2,6.2);
+        g.strokeStyle=i%3?'#b1d6cb66':'#5c939b99';g.lineWidth=2.4;g.beginPath();g.moveTo(u(x),v(z));g.quadraticCurveTo(u(x+.34),v(z+.12),u(x+.72),v(z));g.stroke();}
+    }else if(day==='1129'||day==='1201'){
+      for(let i=0;i<36;i++){const x=u(r.range(-9.4,9.4)),z=v(r.range(-5.8,5.8)),sz=r.range(5,24);g.strokeStyle=day==='1201'?'#53526260':'#e4eee46b';g.lineWidth=3;g.beginPath();g.ellipse(x,z,sz,sz*.61,0,.21,Math.PI*1.45);g.stroke();}
+    }else{
+      for(let i=0;i<14;i++){const x=u(-9+i*1.35);g.fillStyle='#c5b69877';g.fillRect(x,v(2.88),24,5);g.fillRect(x,v(3.06),11,5);}
+    }
+  }
   for (const path of game.map.routes) {
     g.beginPath(); path.forEach(([x, z], i) => i ? g.lineTo(u(x), v(z)) : g.moveTo(u(x), v(z)));
     g.lineJoin = 'round'; g.lineCap = 'round'; g.strokeStyle = p[3]; g.lineWidth = game.map.flow === 'alternate' ? 68 : 48; g.stroke();
@@ -178,7 +265,7 @@ function boardTexture(game: JanuaryDefense) {
 }
 
 export function buildJanuaryDefense(game: JanuaryDefense) {
-  const theme = game.map.theme, p = game.map.palette ?? colors[theme];
+  const theme = game.map.theme, p = game.control?seasonDefensePalette[game.control.day]:game.map.palette ?? colors[theme];
   const night = theme === 'eclipse' || theme === 'lunar' || theme === 'orbital' || theme === 'ice';
   const stage = new Stage({
     skyTop: p[0], skyHorizon: p[1], fog: [38, 94], sun: night ? '#e4ae9f' : '#fff0ce', sunIntensity: 1.75,
@@ -187,23 +274,48 @@ export function buildJanuaryDefense(game: JanuaryDefense) {
   const root = new T.Group(); root.name = 'january-defense-diorama'; stage.scene.add(root);
   const material = stage.toon('#ffffff'), kit = new Kit({toon: material, lit: material, lamp: material, glow: material, glass: material}, theme);
   const floorMat = stage.toon('#ffffff', {map: boardTexture(game)});
-  const floor = new T.Mesh(new T.BoxGeometry(20, 0.54, 12.5), [material, material, floorMat, material, material, material]);
+  const edge=game.control?stage.toon(game.day==='1127'?'#596d63':game.day==='1128'?'#536f73':game.day==='1129'?'#748591':game.day==='1130'?'#536671':'#79736d'):material;
+  const floor = new T.Mesh(new T.BoxGeometry(20, 0.54, 12.5), [edge, edge, floorMat, edge, edge, edge]);
   floor.name = 'board'; floor.position.y = -0.27; floor.receiveShadow = true; root.add(floor);
   const baked = bakeRegion(stage, {x0: -10, z0: -6.25, w: 20, h: 12.5, ground: () => null, classify: () => 'solid', root: floor});
   const spawn: [number, number, number] = [-6, 0.02, 3.5];
   const actor = new SlimeCharacter(stage, {spawn, world: {boxes: [], surfaces: [], height: baked.height ?? undefined}, input: false, ui: false, trainingTargets: [], onToast: () => {}}).attach();
   const backdrop = kit.group(root), mover = kit.group(root), gateLeft = kit.group(root), gateRight = kit.group(root);
+  const horse = game.parade ? kit.group(root) : mover;
+  const bouquet = game.parade ? kit.group(mover) : mover;
+  const streamers: T.Group[] = [];
   let paintMoon: ((fraction: number) => void) | undefined;
   kit.box(backdrop, p[2], 0, -1.33, -12, 120, 1, 110);
   const r = rng(theme + '-' + game.map.finale);
-  for (let i = 0; i < 18; i++) {
+  if(isNewyearDay(game.day))newyearBackdrop(kit,backdrop,game.day);
+  else if(isMonthendDay(game.day))monthBackdrop(kit,backdrop,game.day);
+  else if(game.day==='1218'||game.day==='1219'){
+    const print=game.day==='1218',z=-13.24;kit.box(backdrop,print?'#b6a188':'#b99d80',0,2.57,z,40,6.78,.36);
+    kit.box(backdrop,print?'#7d7966':'#916a54',0,1.01,z+.21,40,2.24,.14);
+    for(let j=0;j<8;j++){
+      const x=-15.6+j*4.55;kit.box(backdrop,print?'#776c58':'#89694e',x,3.74,z+.26,3.56,3.10,.16);
+      for(let v=0;v<2;v++)for(let m=0;m<3;m++)kit.box(backdrop,print?m===1?'#bbc9c1':'#a9bdb9':'#d7c6a4',x-.78+v*1.56,2.85+m*.90,z+.364,1.42,.77,.036);
+    }
+    kit.box(backdrop,print?'#8d806a':'#aa875f',0,5.66,z+.28,40,.23,.25);
+  }else if(game.day==='1220'||game.day==='1221'){
+    const orbit=game.day==='1220';kit.box(backdrop,orbit?'#506776':'#505568',0,2.71,-16.23,52,7.25,.35);
+    for(let i=0;i<68;i++){const x=-24+r.range(0,48),y=r.range(.47,6.07);
+      kit.ball(backdrop,i%6?'#afc0bb':'#d6c59b',x,y,-16.01,i%5?.027:.061);}
+    if(orbit){for(let j=0;j<4;j++)for(let i=0;i<25;i++){const x=-16+i*1.32,y=1.8+j*.41+1.39*Math.sin(x*.20+j*.54);
+      kit.beam(backdrop,'#849a9c',[x,y,-15.98],[x+1.32,1.8+j*.41+1.39*Math.sin((x+1.32)*.20+j*.54),-15.98],.028);}}
+    else{for(let j=0;j<8;j++){const x=-18+j*5.1;kit.box(backdrop,'#6b777e',x,2.75,-15.80,.15,7.1,.16);}
+      for(const y of [1.04,4.92])kit.box(backdrop,'#68767b',0,y,-15.80,52,.12,.16);}
+  }else for (let i = 0; i < 18; i++) {
     const x = -46 + i * 5.2, z = -20 - r.range(0, 10), h = r.range(2, 7);
     if (theme === 'station' || theme === 'workshop' || theme === 'rail') {
       kit.box(backdrop, i % 2 ? '#728b94' : '#97aab0', x, h / 2, z, 3.6, h, 2.4);
       for (let j = 0; j < 3; j++) kit.box(backdrop, '#ddcdb0', x - 0.85 + j * 0.85, h * 0.65, z + 1.24, 0.42, 0.3, 0.055);
     } else kit.rock(backdrop, i % 2 ? p[2] : p[0], x, -0.5, z, 6.5, h, 5.4, r.next());
   }
-  if (theme === 'parade') {
+  const machine=game.control?buildDefenseMachine(kit,root,game):null;
+  if(machine){
+    mover.visible=false;
+  } else if (theme === 'parade') {
     greenhouse(kit, root, -6.4, -4.9); greenhouse(kit, root, -1.9, -5.2);
     for (let n = 0; n < 9; n++) {
       const x = -15 + n * 3.8, z = -10.4 + (n % 2) * 0.5, h = 1.6 + (n % 3) * 0.22;
@@ -223,7 +335,15 @@ export function buildJanuaryDefense(game: JanuaryDefense) {
     }
     for (let n = 0; n < 10; n++) {
       const angle = n * Math.PI / 9, x = 4 + 1.38 * Math.cos(angle), y = 1.46 + 1.3 * Math.sin(angle);
-      kit.ball(root, '#557654', x, y, 2.54, 0.36, 0.34, 0.27); roses(kit, root, x, y + 0.04, 2.64, 5);
+      if(game.parade){
+        kit.beam(root,'#768851',[x,y,2.55],[4+1.38*Math.cos(angle+.19),1.46+1.3*Math.sin(angle+.19),2.55],.105);
+        for(let j=0;j<3;j++){
+          const xx=x+.085*Math.sin(n*2+j*3), yy=y+(j-1)*.11, zz=2.60+j*.06;
+          for(let k=0;k<5;k++){const theta=k*1.257+n;kit.ball(root,(n+j)%4?'#ae415c':'#f2a278',xx+.085*Math.cos(theta),yy+.085*Math.sin(theta),zz,.089,.095,.073);}
+          kit.ball(root,'#ffcd8a',xx,yy,zz+.052,.056);
+          kit.put('ball',root,'toon','#608455',xx+.17,yy-.09,zz-.04,.15,.064,.07,0,0,.53);
+        }
+      }else{kit.ball(root, '#557654', x, y, 2.54, 0.36, 0.34, 0.27); roses(kit, root, x, y + 0.04, 2.64, 5);}
     }
     for (const s of [-1, 1]) kit.cyl(root, '#a87b5b', 4 + 1.38 * s, 0.73, 2.54, 0.14, 1.46);
     gateLeft.position.set(2.62, 0, 2.54); gateRight.position.set(5.38, 0, 2.54);
@@ -231,7 +351,92 @@ export function buildJanuaryDefense(game: JanuaryDefense) {
       kit.box(g, '#a6735a', 0.62 * s, 0.61, 0, 1.23, 0.1, 0.12);
       for (let i = 0; i < 4; i++) kit.box(g, '#dbb58a', s * (0.16 + 0.3 * i), 0.53, 0, 0.12, 0.93, 0.15);
     }
-    carriage(kit, mover);
+    carriage(kit, mover, horse, bouquet);
+    if (game.parade) {
+      // Curved muzzle, mane, ears, collar and reins read from the street-level finale.
+      kit.ball(horse,'#976b49',2.27,1.01,0,.21,.13,.15);
+      kit.ball(horse,'#624133',2.41,.99,0,.085,.09,.125);
+      kit.put('ball',horse,'toon','#4f352c',2.02,1.13,0,.095,.29,.16,0,0,-.54);
+      for(const side of [-1,1]){
+        kit.put('ball',horse,'toon','#6f4536',2.10,1.35,side*.081,.06,.14,.05,0,0,-.24);
+        kit.ball(horse,'#292727',2.19,1.14,side*.126,.032,.036,.022);
+        kit.beam(horse,'#c2a36c',[2.27,1.035,side*.145],[1.86,.75,side*.214],.017);
+        for(const x of [1.5,1.96])kit.ball(horse,'#4c362e',x+.054,.087,side*.13,.078,.066,.06);
+      }
+      kit.put('ball',horse,'toon','#4e352c',1.29,.65,0,.105,.31,.095,0,0,-.35);
+      kit.ball(mover,'#536c66',.74,1.41,0,.18,.24,.19);
+      kit.ball(mover,'#d4a575',.79,1.72,0,.14);
+      kit.ball(mover,'#a57b48',.79,1.81,0,.22,.045,.20);
+      kit.cyl(mover,'#b98d55',.79,1.86,0,.133,.12);
+      for(let i=0;i<9;i++){
+        const x=-15+i*3.8,z=-10.4+(i%2)*.5,h=1.6+(i%3)*.22;
+        const plaster = i%2?'#d0aa81':'#e9c49a';
+        kit.box(backdrop,plaster,x,h-.25,z+1.27,3.34,.22,.17);
+        kit.box(backdrop,'#865642',x,h-.08,z+1.29,3.42,.105,.24);
+        for(const dx of [-1.54,-.56,.56,1.54])kit.box(backdrop,'#a57b59',x+dx,h*.43-.43,z+1.305,.075,h*.67,.105);
+        for(let j=0;j<7;j++){
+          const col=j%2?'#b76b64':'#f5d8a1';
+          kit.put('box',backdrop,'toon',col,x-1.34+j*.445,h*.63-.38,z+1.47,.445,.065,.46,.22);
+        }
+      }
+      // Fictional flower-loading shed, ribbon wind indicators and pulley stations.
+      for(let i=0;i<7;i++){
+        const x=11.8+i*2.85,z=7.6+i%3*1.64,height=1.6+(i%3)*.28;
+        kit.box(backdrop,i%2?'#d2b190':'#bc9e83',x,height/2-.72,z,2.5,height,2.25);
+        for(const side of [-1,1])kit.put('box',backdrop,'toon','#9b7664',x,height-.43,z+side*.61,2.65,.11,1.42,side*.31);
+        for(const dx of [-.67,.23,.84])kit.box(backdrop,'#60766c',x+dx,.36,z-1.16,.34,.54,.055);
+        kit.beam(backdrop,'#897454',[x-1.27,-.71,z+2.69],[x-1.27,1.28,z+2.69],.116);
+        kit.ball(backdrop,'#90a284',x-1.27,1.82,z+2.69,.77,1.07,.66);
+      }
+      for(const [x,z] of [[-6.4,-4.9],[-1.9,-5.2]]){
+        for(const side of [-1,1]){
+          kit.put('box',root,'toon','#b3d9ce',x,1.72,z+side*.47,3.29,.042,1.15,side*.72);
+          for(let j=0;j<5;j++)kit.beam(root,'#bda46d',[x-1.4+j*.67,2.18,z],[x-1.4+j*.67,1.38,z+side*.9],.034);
+        }
+        kit.box(root,'#7a9b86',x,1.04,z+.97,.69,1.03,.08);
+        kit.ball(root,'#f7c480',x+.22,.83,z+1.032,.043);
+      }
+      for (const x of [-3.4, -0.65]) for (const z of [-4.05, -2.85]) {
+        kit.cyl(root, '#755440', x, .76, z, .075, 1.52);
+      }
+      for (let i = 0; i < 9; i++) {
+        const x = -3.65 + i * .38, col = i % 2 ? '#a35061' : '#f5dcab';
+        kit.put('box', root, 'toon', col, x, 1.67, -3.46, .38, .09, 1.57, -.12);
+        kit.box(root, col, x, 1.48, -2.67, .38, .24, .07);
+        kit.ball(root, col, x, 1.38, -2.67, .19, .12, .045);
+      }
+      for (const [x,z] of [[-7.6,-1.6],[-3.3,-3.3],[-1.8,-3.3],[1.8,3.6],[6,3.5]]) {
+        kit.taper(root, '#b2814e', x,.24,z,.36,.45,true);
+        for(let j=0;j<3;j++) kit.ring(root,'#745334',x,.12+j*.12,z,.28+j*.028,Math.PI/2);
+        for(let i=0;i<9;i++){
+          const angle=i*2.4, dx=Math.cos(angle)*.28, dz=Math.sin(angle)*.28;
+          kit.beam(root,'#678150',[x,.35,z],[x+dx,.66,z+dz],.018);
+          kit.ball(root,i%3?'#c64e64':'#f8bb75',x+dx,.65+i%2*.07,z+dz,.13,.115,.14);
+        }
+      }
+      for (const x of [-6,0,6]) {
+        kit.cyl(root,'#906849',x,1.24,-1.7,.048,2.48);
+        const vane = kit.group(root,x,2.37,-1.7); streamers.push(vane);
+        for(let j=0;j<5;j++) kit.put('box',vane,'toon',j%2?'#f4c898':'#c45367',j*.19,.03*Math.sin(j*1.4),.06*Math.sin(j),.19,.16,.028);
+      }
+      for (const x of [2.25,5.75]) {
+        kit.taper(root,'#785242',x,.16,3.12,.38,.3);
+        kit.ring(root,'#ddb773',x,.42,3.12,.3,0,0,'toon',true);
+        kit.beam(root,'#ad885d',[x,.64,3.12],[x<4?2.62:5.38,1.44,2.54],.035);
+      }
+      for (const sign of [-1,1]) for (let i=0;i<6;i++) {
+        const x=-.76+i*.3;
+        kit.beam(mover,'#cda86c',[x,.74,sign*.43],[x+.18,1.06,sign*.43],.025);
+      }
+      for(let i=0;i<17;i++) {
+        const a=i*2.4,x=Math.cos(a)*.70,y=1.16+.12*Math.sin(i),z=Math.sin(a)*.39;
+        for(let j=0;j<5;j++){
+          const b=j*1.257+a;
+          kit.ball(bouquet,i%3?'#c94659':'#ffa58a',x+.082*Math.cos(b),y,z+.082*Math.sin(b),.075,.065,.075);
+        }
+        kit.ball(bouquet,'#efb354',x,y+.032,z,.05);
+      }
+    }
   } else if (theme === 'station' || theme === 'rail') {
     kit.box(backdrop, '#809a98', 0, 0.72, -8.2, 18.6, 2.9, 1.5);
     kit.box(backdrop, '#d1cab5', 0, 2.27, -8.15, 19.1, 0.21, 1.94);
@@ -353,6 +558,10 @@ export function buildJanuaryDefense(game: JanuaryDefense) {
     return {base, water, wind};
   });
   kit.flush();
+  if(game.parade){
+    // Fine petals, cloth and reins share the larger body's shadow.
+    for(const group of [bouquet,horse,...streamers])group.traverse(child=>child.castShadow=false);
+  }
   const dotMat = stage.toon('#ffffff'), tokens = new T.InstancedMesh(new T.IcosahedronGeometry(1, 1), dotMat, 64);
   const bodies = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), dotMat, 32);
   const rays = new T.InstancedMesh(new T.CylinderGeometry(1, 1, 1, 6), dotMat, 6);
@@ -364,30 +573,106 @@ export function buildJanuaryDefense(game: JanuaryDefense) {
   }
   const cart = measure(cartRoute);
   const pathP: Point = [0, 0], ahead: Point = [0, 0];
+  const bunch = new T.Color(), pollenTint = new T.Color('#e8d7a4');
+  const harness=game.parade ? new T.InstancedMesh(new T.CylinderGeometry(.03,.03,1,8),stage.toon('#9d784f'),2) : null;
+  if(harness){harness.frustumCulled=false;root.add(harness);}
+  const hitch=new T.Vector3(), collar=new T.Vector3();
+  const flowerBatches = game.parade ? bouquet.children.filter((m): m is T.InstancedMesh => m instanceof T.InstancedMesh && !!m.instanceColor)
+    .map(mesh => ({mesh, originals: mesh.instanceColor!.array.slice()})) : [];
+  let lastPollen = -1, crossing = false;
+  const eye = new T.Vector3(), aim = new T.Vector3();
   let actionTime = -5, finalTime = 0, t = 0;
   function react(kind: InstallationAction) {
     actionTime = t; actor.setElement(kind === 'wind' ? 1 : 0, true); actor.setMood('Happy', 0.62);
   }
   const camera = stage.camera as T.PerspectiveCamera;
-  let view: 'play' | 'low' | 'far' = 'play';
+  let view: 'play' | 'low' | 'far' = 'play', greenhouseView=game.parade, machineIntro=!!machine;
   function resize() {
     const portrait = innerHeight > innerWidth;
-    const distance = Math.max(1, 1.52 / (innerWidth / innerHeight));
+    const framedPortrait=portrait&&(isNewyearDay(game.day)||game.day>='1217'&&game.day<='1231')&&view==='play';
+    const distance = Math.max(1, (framedPortrait?1.14:1.52) / (innerWidth / innerHeight));
     camera.fov = 39; camera.position.set((view === 'low' ? 7 : 2.7) * distance, (view === 'low' ? 5.4 : view === 'far' ? 18 : 12.5) * distance, (view === 'far' ? 21 : 18) * distance);
     camera.lookAt(0, portrait ? 0.15 : 0.55, -0.65); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+    if(machineIntro&&view==='play'){
+      camera.fov=portrait?61:46;camera.position.set(portrait?3.8:5.1,portrait?7.9:5.65,portrait?12.4:9.3);
+      camera.lookAt(0,1.37,-3.15);camera.updateProjectionMatrix();camera.updateMatrixWorld();
+    }
+    if(greenhouseView){
+      camera.fov=portrait?65:57;
+      camera.position.set(-8.8,2.35,-3.55);
+      camera.lookAt(-1,.77,1.15);
+      camera.updateProjectionMatrix();camera.updateMatrixWorld();
+    }
     stage.scene.fog.near = camera.position.length() + 18; stage.scene.fog.far = camera.position.length() + 92;
   }
   function screen(index: number) {const [x, z] = game.map.pads[index]; dir.set(x, 0.32, z).project(camera); return {x: (dir.x + 1) * innerWidth / 2, y: (1 - dir.y) * innerHeight / 2};}
   function update(dt: number) {
     t += dt; if (game.phase === 'won') finalTime += dt;
+    if (game.parade && (game.phase === 'finale' || game.phase === 'won')) {
+      const targetX = crossing ? 5.75 : 3.8, dx=targetX-actor.position[0], dz=3.12-actor.position[2];
+      const n=Math.hypot(dx,dz), step=Math.min(n,dt*4.7);
+      if(n>.01){actor.position[0]+=dx/n*step;actor.position[2]+=dz/n*step;}
+      if(game.wheel==='cast') game.secureWheel(!!actor.latest?.shots.some(s=>s.phase==='active' && Math.hypot(s.center[0]-2.25,s.center[2]-3.12)<.9));
+      if(crossing && n<.22 && game.phase==='finale')game.finish();
+    }
     const anim = 1 - Math.min(1, (t - actionTime) / 0.63);
     actor.spread = Math.max(0, anim) * 0.94; actor.forward[0] = 0.45; actor.forward[2] = -0.89; actor.update(t, dt);
     const within = game.phase === 'wave' ? (game.released - game.packets.length * 0.5) / game.size : game.phase === 'interval' ? 1 : 0;
     const fraction = game.phase === 'finale' || game.phase === 'won' ? 1 : Math.min(1, Math.max(0, (game.wave + within) / 6));
-    if (theme === 'parade') {
-      const u = cart.total * (game.phase === 'won' ? 0.87 + 0.13 * Math.min(1, finalTime / 2) : 0.87 * fraction);
+    if(machine){
+      machine.update(t,fraction,finalTime);
+      if(game.phase==='won'&&view==='play'){
+        const portrait=innerHeight>innerWidth;
+        if(game.day==='1209'){
+          camera.position.lerp(eye.set(portrait?9.6:8.8,portrait?6.3:5.15,portrait?5.6:2.8),1-Math.exp(-dt*2.4));
+          camera.lookAt(aim.set(2.56,1.26,-4.56));
+        }else{
+          camera.position.lerp(eye.set(portrait?2.6:3.75,portrait?5.62:4.04,portrait?10.4:8.1),1-Math.exp(-dt*2.4));
+          camera.lookAt(aim.set(0,1.18,-3.5));
+        }
+      }
+    }
+    else if (theme === 'parade') {
+      const stop=game.parade ? .762 : .87;
+      const progress=game.parade?Math.min(1,Math.max(0,finalTime-.48)/2.05):Math.min(1,finalTime/2);
+      const u = cart.total * (game.phase === 'won' ? stop+((game.parade ? .955 : 1)-stop)*progress : stop*fraction);
+      if(game.parade) {
+        sample(cart,u+1.78,pathP); sample(cart,u+1.86,ahead);
+        if(u+1.78>cart.total)pathP[1]+=u+1.78-cart.total;
+        if(u+1.86>cart.total)ahead[1]+=u+1.86-cart.total;
+        const yaw = Math.hypot(ahead[0]-pathP[0],ahead[1]-pathP[1])>.001 ? -Math.atan2(ahead[1]-pathP[1],ahead[0]-pathP[0]) : -Math.PI/2;
+        horse.rotation.y=yaw;horse.position.set(pathP[0]-1.75*Math.cos(yaw),.025*Math.sin(t*8),pathP[1]+1.75*Math.sin(yaw));
+        if(lastPollen!==game.pollen) {
+          for(const {mesh,originals} of flowerBatches){
+            for(let j=0;j<mesh.count;j++)mesh.setColorAt(j,bunch.fromArray(originals,j*3).lerp(pollenTint,game.pollen));
+            mesh.instanceColor!.needsUpdate=true;
+          }
+          lastPollen=game.pollen;
+        }
+        const nextSector=Math.min(2,Math.floor((game.wave+(game.phase==='interval'?1:0))/2));
+        streamers.forEach((r,i)=>{r.rotation.y=(nextSector===2?Math.PI:0)+.26*Math.sin(t*3+i); r.rotation.z=.13*Math.sin(t*5+i);});
+        if(game.phase==='won' && view==='play'){
+          camera.position.lerp(eye.set(9.4,3.1,10.1),1-Math.exp(-dt*1.9));
+          camera.lookAt(aim.set(4,.99,3.6));
+        }
+      }
       sample(cart, u, pathP); sample(cart, u + 0.08, ahead);
       mover.position.set(pathP[0], 0, pathP[1]); if (u < cart.total - 0.08) mover.rotation.y = -Math.atan2(ahead[1] - pathP[1], ahead[0] - pathP[0]);
+      if(harness){
+        // Pulling direction is the chord between the coach and the horse. Two shafts
+        // retain their couplings throughout a corner, including beyond the final arch.
+        collar.set(1.75,.68,0).applyEuler(horse.rotation).add(horse.position);
+        mover.rotation.y=-Math.atan2(collar.z-pathP[1],collar.x-pathP[0]);
+        for(let j=0;j<2;j++){
+          const side=j?1:-1;
+          hitch.set(.65,.67,side*.32).applyEuler(mover.rotation).add(mover.position);
+          collar.set(1.71,.71,side*.19).applyEuler(horse.rotation).add(horse.position);
+          dir.subVectors(collar,hitch);dummy.position.copy(hitch).lerp(collar,.5);
+          dummy.scale.set(1,dir.length(),1);dummy.quaternion.setFromUnitVectors(up,dir.normalize());
+          dummy.updateMatrix();harness.setMatrixAt(j,dummy.matrix);
+        }
+        harness.instanceMatrix.needsUpdate=true;
+      }
       gateLeft.rotation.y = Math.min(1, finalTime * 1.4) * 1.46; gateRight.rotation.y = -gateLeft.rotation.y;
     } else if (theme === 'station' || theme === 'rail') {
       mover.position.set(-3 + Math.sin(fraction * Math.PI * 3) * 4 + Math.min(13, finalTime * 4), 0, -5.53);
@@ -406,7 +691,11 @@ export function buildJanuaryDefense(game: JanuaryDefense) {
     tokens.count = bodies.count = rays.count = 0;
     for (const packet of game.packets) {
       const {x, z} = packet, bob = 0.07 * Math.sin(t * 4 + packet.id);
-      if (theme === 'station' || game.map.flow === 'alternate') {
+      if(game.control){
+        const day=game.control.day,tone=januaryPacketColor(day,packet.id)??(['0102','0105','1219','1220','1222','1225','1226'].includes(day)?['#80bed9','#e8b475','#8ab583'][packet.id%(day==='1220'||day==='1226'?3:2)]:game.control.spec.color);
+        stamp(tokens,packet.connected?'#88b594':day==='1230'&&packet.lit&&packet.slow>0?'#9dd8e2':packet.lit?'#ffe7a0':tone,x,.43+bob,z,.25,.23,.23);
+        stamp(bodies,'#d3e0d5',x,.37+bob,z,.55,.12,.27);
+      } else if (theme === 'station' || game.map.flow === 'alternate') {
         stamp(bodies, packet.connected ? '#86bd91' : packet.id % 2 ? p[4] : '#497e95', x, 0.26 + bob, z, 0.25, 0.48, 0.22);
         stamp(tokens, '#edd0aa', x, 0.62 + bob, z, 0.14, 0.14, 0.14); stamp(bodies, '#d6ad62', x + 0.23, 0.15, z, 0.16, 0.23, 0.18);
       } else if (theme === 'parade' || theme === 'workshop' || theme === 'ice') {
@@ -429,7 +718,13 @@ export function buildJanuaryDefense(game: JanuaryDefense) {
   }
   addEventListener('resize', resize); resize();
   return {
-    stage, actor, update, screen, react, setView(v: typeof view) {view = v; resize();},
+    stage, actor, update,
+    enter(){if(greenhouseView||machineIntro){greenhouseView=false;machineIntro=false;resize();}},
+    get wheelReady(){return Math.abs(actor.position[0]-3.8)<.35;},
+    castWheel(){if(game.castWheel())actor.launch([2.25,.12,3.12]);},
+    crossWheel(){if(game.wheel==='held')crossing=true;},
+    get crossing(){return crossing;},
+    screen, react, setView(v: typeof view) {view = v; resize();},
     dispose() {removeEventListener('resize', resize); actor.dispose();},
     collision: {triangles: baked.triangles, meshCount: baked.meshes},
   };

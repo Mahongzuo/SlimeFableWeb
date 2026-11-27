@@ -22,7 +22,7 @@ const slimeCamera=stage.camera.clone();
 const slime=new SlimeCharacter({THREE,renderer:stage.renderer,scene:art.root,camera:slimeCamera,sun:stage.sun,controls:stage.controls},{
   world:{boxes:[],surfaces:[],bounds:{min:[-200,-200,-200],max:[200,200,200]}},
   spawn:[flight.x,1.2,flight.z],gravityScale:0,input:false,ui:false,trainingTargets:[],title:spec.title,
-  onToast:()=>{},onReady:()=>{if(mode==='intro')showIntro();},
+  onToast:()=>{},onReady:()=>{if(mode==='intro')start();},
 }).attach();
 // Observe mode runs only the jelly renderer/worker. Ground movement and its camera are never enabled.
 slime.grounded=false;applyLevelQuality(stage,slime,save.data.quality);
@@ -69,14 +69,6 @@ const cameraCoordinates=[0,0,0],targetCoordinates=[0,0,0],lookTarget=new THREE.V
 stage.camera.position.fromArray(FLYBY_SHOTS.opening.position);stage.camera.fov=FLYBY_SHOTS.opening.fov;
 stage.camera.far=1000;stage.camera.updateProjectionMatrix();stage.camera.lookAt(lookTarget);
 let shotLock:keyof typeof FLYBY_SHOTS|null=null;
-function showIntro() {ui.intro(spec.title,spec.intro,[
-  '只有两种操作：空格短促推进，F 拍照；推进沿当前速度方向，最多12次',
-  '先在安全区轻推一次，看青色预测线变化；漂入取景框后按F，六个窗口各有一张照片',
-  '史莱姆在光环颗粒中自动摊开缓冲；卡西尼缝内不减速、不扣护盾',
-  '擦过泰坦的金色引力圈，借它转弯离开黄道面；金色微光藏着纪念品',
-  '复玩：剩余9次推进得金牌、5次得银牌；六张全收集、零推进挑战',
-],slime.ready);}
-showIntro();
 function start() {if(mode!=='intro'||!slime.ready)return;shotLock=null;mode='play';ui.panel(null);ui.showHud(true);save.add('visited',id);updateHud();}
 function pause() {if(mode!=='play')return;mode='pause';fire=shutter=false;accumulator=0;ui.showHud(false);ui.panelPause();}
 function resume() {if(mode!=='pause')return;mode='play';ui.panel(null);ui.showHud(true);timer.getDelta();}

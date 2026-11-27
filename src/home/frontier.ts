@@ -1,3 +1,7 @@
+import {BUILD_ITEMS,propCollisionParts} from './build-catalog';
+import type {Box} from '../slime/types';
+import {lotusPond} from './water-fish';
+import {valleyWater} from '../zones/lake-water';
 import {climateMaterial} from './climate-material';
 import type {ExpandedTile, ExpansionThemeId} from '../life/state';
 import {
@@ -14,6 +18,7 @@ interface RenderedTile {
   id: string;
   group: any;
   models: SpawnedPackModel[];
+  boxes:Box[];
 }
 
 interface PreviewEntry {
@@ -65,6 +70,7 @@ export class FrontierRenderer {
     for (const [id, rt] of this.rendered) {
       if (!ownedIds.has(id)) {
         for (const m of rt.models) m.dispose();
+        rt.group.traverse((node:any)=>{if(node.userData.releaseWater){node.userData.releaseWater();node.geometry.dispose();}});
         rt.group.removeFromParent();
         this.rendered.delete(id);
       }
@@ -77,6 +83,8 @@ export class FrontierRenderer {
     }
     this.rebuildOuterSkirts(expansions);
     this.rebuildFrontierPreviews(expansions, previewTheme, focusXZ);
+    this.ctx.islandCoast?.syncExpansions(expansions);
+    this.ctx.grassField?.syncExpansions(expansions);
   }
 
   /** Lightweight refresh of ONLY the focal 8 frontier preview tiles as the user pans around an infinite map. */
@@ -112,6 +120,8 @@ export class FrontierRenderer {
     if (!hits.length) return null;
     return (hits[0].object.userData.slotId as string) ?? null;
   }
+
+  structuralBoxes(){return Array.from(this.rendered.values()).flatMap(tile=>tile.boxes);}
 
   private mountExpandedTile(tile: ExpandedTile) {
     const slot = slotForTile(tile);
@@ -184,23 +194,14 @@ export class FrontierRenderer {
     group.add(mesh);
 
     // Decorative shallow lotus pond plane for jiangnan theme (recessed cleanly inside basin, no Z-fighting)
-    if (tile.theme === 'jiangnan') {
-      const centerY = expansionHeight(cx, cz, slot, tile.theme);
-      const waterMat = new T.MeshStandardMaterial({
-        color: 0x75a89b,
-        roughness: 0.18,
-        metalness: 0.1,
-        transparent: true,
-        opacity: 0.78,
-      });
-      const pond = new T.Mesh(new T.CircleGeometry(Math.min(w, h) * 0.20, 28).rotateX(-Math.PI / 2), waterMat);
-      pond.position.set(cx, centerY + 0.18, cz);
-      pond.name = `pond-exp-${tile.id}`;
-      group.add(pond);
+    const basin=lotusPond(tile);
+    if(basin){
+      const pond=valleyWater(this.ctx,new T.CircleGeometry(basin.radius,64),basin.x,basin.level,basin.z);
+      pond.name=`pond-exp-${tile.id}`;group.add(pond);
     }
 
     // Spawn natural theme props (trees, lilies, reeds, tidal rocks)
-    const models: SpawnedPackModel[] = [];
+    const models: SpawnedPackModel[] = [],boxes:Box[]=[];
     for (const np of theme.naturalProps) {
       const px = slot.min[0] + w * np.u;
       const pz = slot.min[1] + h * np.v;
@@ -209,64 +210,25 @@ export class FrontierRenderer {
       spawned.group.position.set(px, py, pz);
       spawned.group.rotation.y = np.yaw;
       group.add(spawned.group);
+      const def=BUILD_ITEMS[np.asset];
+      if(def?.solid)boxes.push(...propCollisionParts({id:tile.id+'-'+np.u+'-'+np.v,itemId:np.asset,
+        x:px,y:py,z:pz,scale:np.width/Math.max(def.width,def.depth),yaw:np.yaw}));
       models.push(spawned);
     }
 
     this.tilesRoot.add(group);
-    this.rendered.set(tile.id, {id: tile.id, group, models});
+    this.rendered.set(tile.id, {id: tile.id, group, models,boxes});
   }
 
-  /** Builds cliff skirts ONLY along exposed outer edges of expanded tiles (never across internal seams). */
-  private rebuildOuterSkirts(expansions: ExpandedTile[]) {
+  /** Coastline cliffs and seabed are dynamically sculpted around all owned tiles by IslandCoastSystem. */
+  private rebuildOuterSkirts(_expansions: ExpandedTile[]) {
     while (this.skirtGroup.children.length) {
       const ch = this.skirtGroup.children[0];
       ch.geometry?.dispose?.();
       this.skirtGroup.remove(ch);
     }
-    if (!expansions.length) return;
-    const T = this.T;
-    const skirtMat = this.ctx.mats.toon(SKIRT_HEX);
-
-    for (const tile of expansions) {
-      const slot = slotForTile(tile);
-      if (!slot) continue;
-      const [x0, z0] = slot.min;
-      const [x1, z1] = slot.max;
-      const edges: {a: [number, number]; b: [number, number]; outX: number; outZ: number}[] = [
-        {a: [x0, z1], b: [x1, z1], outX: 0, outZ: 1},
-        {a: [x0, z0], b: [x1, z0], outX: 0, outZ: -1},
-        {a: [x0, z0], b: [x0, z1], outX: -1, outZ: 0},
-        {a: [x1, z0], b: [x1, z1], outX: 1, outZ: 0},
-      ];
-      for (const e of edges) {
-        const mx = (e.a[0] + e.b[0]) * 0.5 + e.outX * 2;
-        const mz = (e.a[1] + e.b[1]) * 0.5 + e.outZ * 2;
-        // Skip internal edges that border owned territory!
-        if (isInsideHomeTerritory(mx, mz, expansions, 0)) continue;
-        const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]);
-        const n = Math.ceil(len / 2);
-        const verts: number[] = [];
-        const idx: number[] = [];
-        for (let i = 0; i <= n; i++) {
-          const t = i / n;
-          const x = e.a[0] + (e.b[0] - e.a[0]) * t;
-          const z = e.a[1] + (e.b[1] - e.a[1]) * t;
-          // Start slightly below top edge (-0.02) so cliff never pokes through ground edge
-          verts.push(x, expansionHeight(x, z, slot, tile.theme) - 0.02, z, x, -8, z);
-          if (i) {
-            const k = (i - 1) * 2;
-            idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
-          }
-        }
-        const geo = new T.BufferGeometry();
-        geo.setAttribute('position', new T.Float32BufferAttribute(verts, 3));
-        geo.setIndex(idx);
-        geo.computeVertexNormals();
-        const m = new T.Mesh(geo, skirtMat);
-        m.material.side = T.DoubleSide;
-        this.skirtGroup.add(m);
-      }
-    }
+    void SKIRT_HEX;
+    void isInsideHomeTerritory;
   }
 
   /** Builds DreamWorld-style translucent green terrain-hugging preview carpets + dashed borders + port rings. */

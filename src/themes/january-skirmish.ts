@@ -4,6 +4,7 @@ import {Kit} from './folio-landmarks';
 import {bakeRegion} from '../world/bake';
 import type {WorldDefinition} from '../slime/world';
 import type {Course,FloorTile} from '../templates/january-skirmish';
+import {bayWater, launchBoat} from './jan01-skirmish';
 import {floorAt} from '../templates/january-skirmish';
 
 export function skirmishLook(c: Course): StageLook {
@@ -39,7 +40,9 @@ function makeDeck(stage: Stage, c: Course) {
   const atlas = document.createElement('canvas'); atlas.width = 192 * 4; atlas.height = 220 * Math.ceil(c.tiles.length / 4);
   const ctx = atlas.getContext('2d')!;
   const wet = c.style === 'air' || c.style === 'maritime';
+  const floatTile = c.day==='0101' ? c.tiles.find(t=>t.x<0 && t.z<0 && t.z>-t.depth) : undefined;
   for (const [index, t] of c.tiles.entries()) {
+    if(t===floatTile)continue;
     const left = t.x - t.width / 2, right = t.x + t.width / 2, near = t.z + t.depth / 2, far = t.z - t.depth / 2;
     const col = index % 4, row = Math.floor(index / 4), a = col / 4, b = (col + 1) / 4, d = 1 - row * 220 / atlas.height, e = 1 - (row + 1) * 220 / atlas.height;
     ctx.drawImage(floorTexture(c, t), col * 192, row * 220);
@@ -64,7 +67,15 @@ function makeDeck(stage: Stage, c: Course) {
   const baked = bakeRegion(stage, {root: deck, x0: -7, z0: -11, w: 14, h: 22, ground: () => null, classify: () => 'solid'});
   const world: WorldDefinition = {boxes: [], surfaces: [], height: baked.height ?? undefined, bounds: {min: [-9, -4, -12], max: [9, 12, 12]}};
   if (wet) world.fluids = [{min: [-9, -12], max: [9, 12], level: -0.56, sink: 0.14}];
-  return world;
+  let float:T.Mesh|null=null;
+  if(floatTile){
+    const t=floatTile, material=stage.toon('#ffffff',{map:new T.CanvasTexture(floorTexture(c,t))});material.map.colorSpace=T.SRGBColorSpace;
+    const wood=stage.toon('#75563f');
+    float = new T.Mesh(new T.BoxGeometry(t.width-.045,.28,t.depth-.055),[wood,wood,material,wood,wood,wood]);
+    float.name='tampa-floating-landing';float.position.set(t.x,-.14,t.z);stage.add(float);
+    world.boxes.push({name:"floating-landing",min:[t.x-t.width/2,-.28,t.z-t.depth/2],max:[t.x+t.width/2,0,t.z+t.depth/2]});
+  }
+  return {world, float};
 }
 function bannerBoard(k: Kit, root: T.Group, stage: Stage, c: Course, y: number, z: number) {
   const board = k.group(root, 0, y, z);
@@ -85,7 +96,9 @@ function bannerBoard(k: Kit, root: T.Group, stage: Stage, c: Course, y: number, 
   };
 }
 function buildAirfield(k: Kit, root: T.Group, stage: Stage, c: Course) {
+  const fly = c.day==='0101' ? launchBoat(k,root,stage) : null;
   const hull = k.group(root, 6, -0.16, -6), prop = k.group(hull, 0, 0.99, -1.75);
+  if(!fly){
   k.ball(hull, '#996444', 0, 0.5, 0, 0.52, 0.48, 1.9); k.ball(hull, '#535550', 0, 0.89, -1.18, 0.38, 0.38, 0.55);
   for (const y of [0.82, 1.87]) k.ball(hull, '#f3d196', 0, y, 0.02, 2.95, 0.08, 0.71);
   for (const x of [-2.16, -1.1, 1.1, 2.16]) {
@@ -94,12 +107,31 @@ function buildAirfield(k: Kit, root: T.Group, stage: Stage, c: Course) {
   k.ball(hull, '#eabf79', 0, 1.04, 1.53, 1.06, 0.065, 0.42); k.ball(hull, '#ae5b41', 0, 1.29, 1.60, 0.08, 0.55, 0.45);
   for (const x of [-1.12, 1.12]) {k.ball(hull, '#916449', x, 0.13, 0.22, 0.20, 0.15, 1); k.beam(hull, '#66513d', [x, 0.22, 0.21], [x, 0.8, 0.21], 0.05);}
   k.ball(prop, '#c45739', 0, 0, 0, 0.12, 0.8, 0.055); k.cyl(prop, '#f4d08f', 0, 0, 0, 0.11, 0.23);
+  }
+  if(fly){
+    for(const z of [3.6,6.9])for(const x of [-1.28,1.28]){
+      k.cyl(root,'#725643',x,1.48,z,.085,2.97);
+      k.beam(root,'#906d50',[x,2.35,z],[0,3.6,z],.087);
+    }
+    for(const x of [-.72,.72])k.put('box',root,'toon','#805f4f',x,3.22,5.25,1.68,.11,3.74,0,0,x<0?.46:-.46);
+    for(const z of [3.85,5.05,6.4])k.beam(root,'#d1ae7d',[-1.29,2.85,z],[1.29,2.85,z],.072);
+    for(const z of [-3.4,-.4,2.4]){
+      k.ball(root,'#d69c59',-4.4,-.33,z,.31,.17,.35);k.ball(root,'#f6d9aa',-4.4,-.22,z,.24,.07,.26);
+      k.beam(root,'#94775a',[-4.35,-.14,z],[-4.06,.12,z+.28],.027);
+    }
+    for(const x of [-3.72,-3.05,3.85])for(let i=0;i<4;i++)k.ring(root,'#bca07b',x,.045+i*.047,5.6,.24+.012*i,Math.PI/2);
+  }
   for (const x of [1.52, 4.08]) for (const z of [-3.55, -0.6, 2.35]) k.cyl(root, '#805f49', x, 1.72, z, 0.075, 4.3);
   for (const x of [1.52, 4.08]) k.beam(root, '#614a3b', [x, 3.84, -3.8], [x, 3.84, 2.6], 0.10);
   for (const x of [2.04, 3.56]) k.put('box', root, 'toon', '#a85f46', x, 4.12, -0.6, 1.62, 0.13, 6.55, 0, 0, x < 2.8 ? 0.32 : -0.32);
   for (const z of [-6, -3, 0, 3, 6]) for (const x of [-4.22, 4.22]) {
     k.cyl(root, '#856447', x, -0.12, z, 0.15, 1.37); k.cyl(root, '#bcb295', x, 0.34, z, 0.17, 0.18);
-    if (z < 6) k.beam(root, '#c9b48e', [x, 0.45, z], [x, 0.45, z + 3], 0.027);
+    if (z < 6 && fly){
+      for(let j=0;j<4;j++){
+        const a=j/4,b=(j+1)/4;
+        k.beam(root,'#b9a47f',[x,.45-.46*a*(1-a),z+3*a],[x,.45-.46*b*(1-b),z+3*b],.029);
+      }
+    }else if(z<6)k.beam(root, '#c9b48e', [x, 0.45, z], [x, 0.45, z + 3], 0.027);
   }
   for (let i = 0; i < 5; i++) {
     const x = -3.85 + (i % 2) * 0.51, z = 4.15 + Math.floor(i / 2) * 0.58;
@@ -120,10 +152,11 @@ function buildAirfield(k: Kit, root: T.Group, stage: Stage, c: Course) {
     k.box(root, '#608080', x, 1.49, z + 1.04, 0.58, 0.79, 0.055);
   }
   k.taper(root, '#e8d7ad', -14, 2.48, -25, 0.74, 4.2); k.cyl(root, '#b6674b', -14, 4.7, -25, 0.52, 0.47); k.cone(root, '#557c7e', -14, 5.12, -25, 0.78, 0.55);
-  const water = new T.Mesh(new T.PlaneGeometry(150, 150), stage.toon(c.day === '0111' ? '#2c4f6b' : '#66aca9')); water.rotation.x = -Math.PI / 2; water.position.y = -0.56; stage.scene.add(water);
+  const water = new T.Mesh(new T.PlaneGeometry(150, 150), fly ? bayWater(stage) : stage.toon(c.day === '0111' ? '#2c4f6b' : '#66aca9')); water.rotation.x = -Math.PI / 2; water.position.y = -0.56; stage.scene.add(water);
   for (let i = 0; i < 28; i++) {const x = (i % 2 ? 1 : -1) * (5.5 + i % 8 * 1.65), z = i % 13 * 2 - 14; k.ball(root, '#c1ded3', x, -0.548, z, 0.45 + 0.1 * (i % 3), 0.02, 0.06);}
   const updateBanner = c.day === '0101' ? null : bannerBoard(k, root, stage, c, 4.8, -14.5);
   return (time: number, finish: number) => {
+    if(fly){fly(time,finish);return;}
     prop.rotation.z = time * (finish ? 25 : 7); hull.rotation.y = -0.45;
     hull.position.set(7.2 + finish * 2.1, -0.16 + Math.max(0, finish - 0.6) * 1.2, -6 - finish * 3);
     hull.rotation.x = -Math.min(0.20, finish * 0.13);
@@ -229,7 +262,7 @@ function buildWorkshop(k: Kit, root: T.Group, stage: Stage, c: Course) {
 }
 
 export function buildSkirmishScene(stage: Stage, c: Course) {
-  const world = makeDeck(stage, c), root = new T.Group(); stage.scene.add(root);
+  const {world,float} = makeDeck(stage, c), root = new T.Group(); stage.scene.add(root);
   const toon = stage.toon('#ffffff'), lamp = stage.toon('#ffffff', {emissive: '#f6d19a', emissiveIntensity: 0.2});
   const kit = new Kit({toon, glow: lamp, lit: toon, lamp, glass: toon}, c.day);
   const animate =
@@ -240,7 +273,13 @@ export function buildSkirmishScene(stage: Stage, c: Course) {
     buildWorkshop(kit, root, stage, c);
   const targets = c.anchors.map((_, i) => {
     const p = kit.group(root), col = i === 0 ? '#e4be66' : c.accent;
-    if (c.style === 'air' || c.style === 'maritime') {
+    if (c.day==='0101' && i===3) {
+      kit.cyl(p,'#76543d',0,.59,0,.07,1.18);
+      kit.beam(p,'#9d7647',[0,1.18,0],[.52,1.18,0],.052);
+      kit.taper(p,'#be8f45',.44,.93,0,.24,.35);
+      kit.ring(p,'#edc875',.44,.765,0,.25,Math.PI/2);
+      kit.ball(p,'#6b5342',.44,.71,0,.075);
+    } else if (c.style === 'air' || c.style === 'maritime') {
       kit.cyl(p, '#576d70', 0, 0.55, 0, 0.075, 1.08); kit.ball(p, col, 0, 0.83, 0, 0.45, 0.2, 0.24); kit.cone(p, '#f1dcad', 0.35, 0.85, 0, 0.18, 0.36);
     } else if (c.style === 'sport' || c.style === 'court') {
       kit.ball(p, '#648e97', 0, 0.46, 0, 0.38, 0.49, 0.30); kit.ball(p, col, 0, 0.98, 0, 0.37, 0.32, 0.33); kit.box(p, '#ecce96', 0, 0.91, 0.30, 0.42, 0.13, 0.08); kit.ball(p, '#975937', 0.3, 0.49, 0.18, 0.18, 0.11, 0.11);
@@ -253,5 +292,5 @@ export function buildSkirmishScene(stage: Stage, c: Course) {
   kit.ball(terminal, '#f5ce70', 0, 0.66, -0.76, 0.24);
   const latch = kit.group(root, ...c.pad); kit.ring(latch, '#54bcab', 0, 0.09, 0, 0.43, Math.PI / 2);
   kit.flush();
-  return {world, targets, latch, animate};
+  return {world, float, targets, latch, animate};
 }

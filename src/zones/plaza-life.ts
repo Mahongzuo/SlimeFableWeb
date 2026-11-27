@@ -2,6 +2,7 @@ import {ITEMS} from '../life/catalog';
 import {cook, cookable, nearest, FIRE} from '../life/cooking';
 import {deliver, requester, today} from '../life/requests';
 import {SERIF, paperCard, tagTexture} from '../home/paper';
+import type {Box} from '../slime/types';
 import type {PlayerHandle, ZoneContext} from './types';
 const dayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const needs = (n: Record<string, number>) => Object.entries(n).map(([k, c]) => `${ITEMS[k].icon}${ITEMS[k].name}×${c}`).join(' ');
@@ -9,19 +10,34 @@ const needs = (n: Record<string, number>) => Object.entries(n).map(([k, c]) => `
  * 凝露小厨 (a brick stove with a wok: cook dishes from your harvest, fire element lights it) and the 委托板
  * (three requests a day, delivered for shells). Both stand at the park gate, right off the harbour plaza.
  */
-export function plazaLife(z: ZoneContext, root: any, stove: [number, number], board: [number, number]) {
+export function plazaLife(z: ZoneContext, root: any, stove: [number, number], board: [number, number], boxes?: Box[]) {
   const {T, life} = z; let player: PlayerHandle | null = null;
+  const addObb = (ox: number, oy: number, oz: number, yaw: number, name: string, lx: number, lz: number, w: number, d: number, y0: number, y1: number, camera = true) => {
+    if (!boxes) return;
+    const c = Math.cos(yaw), sn = Math.sin(yaw);
+    const wx = ox + lx * c + lz * sn, wz = oz - lx * sn + lz * c;
+    boxes.push({name, min: [wx - w / 2, oy + y0, wz - d / 2], max: [wx + w / 2, oy + y1, wz + d / 2], yaw, camera});
+  };
   // ---- stove
-  const s = new T.Group(); s.name = 'cook-stove'; s.position.set(stove[0], z.ground(stove[0], stove[1]), stove[1]); s.rotation.y = Math.PI * .85; root.add(s);
+  const sy = z.ground(stove[0], stove[1]), sYaw = Math.PI * .85;
+  const s = new T.Group(); s.name = 'cook-stove'; s.position.set(stove[0], sy, stove[1]); s.rotation.y = sYaw; s.userData.skipHeightBake = true; root.add(s);
+  addObb(stove[0], sy, stove[1], sYaw, 'cook-stove-body', 0, 0, 1.6, 1.0, 0, .80, true);
+  addObb(stove[0], sy, stove[1], sYaw, 'cook-stove-top', 0, 0, 1.7, 1.1, .80, .88, false);
+  addObb(stove[0], sy, stove[1], sYaw, 'cook-stove-chimney', .55, -.25, .44, .44, .80, 2.46, true);
   const brick = z.toon(0xb65a40), stone = z.toon(0xb8b1a3), iron = z.toon(0x3b3f42), wood = z.toon(0x8a6a48);
   const add = (geo: any, mat: any, x: number, y: number, zz: number, name = 'cook-stove-part') => { const m = new T.Mesh(geo, mat); m.position.set(x, y, zz); m.castShadow = m.receiveShadow = true; m.name = name; s.add(m); return m; };
   add(new T.BoxGeometry(1.6, .8, 1), brick, 0, .4, 0); add(new T.BoxGeometry(1.7, .08, 1.1), stone, 0, .84, 0);
-  add(new T.SphereGeometry(.42, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), iron, -.3, 1.0, 0).scale.y = .5; // wok
+  // Thick-walled cast-iron wok (outer + rim + inner bowl — never transparent from above)
+  const wokPts: any[] = [];
+  for (let i = 0; i <= 8; i++) { const a = (i / 8) * Math.PI * 0.5; wokPts.push(new T.Vector2(Math.sin(a) * .42, -Math.cos(a) * .22)); }
+  for (let i = 8; i >= 0; i--) { const a = (i / 8) * Math.PI * 0.5; wokPts.push(new T.Vector2(Math.sin(a) * .385, -Math.cos(a) * .185 + .012)); }
+  add(new T.LatheGeometry(wokPts, 24), iron, -.3, 1.0, 0); // wok
   add(new T.CylinderGeometry(.06, .06, .5, 6), wood, .05, 1.0, 0).rotation.z = Math.PI / 2;
   add(new T.BoxGeometry(.4, 1.6, .4), brick, .55, 1.6, -.25); add(new T.BoxGeometry(.5, .08, .5), stone, .55, 2.42, -.25); // chimney
   const fire = add(new T.BoxGeometry(.5, .25, .05), z.toon(0xf08a3c, {emissive: 0xf08a3c, emissiveIntensity: .2, noCache: true}), -.3, .3, .52, 'cook-fire-fx');
   const signTex = tagTexture(T, (g, w, h) => { paperCard(g, w, h, '#2f2a24', '#f6e7c8'); g.fillStyle = '#9d3b27'; g.textAlign = 'center'; g.font = `900 86px ${SERIF}`; g.fillText('凝露小厨', w / 2 - 6, 150); });
-  const sign = add(new T.PlaneGeometry(1.1, .55), z.toon(0xffffff, {map: signTex}), 0, 2.15, .21, 'cook-sign'); sign.userData.walkThrough = true;
+  const signFace = z.toon(0xffffff, {map: signTex});
+  const sign = add(new T.BoxGeometry(1.1, .55, .05), [wood, wood, wood, wood, signFace, signFace], 0, 2.15, .20, 'cook-sign'); sign.userData.walkThrough = true;
   add(new T.BoxGeometry(.06, 1.4, .06), wood, -.5, 1.55, .2); add(new T.BoxGeometry(.06, 1.4, .06), wood, .5, 1.55, .2);
   const steam = Array.from({length: 6}, (_, i) => { const p = z.ctx.mats.glowSprite(0xffffff, .5, 0); p.name = 'cook-steam-fx'; p.position.set(-.3, 1.2 + i * .25, 0); s.add(p); return p; });
   let cooking = 0;
@@ -38,7 +54,12 @@ export function plazaLife(z: ZoneContext, root: any, stove: [number, number], bo
       if (res.ok) { z.save(); cooking = 2.2; player?.mood('Happy', 1.4); player?.toast(`${ITEMS[r.id].icon} 做好了${ITEMS[r.id].name}${res.first ? ' · 图鉴新增！' : ''}`, 3000); }
     }});
   // ---- request board
-  const b = new T.Group(); b.name = 'request-board'; b.position.set(board[0], z.ground(board[0], board[1]), board[1]); b.rotation.y = -Math.PI * .8; root.add(b);
+  const by = z.ground(board[0], board[1]), bYaw = -Math.PI * .8;
+  const b = new T.Group(); b.name = 'request-board'; b.position.set(board[0], by, board[1]); b.rotation.y = bYaw; b.userData.skipHeightBake = true; root.add(b);
+  addObb(board[0], by, board[1], bYaw, 'request-board-post-l', -.85, 0, .14, .14, 0, 2.2, true);
+  addObb(board[0], by, board[1], bYaw, 'request-board-post-r', .85, 0, .14, .14, 0, 2.2, true);
+  addObb(board[0], by, board[1], bYaw, 'request-board-panel', 0, 0, 1.9, .14, .85, 2.05, true);
+  addObb(board[0], by, board[1], bYaw, 'request-board-roof', 0, 0, 2.2, .50, 2.15, 2.26, true);
   for (const x of [-.85, .85]) { const p = new T.Mesh(new T.BoxGeometry(.12, 2.2, .12), wood); p.position.set(x, 1.1, 0); p.castShadow = true; b.add(p); }
   const panel = new T.Mesh(new T.BoxGeometry(1.9, 1.2, .08), z.toon(0x9c7a52)); panel.position.y = 1.45; panel.castShadow = true; b.add(panel);
   const roof = new T.Mesh(new T.BoxGeometry(2.2, .1, .5), z.toon(0x5d6266)); roof.position.y = 2.2; b.add(roof);

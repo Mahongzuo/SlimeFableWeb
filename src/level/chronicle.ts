@@ -69,7 +69,7 @@ const slime = new SlimeCharacter(ctx, {
   title: spec.title,
   onToast: () => {},
   onReady: () => {
-    if (phase === 'intro') showIntro();
+    if (phase === 'intro') start();
   },
 }).attach();
 ui.bindCharacter(slime);
@@ -528,7 +528,6 @@ function step(rawDelta: number) {
 
 const clock = new T.Clock();
 stage.renderer.setAnimationLoop(() => step(clock.getDelta()));
-showIntro();
 
 (window as any).__slime = slime;
 (window as any).__level = {

@@ -14,11 +14,14 @@ const smoothMax=(a:number,b:number,k:number)=>{if(k<=1e-5)return Math.max(a,b);c
 export class SurfaceBuilder {
  readonly maxVertices=9000;
  private field=new Float32Array(44**3);
+ private blurred=new Float32Array(44**3);
+ private vals=new Float32Array(8);
  private points=new Float32Array(36);
  private norms=new Float32Array(36);
  private offX=new Float32Array(44*44);
  private offZ=new Float32Array(44*44);
  private seeded=new Uint8Array(44*44);
+ private planeMask=new Uint8Array(44*44);
  private cellScale=1;
  private scales=new Map<string,number>();
 
@@ -46,7 +49,12 @@ export class SurfaceBuilder {
 
   const num=nx*nz;
   if(this.offX.length<num){this.offX=new Float32Array(num);this.offZ=new Float32Array(num);this.seeded=new Uint8Array(num)}
-  const offX=this.offX,offZ=this.offZ,seeded=this.seeded;
+  if(this.planeMask.length<num)this.planeMask=new Uint8Array(num);
+  const offX=this.offX,offZ=this.offZ,seeded=this.seeded,planeMask=this.planeMask;
+  for(let z=0;z<nz;z++){
+   const wz=origin[2]+z*cell;
+   for(let x=0;x<nx;x++)planeMask[x+nx*z]=onPlane(origin[0]+x*cell,wz)?1:0;
+  }
   const slope=iso/Math.max(cell,.001);
   const effectiveTip=Math.min(tip,reach);
   const dirX=[1,-1,0,0],dirZ=[0,0,1,-1];
@@ -105,12 +113,9 @@ export class SurfaceBuilder {
    const band=spread+cell;
 
    for(let z=0;z<nz;z++){
-    const wz=origin[2]+z*cell;
     for(let x=0;x<nx;x++){
      const idx=x+nx*z;
-     if(!seeded[idx])continue;
-     const wx=origin[0]+x*cell;
-     if(!onPlane(wx,wz))continue;
+     if(!seeded[idx]||!planeMask[idx])continue;
      const len=Math.hypot(offX[idx],offZ[idx]);
      const signed=sample(x,y,z)>=iso?-len:len;
      if(signed>band||signed<-cell)continue;
@@ -151,28 +156,58 @@ export class SurfaceBuilder {
    if(padXZ>0){min[0]-=padXZ;min[2]-=padXZ;max[0]+=padXZ;max[2]+=padXZ;min[1]=Math.min(min[1],solver.foot[1]);}
 
    const maxDim=quality==='high'?44:32;
-   let cell=Math.max((quality==='high'?(.028+(id===0?solver.spread*.042:0)):(.038+(id===0?solver.spread*.045:0)))*this.cellScale,Math.max(...max.map((v,k)=>v-min[k]+reach*2))/(maxDim-2));
-   const cellY=id===0?Math.max((max[1]-min[1]+reach*2)/(maxDim-2),Math.min(cell,cell*(1-solver.spread)+.006*solver.spread)):cell;
-   const cells=[cell,cellY,cell];
-   const origin=min.map((v,k)=>Math.floor((v-reach)/cells[k])*cells[k]) as Vec;
-   const dims=max.map((v,k)=>Math.min(maxDim,Math.ceil((v+reach-origin[k])/cells[k])+1));
-   const [nx,ny,nz]=dims,stride=nx*ny,n=nx*ny*nz;
+   const spanX=max[0]-min[0]+reach*2,spanY=max[1]-min[1]+reach*2,spanZ=max[2]-min[2]+reach*2;
+   // When particles drape vertically over a thin ledge/wall, keep initial grid density bounded so MC stays fast & avoids overflow rebuilds.
+   const drapeScale=id===0&&solver.spread<.2&&spanY>.72?Math.min(1.38,1+(spanY-.72)*.48):1;
+   let cell=Math.max((quality==='high'?(.028+(id===0?solver.spread*.042:0)):(.038+(id===0?solver.spread*.045:0)))*this.cellScale*drapeScale,Math.max(spanX,spanY,spanZ)/(maxDim-2));
+   const cellY=id===0?Math.max(spanY/(maxDim-2),Math.min(cell,cell*(1-solver.spread)+.006*solver.spread)):cell;
+   const ox=Math.floor((min[0]-reach)/cell)*cell,oy=Math.floor((min[1]-reach)/cellY)*cellY,oz=Math.floor((min[2]-reach)/cell)*cell;
+   const origin:Vec=[ox,oy,oz];
+   const nx=Math.min(maxDim,Math.ceil((max[0]+reach-ox)/cell)+1);
+   const ny=Math.min(maxDim,Math.ceil((max[1]+reach-oy)/cellY)+1);
+   const nz=Math.min(maxDim,Math.ceil((max[2]+reach-oz)/cell)+1);
+   const stride=nx*ny,n=nx*ny*nz;
    if(this.field.length<n)this.field=new Float32Array(n);
+   if(this.blurred.length<n)this.blurred=new Float32Array(n);
    const field=this.field;field.fill(0,0,n);
+   const blurred=this.blurred;
 
-   for(const {p} of particles){const local=p.map((v,k)=>(v-origin[k])/cells[k]);const r=reach/cell;const rs=cells.map(v=>reach/v);const a=local.map((v,k)=>Math.max(0,Math.floor(v-rs[k]))),b=local.map((v,k)=>Math.min(dims[k]-1,Math.ceil(v+rs[k])));for(let z=a[2];z<=b[2];z++)for(let y=a[1];y<=b[1];y++)for(let x=a[0];x<=b[0];x++){const d2=((x-local[0])**2+(z-local[2])**2)/(r*r)+(y-local[1])**2/(rs[1]*rs[1]);if(d2<1)field[x+nx*y+stride*z]+=Math.pow(1-d2,3)}}
-   const blurred=new Float32Array(n);
-   for(let pass=0;pass<(quality==='high'?3:2);pass++)for(let axis=0;axis<3;axis++){blurred.set(field.subarray(0,n));const step=[1,nx,stride][axis];for(let z=1;z<nz-1;z++)for(let y=1;y<ny-1;y++)for(let x=1;x<nx-1;x++){const j=x+nx*y+stride*z;field[j]=(blurred[j-step]+2*blurred[j]+blurred[j+step])*.25}}
+   const invCell=1/cell,invCellY=1/cellY;
+   const rXZ=reach*invCell,rY=reach*invCellY,invR2XZ=1/(rXZ*rXZ),invR2Y=1/(rY*rY);
+   for(let pi=0;pi<particles.length;pi++){
+    const pp=particles[pi].p;
+    const lx=(pp[0]-ox)*invCell,ly=(pp[1]-oy)*invCellY,lz=(pp[2]-oz)*invCell;
+    const ax=Math.max(0,Math.floor(lx-rXZ)),bx=Math.min(nx-1,Math.ceil(lx+rXZ));
+    const ay=Math.max(0,Math.floor(ly-rY)),by=Math.min(ny-1,Math.ceil(ly+rY));
+    const az=Math.max(0,Math.floor(lz-rXZ)),bz=Math.min(nz-1,Math.ceil(lz+rXZ));
+    for(let z=az;z<=bz;z++){
+     const dz=z-lz,dz2=dz*dz*invR2XZ,zOff=stride*z;
+     for(let y=ay;y<=by;y++){
+      const dy=y-ly,dyz2=dz2+dy*dy*invR2Y;if(dyz2>=1)continue;
+      const yzOff=nx*y+zOff;
+      for(let x=ax;x<=bx;x++){
+       const dx=x-lx,d2=dyz2+dx*dx*invR2XZ;
+       if(d2<1){const t=1-d2;field[x+yzOff]+=t*t*t;}
+      }
+     }
+    }
+   }
+   const passes=quality==='high'?3:2;
+   for(let pass=0;pass<passes;pass++)for(let axis=0;axis<3;axis++){
+    blurred.set(field.subarray(0,n));
+    const step=axis===0?1:axis===1?nx:stride;
+    for(let z=1;z<nz-1;z++){const zOff=stride*z;for(let y=1;y<ny-1;y++){const yzOff=nx*y+zOff;for(let x=1;x<nx-1;x++){const j=x+yzOff;field[j]=(blurred[j-step]+2*blurred[j]+blurred[j+step])*.25}}}
+   }
 
    // Density-union liquid bridges only appear when shots are right against the body surface.
-   if(id===0){for(const shot of solver.shots){if(shot.phase!=='merging'&&shot.phase!=='separating')continue;const a=solver.center,b=shot.center,dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],l2=dx*dx+dy*dy+dz*dz;if(l2<.005||(shot.phase==='merging'&&l2>.32))continue;const radius=shot.phase==='merging'?.115:.095;for(let z=1;z<nz-1;z++)for(let y=1;y<ny-1;y++)for(let x=1;x<nx-1;x++){const wx=origin[0]+x*cell,wy=origin[1]+y*cellY,wz=origin[2]+z*cell;const t=clamp(((wx-a[0])*dx+(wy-a[1])*dy+(wz-a[2])*dz)/l2,0,1),r=radius*(.8+.2*Math.sin(t*Math.PI)),d2=((wx-a[0]-t*dx)**2+(wy-a[1]-t*dy)**2+(wz-a[2]-t*dz)**2)/(r*r);if(d2<1)field[x+nx*y+stride*z]+=2.4*(1-d2)**2}}}
+   if(id===0){for(const shot of solver.shots){if(shot.phase!=='merging'&&shot.phase!=='separating')continue;const a=solver.center,b=shot.center,dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],l2=dx*dx+dy*dy+dz*dz;if(l2<.005||(shot.phase==='merging'&&l2>.32))continue;const radius=shot.phase==='merging'?.115:.095;for(let z=1;z<nz-1;z++)for(let y=1;y<ny-1;y++)for(let x=1;x<nx-1;x++){const wx=ox+x*cell,wy=oy+y*cellY,wz=oz+z*cell;const t=clamp(((wx-a[0])*dx+(wy-a[1])*dy+(wz-a[2])*dz)/l2,0,1),r=radius*(.8+.2*Math.sin(t*Math.PI)),d2=((wx-a[0]-t*dx)**2+(wy-a[1]-t*dy)**2+(wz-a[2]-t*dz)**2)/(r*r);if(d2<1)field[x+nx*y+stride*z]+=2.4*(1-d2)**2}}}
 
    const onPlane=(wx:number,wz:number)=>{const g=solver.world.support(wx,wz,solver.foot[1]+.05);return g!==null&&Math.abs(g-solver.foot[1])<=.08};
    if(bellReach>.002){
     // Smooth UE Dome Bell Flare: higher onset (0.56), wide fluid sweep (0.185m), curve 2.25, rounded meniscus tip
     this.applyBellFlare(field,nx,ny,nz,stride,origin,cell,cellY,solver.foot[1],iso,.56,bellReach,2.25,.018*domeWeight,onPlane);
     // One post-flare 1-2-1 smoothing pass eliminates any waist crease so top-to-skirt reads as one glassy curve.
-    for(let axis=0;axis<3;axis++){blurred.set(field.subarray(0,n));const step=[1,nx,stride][axis];for(let z=1;z<nz-1;z++)for(let y=1;y<ny-1;y++)for(let x=1;x<nx-1;x++){const j=x+nx*y+stride*z;field[j]=(blurred[j-step]+2*blurred[j]+blurred[j+step])*.25}}
+    for(let axis=0;axis<3;axis++){blurred.set(field.subarray(0,n));const step=axis===0?1:axis===1?nx:stride;for(let z=1;z<nz-1;z++){const zOff=stride*z;for(let y=1;y<ny-1;y++){const yzOff=nx*y+zOff;for(let x=1;x<nx-1;x++){const j=x+yzOff;field[j]=(blurred[j-step]+2*blurred[j]+blurred[j+step])*.25}}}}
    }
    if(skirtReach>.002){
     // UE Ball Ground Skirt: low meniscus skirt
@@ -180,17 +215,72 @@ export class SurfaceBuilder {
    }
 
    // UE sheet mode: conserved particle volume accumulates into XZ columns.
-   if(id===0&&solver.spread>.01){const radius=.046*mixScale(solver.spread)*1.6,volume=4/3*Math.PI*.27**3/384,norm=3/(Math.PI*radius*radius);for(let z=0;z<nz;z++)for(let x=0;x<nx;x++){const wx=origin[0]+x*cell,wz=origin[2]+z*cell;let weight=0,height=0;for(const {p} of particles){const d2=((p[0]-wx)**2+(p[2]-wz)**2)/(radius*radius);if(d2>=1)continue;const w=(1-d2)**2;weight+=w;height+=p[1]*w;}if(weight<.02)continue;const g=solver.world.support(wx,wz,solver.foot[1]+.05);const base=g!==null&&g>=solver.foot[1]-.08?g:height/weight-.023;const thick=Math.max(cellY*1.8,volume*norm*weight);for(let y=0;y<ny;y++){const wy=origin[1]+y*cellY,inside=Math.min(wy-base,base+thick-wy);const sheet=Math.max(0,1.05+inside*1.05/Math.max(cellY*.40,.003));const j=x+nx*y+stride*z;field[j]=field[j]*(1-solver.spread)+sheet*solver.spread;}}}
+   if(id===0&&solver.spread>.01){const radius=.046*mixScale(solver.spread)*1.6,volume=4/3*Math.PI*.27**3/384,norm=3/(Math.PI*radius*radius);for(let z=0;z<nz;z++)for(let x=0;x<nx;x++){const wx=ox+x*cell,wz=oz+z*cell;let weight=0,height=0;for(const {p} of particles){const d2=((p[0]-wx)**2+(p[2]-wz)**2)/(radius*radius);if(d2>=1)continue;const w=(1-d2)**2;weight+=w;height+=p[1]*w;}if(weight<.02)continue;const g=solver.world.support(wx,wz,solver.foot[1]+.05);const base=g!==null&&g>=solver.foot[1]-.08?g:height/weight-.023;const thick=Math.max(cellY*1.8,volume*norm*weight);for(let y=0;y<ny;y++){const wy=oy+y*cellY,inside=Math.min(wy-base,base+thick-wy);const sheet=Math.max(0,1.05+inside*1.05/Math.max(cellY*.40,.003));const j=x+nx*y+stride*z;field[j]=field[j]*(1-solver.spread)+sheet*solver.spread;}}}
 
    // Per-cell floors retain contact on slopes and permit supported edge sag.
    const shot=solver.shots.find(s=>s.id===id);
-   if(!id||shot?.grounded){for(let z=0;z<nz;z++)for(let x=0;x<nx;x++){const g=solver.world.support(origin[0]+x*cell,origin[2]+z*cell,center[1]);if(g===null)continue;for(let y=0;y<ny&&origin[1]+y*cellY<g-.004;y++)field[x+nx*y+stride*z]=0}}
+   if(!id||shot?.grounded){for(let z=0;z<nz;z++)for(let x=0;x<nx;x++){const g=solver.world.support(ox+x*cell,oz+z*cell,center[1]);if(g===null)continue;for(let y=0;y<ny&&oy+y*cellY<g-.004;y++)field[x+nx*y+stride*z]=0}}
+   if(!id&&solver.ridePlane){const rp=solver.ridePlane,n=rp.normal,pt=rp.point;for(let z=0;z<nz;z++){const wz=oz+z*cell;for(let x=0;x<nx;x++){const wx=ox+x*cell;for(let y=0;y<ny;y++){const wy=oy+y*cellY;if((wx-pt[0])*n[0]+(wy-pt[1])*n[1]+(wz-pt[2])*n[2]<-.002)field[x+nx*y+stride*z]=0}}}}
 
-   const grad=(x:number,y:number,z:number):Vec=>{const at=(a:number,b:number,c:number)=>field[clamp(a,0,nx-1)+nx*clamp(b,0,ny-1)+stride*clamp(c,0,nz-1)];const g:Vec=[at(x-1,y,z)-at(x+1,y,z),at(x,y-1,z)-at(x,y+1,z),at(x,y,z-1)-at(x,y,z+1)];return g.map((v,k)=>v/cells[k]) as Vec};
-   for(let z=0;z<nz-1;z++)for(let y=0;y<ny-1;y++)for(let x=0;x<nx-1;x++){
-    const vals=corners.map(c=>field[x+c[0]+nx*(y+c[1])+stride*(z+c[2])]);let cube=0;for(let k=0;k<8;k++)if(vals[k]<iso)cube|=1<<k;const mask=edgeTable[cube];if(!mask)continue;
-    for(let e=0;e<12;e++){if(!(mask&(1<<e)))continue;const [ia,ib]=edges[e],a=corners[ia],b=corners[ib],t=(iso-vals[ia])/(vals[ib]-vals[ia]);const ga=grad(x+a[0],y+a[1],z+a[2]),gb=grad(x+b[0],y+b[1],z+b[2]);for(let k=0;k<3;k++){this.points[e*3+k]=origin[k]+([x,y,z][k]+a[k]+(b[k]-a[k])*t)*cells[k];this.norms[e*3+k]=ga[k]+(gb[k]-ga[k])*t}}
-    for(let t=0;t<16;t+=3){if(triTable[cube*16+t]<0)break;if(count+3>this.maxVertices){overflow=true;continue}const es=[triTable[cube*16+t],triTable[cube*16+t+1],triTable[cube*16+t+2]];const ax=this.points[es[1]*3]-this.points[es[0]*3],ay=this.points[es[1]*3+1]-this.points[es[0]*3+1],az=this.points[es[1]*3+2]-this.points[es[0]*3+2],bx=this.points[es[2]*3]-this.points[es[0]*3],by=this.points[es[2]*3+1]-this.points[es[0]*3+1],bz=this.points[es[2]*3+2]-this.points[es[0]*3+2];if((ay*bz-az*by)*this.norms[es[0]*3]+(az*bx-ax*bz)*this.norms[es[0]*3+1]+(ax*by-ay*bx)*this.norms[es[0]*3+2]<0)[es[1],es[2]]=[es[2],es[1]];for(const e of es){for(let k=0;k<3;k++){positions[count*3+k]=this.points[e*3+k];normals[count*3+k]=this.norms[e*3+k]}slots[count]=slot;count++}}
+   // Zero-allocation Marching Cubes extraction with inlined finite-difference gradients
+   const vals=this.vals,pts=this.points,nrms=this.norms;
+   const nx1=nx-1,ny1=ny-1,nz1=nz-1;
+   for(let z=0;z<nz1;z++){
+    const z0=stride*z,z1=z0+stride;
+    for(let y=0;y<ny1;y++){
+     const y0=nx*y,y1=y0+nx;
+     for(let x=0;x<nx1;x++){
+      const v0=field[x+y0+z0],v1=field[x+1+y0+z0],v2=field[x+1+y1+z0],v3=field[x+y1+z0];
+      const v4=field[x+y0+z1],v5=field[x+1+y0+z1],v6=field[x+1+y1+z1],v7=field[x+y1+z1];
+      let cube=0;
+      if(v0<iso)cube|=1;if(v1<iso)cube|=2;if(v2<iso)cube|=4;if(v3<iso)cube|=8;
+      if(v4<iso)cube|=16;if(v5<iso)cube|=32;if(v6<iso)cube|=64;if(v7<iso)cube|=128;
+      const mask=edgeTable[cube];if(!mask)continue;
+      vals[0]=v0;vals[1]=v1;vals[2]=v2;vals[3]=v3;vals[4]=v4;vals[5]=v5;vals[6]=v6;vals[7]=v7;
+      for(let e=0;e<12;e++){
+       if(!(mask&(1<<e)))continue;
+       const ed=edges[e],ia=ed[0],ib=ed[1],a=corners[ia],b=corners[ib];
+       const t=(iso-vals[ia])/(vals[ib]-vals[ia]);
+       const ax=x+a[0],ay=y+a[1],az=z+a[2];
+       const bx=x+b[0],by=y+b[1],bz=z+b[2];
+       const pOff=e*3;
+       pts[pOff]=ox+(ax+(bx-ax)*t)*cell;
+       pts[pOff+1]=oy+(ay+(by-ay)*t)*cellY;
+       pts[pOff+2]=oz+(az+(bz-az)*t)*cell;
+       const ayOff=nx*ay+stride*az;
+       const gax=(field[(ax>0?ax-1:0)+ayOff]-field[(ax<nx1?ax+1:nx1)+ayOff])*invCell;
+       const gay=(field[ax+nx*(ay>0?ay-1:0)+stride*az]-field[ax+nx*(ay<ny1?ay+1:ny1)+stride*az])*invCellY;
+       const gaz=(field[ax+nx*ay+stride*(az>0?az-1:0)]-field[ax+nx*ay+stride*(az<nz1?az+1:nz1)])*invCell;
+       const byOff=nx*by+stride*bz;
+       const gbx=(field[(bx>0?bx-1:0)+byOff]-field[(bx<nx1?bx+1:nx1)+byOff])*invCell;
+       const gby=(field[bx+nx*(by>0?by-1:0)+stride*bz]-field[bx+nx*(by<ny1?by+1:ny1)+stride*bz])*invCellY;
+       const gbz=(field[bx+nx*by+stride*(bz>0?bz-1:0)]-field[bx+nx*by+stride*(bz<nz1?bz+1:nz1)])*invCell;
+       nrms[pOff]=gax+(gbx-gax)*t;
+       nrms[pOff+1]=gay+(gby-gay)*t;
+       nrms[pOff+2]=gaz+(gbz-gaz)*t;
+      }
+      const baseT=cube*16;
+      for(let t=0;t<16;t+=3){
+       const e0=triTable[baseT+t];if(e0<0)break;
+       if(count+3>this.maxVertices){overflow=true;continue}
+       let e1=triTable[baseT+t+1],e2=triTable[baseT+t+2];
+       const i0=e0*3,i1=e1*3,i2=e2*3;
+       const ax=pts[i1]-pts[i0],ay=pts[i1+1]-pts[i0+1],az=pts[i1+2]-pts[i0+2];
+       const bx=pts[i2]-pts[i0],by=pts[i2+1]-pts[i0+1],bz=pts[i2+2]-pts[i0+2];
+       let o1=i1,o2=i2;
+       if((ay*bz-az*by)*nrms[i0]+(az*bx-ax*bz)*nrms[i0+1]+(ax*by-ay*bx)*nrms[i0+2]<0){o1=i2;o2=i1;}
+       const c0=count*3,c1=c0+3,c2=c0+6;
+       positions[c0]=pts[i0];positions[c0+1]=pts[i0+1];positions[c0+2]=pts[i0+2];
+       normals[c0]=nrms[i0];normals[c0+1]=nrms[i0+1];normals[c0+2]=nrms[i0+2];
+       positions[c1]=pts[o1];positions[c1+1]=pts[o1+1];positions[c1+2]=pts[o1+2];
+       normals[c1]=nrms[o1];normals[c1+1]=nrms[o1+1];normals[c1+2]=nrms[o1+2];
+       positions[c2]=pts[o2];positions[c2+1]=pts[o2+1];positions[c2+2]=pts[o2+2];
+       normals[c2]=nrms[o2];normals[c2+1]=nrms[o2+1];normals[c2+2]=nrms[o2+2];
+       slots[count]=slot;slots[count+1]=slot;slots[count+2]=slot;
+       count+=3;
+      }
+     }
+    }
    }
    slot++;
   }

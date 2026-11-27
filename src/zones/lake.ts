@@ -1,5 +1,6 @@
 import {LAKE, pathDistance, lakeEdge} from '../world/map';
 import {signpost, trees, tufts, windy} from './kit';
+import type {Box} from '../slime/types';
 import type {ZoneBuilder} from './types';
 import {lakeWater} from './lake-water';
 import {critterField} from './critter-field';
@@ -70,9 +71,16 @@ export const lake: ZoneBuilder = z => {
   instances('pier-lantern-frame', box, 0x654b37, [[cx + .92, deckY + 1.15, 107.7, .12, 2.3, .12], [cx + .63, deckY + 2.25, 107.7, .7, .1, .12], [cx + .4, deckY + 2.02, 107.7, .035, .4, .035], [cx + .4, deckY + 1.8, 107.7, .4, .07, .4], [cx + .4, deckY + 1.37, 107.7, .36, .07, .36]]);
   const lamp = new T.Mesh(new T.BoxGeometry(.28, .36, .28), z.toon(0xffdf97, {emissive: 0xffba61, emissiveIntensity: .45}));
   lamp.name = 'pier-lantern-glow-fx'; lamp.position.set(cx + .4, deckY + 1.59, 107.7); root.add(lamp);
-  instances('pier-fish-barrel', new T.CylinderGeometry(.34, .29, .65, 12, 1, true), 0x96704c, [[cx - .66, deckY + .325, 107.65, 1, 1, 1]]);
-  instances('pier-barrel-hoops', new T.TorusGeometry(.32, .025, 4, 12).rotateX(Math.PI / 2), 0x565e58, [[cx - .66, deckY + .12, 107.65, 1, 1, 1], [cx - .66, deckY + .55, 107.65, 1, 1, 1]]);
-  instances('pier-barrel-water', new T.CircleGeometry(.29, 12).rotateX(-Math.PI / 2), 0x548d8a, [[cx - .66, deckY + .4, 107.65, 1, 1, 1]]);
+  // Thick-walled hollow fish barrel (outer stave wall, rounded rim lip, inner wall & bottom — never back-face culled)
+  const pierBarrelGeo = new T.LatheGeometry([
+    [0, -.325], [.29, -.325], [.34, .325], [.306, .325], [.258, -.27], [0, -.27],
+  ].map(([r, y]) => new T.Vector2(r, y)), 20);
+  instances('pier-fish-barrel', pierBarrelGeo, 0x96704c, [[cx - .66, deckY + .325, 107.65, 1, 1, 1]]);
+  instances('pier-barrel-hoops', new T.TorusGeometry(1, .022, 6, 20).rotateX(Math.PI / 2), 0x565e58, [
+    [cx - .66, deckY + .12, 107.65, .304, 1, .304],
+    [cx - .66, deckY + .55, 107.65, .336, 1, .336],
+  ]);
+  instances('pier-barrel-water', new T.CircleGeometry(.284, 20).rotateX(-Math.PI / 2), 0x548d8a, [[cx - .66, deckY + .4, 107.65, 1, 1, 1]]);
   const fish = fishingSpot(z, 'fish-pier', [cx, deckY, cz - LAKE.rz + 10], [0, 1], 'lake');
   root.add(signpost(z, cx + 3.5, cz - LAKE.rz - 4, Math.PI, '镜湖', '码头尽头可以钓鱼'));
 
@@ -105,10 +113,31 @@ export const lake: ZoneBuilder = z => {
     rocks.push([x, z.ground(x, zz) + s * .3, zz, s, s * .65, s * .8, a]);
     for (let k = 0; k < 3; k++) { const px = x + 1 + k * .25, pz = zz + .4; pebbles.push([px, z.ground(px, pz) + .08, pz, .18, .12, .23, k]); }
   }
-  instances('shore-boulders', new T.IcosahedronGeometry(1, 0), 0xffffff, rocks, [0x899a91, 0xa6afa0, 0x788c86]);
+  const shoreRocksMesh = instances('shore-boulders', new T.IcosahedronGeometry(1, 0), 0xffffff, rocks, [0x899a91, 0xa6afa0, 0x788c86]);
+  shoreRocksMesh.userData.skipHeightBake = true;
   instances('shore-pebbles-fx', new T.IcosahedronGeometry(1, 0), 0xb5baaa, pebbles);
 
   const pavilionZ = 136, pavilionY = Math.max(...[-1.7, 1.7].flatMap(dx => [-1.5, 1.5].map(dz => z.ground(cx + dx, pavilionZ + dz))));
+  const zoneBoxes: Box[] = [
+    {name: 'lake-pavilion-plinth', min: [cx - 2.3, pavilionY, pavilionZ - 2.3], max: [cx + 2.3, pavilionY + .30, pavilionZ + 2.3], camera: false},
+    // Lightweight 2-tier hipped roof matching concave hexagon profile (no hovering above outer eaves)
+    {name: 'lake-pavilion-roof-eave', min: [cx - 2.55, pavilionY + 3.18, pavilionZ - 2.55], max: [cx + 2.55, pavilionY + 3.52, pavilionZ + 2.55], camera: true},
+    {name: 'lake-pavilion-roof-top', min: [cx - 1.35, pavilionY + 3.50, pavilionZ - 1.35], max: [cx + 1.35, pavilionY + 4.28, pavilionZ + 1.35], camera: true},
+    // Solid flat fishing boulder on east bank
+    {name: 'lake-east-rock', min: [eastX - 1.25, eastY - 0.15, cz - 1.08], max: [eastX + 1.25, eastY + 0.60, cz + 1.08], camera: false, climbable: false},
+  ];
+  // Solid walkable/blocking OBBs for all lakeside boulders
+  rocks.forEach(([rx, ry, rz, sx, sy, sz, yaw = 0], idx) => {
+    const hx = sx * 0.76, hy = sy * 0.72, hz = sz * 0.76;
+    zoneBoxes.push({
+      name: `lake-shore-boulder-${idx}`,
+      min: [rx - hx, ry - hy, rz - hz],
+      max: [rx + hx, ry + hy, rz + hz],
+      yaw,
+      camera: false,
+      climbable: false,
+    });
+  });
   // Shared batches for village carpentry, masonry and pass-through small details.
   const wood: Part[] = [], stone: Part[] = [], rope: Part[] = [], metal: Part[] = [], cloth: Part[] = [];
   const beam = (parts: Part[], a: number[], b: number[], width: number, depth = width) => {
@@ -130,6 +159,7 @@ export const lake: ZoneBuilder = z => {
     if (i === 3) continue;
     const mx = (x + nx) / 2, mz = (zz + nz) / 2, yaw = Math.atan2(-(nz - zz), nx - x);
     wood.push([mx, pavilionY + .78, mz, 2.05, .18, .5, yaw]);
+    zoneBoxes.push({name: `lake-pavilion-seat-${i}`, min: [mx - 1.02, pavilionY + .30, mz - .25], max: [mx + 1.02, pavilionY + .87, mz + .25], yaw, camera: false});
     for (const t of [.18, .5, .82]) {
       const bx = x + (nx - x) * t, bz = zz + (nz - zz) * t;
       const ox = (bx - cx) * .1, oz = (bz - pavilionZ) * .1;
@@ -248,9 +278,16 @@ export const lake: ZoneBuilder = z => {
   const spots: [number, number, number][] = [];
   for (let i = 0; i < 40; i++) { const x = -28 + z.rand() * 57, zz = 82 + z.rand() * 58; if (lakeEdge(x, zz) > 1.35 && pathDistance(x, zz) > 3) spots.push([x, zz, .8 + z.rand() * .6]); }
   root.add(trees(z, spots));
+  const lakeNativeTrees = [
+    [18, 121, 1.05], [-16, 102, 1.15], [20, 130, 0.95],
+    [-12, 99, 1.10], [14, 98, 1.15], [20, 101, 1.00],
+  ] as const;
   root.add(tufts(z, 1200, {min: [-29, 82], max: [30, 141]},
     (x, zz) => lakeEdge(x, zz) < 1.17 || pathDistance(x, zz) < 2.8 ||
       Math.hypot(x - cx, zz - pavilionZ) < 3.4 ||
+      spots.some(([tx, tz, ts]) => Math.hypot(x - tx, zz - tz) < Math.max(0.80, ts * 0.58 + 0.38)) ||
+      lakeNativeTrees.some(([tx, tz, r]) => Math.hypot(x - tx, zz - tz) < r) ||
+      rocks.some(([rx, , rz, sx, , sz]) => Math.hypot(x - rx, zz - rz) < Math.max(sx, sz) * 0.85 + 0.32) ||
       Math.abs(zz - cz) < 3 && (Math.abs(x - eastX) < 2 || Math.abs(x - westX) < 2),
     [P.grass, P.safetyYellow, P.boatOffWhite]));
   // The kit boards use six material groups; four identical untextured edges can share one draw.
@@ -260,7 +297,7 @@ export const lake: ZoneBuilder = z => {
     obj.geometry.addGroup(24, 6, 4); obj.geometry.addGroup(30, 6, 5);
   });
   const critters = critterField(z, root, 'lake', [[-22, 110], [24, 106], [-12, 128], [16, 126], [-24, 98], [26, 120]]);
-  return {root, update: (t, dt, p) => {
+  return {root, boxes: zoneBoxes, update: (t, dt, p) => {
     mirror?.update();
     lilies.position.y = Math.sin(t * .85) * .018;
     fish(t, dt, p); fishEast(t, dt, p); fishWest(t, dt, p); critters(t, dt, p);

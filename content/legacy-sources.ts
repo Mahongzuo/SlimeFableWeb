@@ -11,7 +11,7 @@ export const legacySources:Record<string,string>={
  '1112-1954':'https://www.nps.gov/elis/learn/historyculture/this-month-in-history-november.htm',
  '1201-1959':'https://www.ats.aq/e/antarctictreaty.html','1202-1942':calendar('12'),
  '1203-1992':'https://www.vodafone.com/news/newsroom/technology/25-anniversary-text-message',
- '1204-1996':'https://science.nasa.gov/mission/mars-pathfinder/','1205-1901':calendar('12'),'1206-1877':calendar('12'),
+ '1204-1996':'https://science.nasa.gov/mission/mars-pathfinder/','1205-1901':calendar('12'),'1206-1877':'https://www.nps.gov/edis/learn/historyculture/origins-of-sound-recording-thomas-edison.htm',
  '1207-1995':'https://science.nasa.gov/mission/galileo/',
  '1209-1968':calendar('12'),'1211-2001':calendar('12'),
  '1212-1901':'https://www.nps.gov/caco/learn/historyculture/marconi.htm','1213-1937':calendar('12'),

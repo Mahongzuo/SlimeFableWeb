@@ -1,3 +1,13 @@
+import {isNewyearDay,januaryWeekDefense} from './newyear-defense';
+import {newyearTone} from './newyear-match';
+import {isMonthendDay} from './monthend-defense';
+import {monthTone} from './monthend-match';
+import {isYearendDay} from './yearend-defense';
+import {yearTone} from './yearend-match';
+import {isMidDay} from './midwinter-defense';
+import {midTone} from './midwinter-match';
+import {pageTone} from './winter-match';
+import {isSeasonMatch,machineGoals,machineContact,machineAxis,machineCell,crateTone,machineLocked} from './season-match';
 import {rng} from './random';
 import {isPressMatch,januaryMatches,pressContact} from './january-match';
 
@@ -9,6 +19,7 @@ export const specialKind=(value:number):SpecialKind=>value<0?'normal':kinds[Math
 export const colour=(value:number)=>value===RAINBOW?-1:value<0?value:value%6;
 export type Swap=[number,number];
 export interface Board {
+  branch?:number;levelHold?:number;
   bonus?:{tile:number;drops:number};day:string;seed:string;stage:number;cells:number[];targets:number[];moves:number;turn:number;shuffles:number;score:number;
 }
 export interface TileFall {to:number; rows:number; spawn:boolean}
@@ -21,6 +32,7 @@ export interface Result {groups:number[][];frames:number[][];cascades:Cascade[];
 const at=(x:number,y:number)=>y*8+x;
 export const budgets:Record<string,number>={'1123':15,'0101':14,'0815':12};
 function open(day:string,stage:number,x:number,y:number){
+ if(isSeasonMatch(day))return machineCell(day,stage,x,y);
  const tableau=januaryMatches[day]?.tableaux[stage];
  if(tableau)return tableau.mask[y][x]==='.';
  if(day==='1123'){
@@ -34,7 +46,8 @@ function open(day:string,stage:number,x:number,y:number){
  }
  return true;
 }
-function goals(day:string,stage:number):number[]{
+function goals(day:string,stage:number,branch=0):number[]{
+ if(isSeasonMatch(day))return machineGoals(day,stage,branch);
  const tableau=januaryMatches[day]?.tableaux[stage];
  if(tableau)return [...tableau.targets];
  if(day==='0101')return [at([2,5,3][stage],7)];
@@ -57,24 +70,26 @@ function lines(cells:number[]):number[][]{
 }
 function adjacent(a:number,b:number){return a>=0&&b>=0&&a<64&&b<64&&Math.abs((a%8)-(b%8))+Math.abs((a>>3)-(b>>3))===1;}
 function exchange(cells:number[],a:number,b:number){[cells[a],cells[b]]=[cells[b],cells[a]];}
-function restoreClones(cells:number[],clones:number[]){
+function restoreClones(cells:number[],clones:number[],reserved?:ReadonlyMap<number,number>){
+ const canRecolour=(i:number)=>!reserved?.has(i);
  for(const clone of clones){
    const tone=colour(clone);
    if(clone===RAINBOW){
-     const free=cells.findIndex(v=>v>=0&&v<6);
+     let free=cells.findIndex((v,i)=>v>=0&&v<6&&canRecolour(i));
+     if(free<0)free=cells.findIndex(v=>v>=0&&v<6);
      if(free<0)throw Error('虹彩棋没有可落的格子');
      cells[free]=RAINBOW;continue;
    }
    let landing=cells.findIndex((v,i)=>v===tone&&(i>>3)===3);
    if(landing<0)landing=cells.findIndex((v,i)=>{
-     if(v<0||v>=6||(i>>3)!==3||i%8>=2&&i%8<=5)return false;
+     if(v<0||v>=6||!canRecolour(i)||(i>>3)!==3||i%8>=2&&i%8<=5)return false;
      cells[i]=tone;const clear=lines(cells).length===0;cells[i]=v;return clear;
    });
    if(landing<0)landing=cells.findIndex(v=>v===tone);
    if(landing<0){
      // Try each ordinary drop; the restored colour should leave a stable board.
      landing=cells.findIndex((v,i)=>{
-       if(v<0||v>=6)return false;
+       if(v<0||v>=6||!canRecolour(i))return false;
        cells[i]=tone;const clear=lines(cells).length===0;cells[i]=v;
        return clear;
      });
@@ -94,8 +109,7 @@ function fill(b:Board, reflow=false){
  const keptClones=b.cells.filter(v=>v>=6);
  // Give every new tableau a genuine match one swap away. Fill around the motifs while avoiding pre-matches.
  const locks=new Map<number,number>();
- const vertical=(x:number,y:number)=>{
-   const tone=random.int(0,5);
+ const vertical=(x:number,y:number,tone=random.int(0,5))=>{
    locks.set(at(x,y-1),tone);locks.set(at(x,y+1),tone);
    locks.set(at(x,y),(tone+1)%6);locks.set(at(x===5?x-1:x+1,y),tone);
  };
@@ -106,7 +120,20 @@ function fill(b:Board, reflow=false){
    // Recoveries keep the coin's column and depth. A horizontal swap can line it up with the outlet.
    const startColumn=x+[0,-1,1][b.stage];
    locks.set(coinPos>=0?coinPos:at(startColumn,4),COIN);
-   if(oldRow<=4)vertical(x,6);
+   if(oldRow<=4){
+     vertical(x,6);
+     if(b.stage===2&&coinPos<0){
+       // The tempting drop under the third coin bypasses its outlet. At the
+       // bottom it can still be slid sideways into the brass channel.
+       const wrong=x+1, tone=(locks.get(at(wrong,6))!+2)%6;
+       locks.set(at(wrong,5),tone);locks.set(at(wrong,7),tone);
+       locks.set(at(wrong+1,6),tone);
+       // That same swap clears a second trio beside the coin. This makes
+       // the sideways recovery a scoring choice players can read in advance.
+       const otherTone=locks.get(at(wrong,6))!;
+       locks.set(at(wrong+1,4),otherTone);locks.set(at(wrong+1,5),otherTone);
+     }
+   }
    else if(oldRow<7){
      const y=7,t=random.int(0,5);
      locks.set(at(x-1,y),t);locks.set(at(x+1,y),t);locks.set(at(x,y),(t+1)%6);
@@ -116,6 +143,16 @@ function fill(b:Board, reflow=false){
    const t=random.int(0,5);for(const x of [2,3,5])locks.set(at(x,3),t);
    locks.set(at(4,3),(t+1)%6);locks.set(at(4,4),t);
  }else for(const i of goalsNow){
+   if(isSeasonMatch(b.day)&&!b.bonus){
+     // A locked goal does not need a motif until the preceding contact clears.
+     if(januaryWeekDefense(b.day)&&machineLocked(b,i))continue;
+     const index=machineGoals(b.day,b.stage,b.branch).indexOf(i);
+     const tone=newyearTone(b.day,b.stage,index,b.branch)??monthTone(b.day,b.stage,index,b.branch)??yearTone(b.day,b.stage,index,b.branch)??midTone(b.day,b.stage,index,b.branch)??(b.day==='1210'?pageTone(b.stage,index):b.day==='1205'?crateTone(b.stage,index):random.int(0,5));
+     if(machineAxis(b.day,b.stage,index,b.branch)==='row'){
+       locks.set(i-1,tone);locks.set(i+1,tone);locks.set(i,(tone+1)%6);locks.set(i+8,tone);
+     }else vertical(i%8,i>>3,tone);
+     continue;
+   }
    const layout=januaryMatches[b.day];
    if(isPressMatch(layout)&&layout!.tableaux[b.stage].targets[1]===i){
      const tone=random.int(0,5);
@@ -146,7 +183,7 @@ function fill(b:Board, reflow=false){
      // Minting a special under the coin here would keep one of its three supports.
      if(immediateCascade||release.length!==1||release[0].length!==3)continue;
    }
-   restoreClones(b.cells,keptClones);
+   restoreClones(b.cells,keptClones,(isMidDay(b.day)||isYearendDay(b.day)||isMonthendDay(b.day)||isNewyearDay(b.day))&&!b.bonus?locks:undefined);
    if(availableSwaps(b).length)return;
  }
  throw Error('无法生成棋盘 '+b.day+'/'+b.stage);
@@ -294,7 +331,9 @@ export function swap(b:Board,a:number,c:number,recordFrames=false):Result|null{
    const wave=resolveWave(b.cells,chain,gesture,combo,random);
    if(recordFrames)result.frames.push([...b.cells]);
    const press=januaryMatches[b.day];
-   if(!b.bonus&&isPressMatch(press)){
+   if(!b.bonus&&isSeasonMatch(b.day)){
+     machineContact(b,wave.hit,chain,wave.sweepRows,wave.sweepCols,gesture,b.cells);
+   }else if(!b.bonus&&isPressMatch(press)){
      const ink=press!.tableaux[b.stage].targets[0];
      b.targets=b.targets.filter(i=>!pressContact(i,i===ink,chain,wave.sweepRows,wave.sweepCols));
    }else if(b.day!=='0101')b.targets=b.targets.filter(g=>!wave.hit.has(g));
@@ -320,13 +359,16 @@ export function swap(b:Board,a:number,c:number,recordFrames=false):Result|null{
    if(b.moves>0&&!availableSwaps(b).length){b.shuffles++;fill(b);result.reshuffled=true;}
    return result;
  }
+ if((b.day==='1203'||b.day==='1217'||b.day==='1228')&&b.stage===1&&b.targets.length===1&&b.levelHold!==undefined&&b.turn>b.levelHold){
+   b.targets=goals(b.day,b.stage);b.levelHold=undefined;b.shuffles++;fill(b,true);result.reshuffled=true;
+ }
  if(b.day==='0101'&&b.cells[b.targets[0]]===COIN)b.targets=[];
  if(b.day==='1123'&&b.stage===0&&b.targets.length===1){b.stage=1;result.advanced=true;}
  else if(!b.targets.length){
    if(b.day==='1123'&&b.stage===0)b.stage=2;else b.stage++;
    result.advanced=true;
    if(b.stage<3){
-     b.targets=goals(b.day,b.stage);fill(b);
+     b.targets=goals(b.day,b.stage,b.branch);fill(b);
    }
  }else if((b.day==='0815'||januaryMatches[b.day])&&b.targets.length<goalsBefore){b.shuffles++;fill(b,true);}
  else if(b.moves>0&&!legalMoves(b).length){b.shuffles++;fill(b,true);result.reshuffled=true;}

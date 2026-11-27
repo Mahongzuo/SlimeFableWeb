@@ -1,5 +1,199 @@
 # 会话检查点
 
+## 2026-11-27 · 1 月 7 日三号门着陆修复
+
+原收尾弹窗模块缺失时可复现按钮停在六轮完成。现由同一场景直接放绳、在加来一侧落地，落稳后领奖。正式鼠标和竖屏触控均已用缺失模块条件回归，F1 已同步。[验收与实景](../../tasks/reports/0106-0110-six.md)
+
+## 2026-11-27 · 1 月 6 日一号门简化
+
+译室改为左右金圈各校一次，前方合稿。五枚译笺作为可选收集。已验证两种先后、零收集通关、正式练习分账、触屏 F1 和原路回港。[验收与实景](../../tasks/reports/0106-0110-six.md#1-月-6-日一号门易读性调整)
+
+## 2026-11-27（终·十一项场景体验精修）· 青蛙防抽搐、水岸泡沫与雨滴、跳床蘑菇材质法线、秋千亭子移位与可荡物理、传送门无缝涡流、四段二次元刀光、树林空气墙清除、礁石碰撞、野外遭遇直接提示与树根禁草
+
+- **1. 青蛙待机/游动防抽搐**：[simpond-ai.ts](../../src/home/simpond-ai.ts) 为两栖类新增最短弧角插值 `stepAngle()`、锁存游动落点 `swimTx/swimTz`（`> 0.28 m` 停步区 + 步长夹紧）、平滑 `group.rotation.y` 转向与温和 `croak` 喉囊脉动；[critter-field.ts](../../src/zones/critter-field.ts) 为池蛙增加 `0.004 m` 移动死区与平滑朝向插值。
+- **2. 湖泊/河道/近海有机近岸泡沫 & 7. 稀疏细腻雨滴涟漪**：[water-surface.ts](../../src/home/render/water-surface.ts) 重写 `bakeFoamTexture(512)` 为域扭曲柔云 + 微气泡（移除生硬 Voronoi 网格泡沫），并将雨滴波纹改为低密度双层 `rainRingLayer`；[fft-ocean.ts](../../src/home/render/fft-ocean.ts) 升级近海碎浪为双尺度滚动波峰与退潮薄纱；[rain-contact.ts](../../src/home/rain-contact.ts) 移除 14 边形线框环与刺状王冠，改为细雨丝 + 96 粒柔和雾滴 `Points`。
+- **3. 跳床蘑菇与森林蘑菇反向法线修复 + 绘本材质升级**：[park.ts](../../src/zones/park.ts) 与 [forest.ts](../../src/zones/forest.ts) 将 `LatheGeometry` 轮廓改为严格自下而上（法线朝外，根治夜间透明/透底问题），新增 512² 五色釉面斑点菌盖、底面放射菌褶贴图、直绑 `emissiveMap`（仅斑点与菌褶夜间微亮）及带菌环弯曲菌柄。
+- **4. 秋千与凉亭移至草地 + 模型升级 + 去空气墙与可荡物理**：[garden-regions.ts](../../src/home/garden-regions.ts) 将凉亭移至 `(-18.5, 65.0)`、紫藤架移至 `(-22.5, 63.5)`、银杏移至 `(-8, 74)`；[park.ts](../../src/zones/park.ts)、[types.ts](../../src/zones/types.ts)、[game.ts](../../src/game/game.ts)、[solver.ts](../../src/slime/solver.ts)、[surface.ts](../../src/slime/surface.ts)、[character.ts](../../src/slime/character.ts) 将秋千移至 `(-9.5, 70.0)` 并重建实木 A 字架、石墩、横撑、金属吊环、双绳与带装饰条座板，`skipHeightBake = true` 彻底消除 2.5D 高度场封堵；站上座板后自动锁定并稳住 1.0 秒起荡，通过随动倾斜 `ridePlane` 同步约束 PBF 384 粒子与 Marching Cubes 标量场底面裁切、跳过悬边下垂并同帧刷新渲染偏移，彻底杜绝穿模与滑落（无头 Chrome 实测跟踪误差 `0.000 m`，仅在玩家主动按 `WASD`/空格/右键冲刺时离开，起跳按真实切向甩飞）。
+- **5. 传送门涡流去水平接缝**：[portal-vfx.ts](../../src/home/portal-vfx.ts) 用连续笛卡尔 `rot2()` 对数螺线旋转与周期单位向量替代传入 `fbm()` 的不连续 `atan(uv.y, uv.x)`，彻底消除中左侧 `-π/+π` 水平拼缝。
+- **6. 鸣潮/异环风格四段连击二次元刀光**：[slash-vfx.ts](../../src/slime/slash-vfx.ts) 重构为双层刀带（Normal 混合高饱和暗墨底剪影 + Additive HDR 锐利刃脊）、UV 噪波侵蚀发光焦边与色散副缘，4 段差异化连段轨迹（1 段快斩、2 段残影上挑、3 段 X 交叉双斩、4 段 248° 螺旋终结技+外环斩波）及 4 角星芒受击闪光。
+- **8. 清除松林树枝空气墙**：[bake.ts](../../src/world/bake.ts) 将 `branch` 加入 `NEVER_SOLID`，[forest.ts](../../src/zones/forest.ts) 为 `pine-branches` 标记 `walkThrough` 与 `skipHeightBake`。
+- **9. 岸边礁石与湖畔石块碰撞**：[island-coast.ts](../../src/world/island-coast.ts) 抽离视觉与物理共用 `computeCoastalReefPoses()` 并导出 `buildCoastalReefBoxes()`（不可攀爬 OBB）接入 [home-world.ts](../../src/world/home-world.ts)；[lake.ts](../../src/zones/lake.ts) 为东岸平岩与全部湖畔礁石注册 `climbable: false` OBB。
+- **10. 野外遭遇去 C 摊扁门槛，直接提示所需物品与来源**：[ranch.ts](../../src/life/ranch.ts) 与 [ranch-runtime.ts](../../src/home/ranch-runtime.ts) 新增 `describeItemSource()`，交互与提示直接显示所需偏好物品及获取方式，背包有 1 份即可直接 `F` 结识。
+- **11. 树干树根全区域禁草防穿模**：[park.ts](../../src/zones/park.ts)、[forest.ts](../../src/zones/forest.ts)、[lake.ts](../../src/zones/lake.ts)、[harbor.ts](../../src/zones/harbor.ts)、[farm.ts](../../src/zones/farm.ts) 与 [builder.ts](../../src/home/builder.ts) 在静态草簇与动态 GPU 禁草遮罩中均排除全部程序化树、原生景观树及玩家种植树树干核心。
+- **验证与证据**：新增 [home-eleven-fixes.test.ts](../../tests/home-eleven-fixes.test.ts)；`npm run check`、`npm run build` 全通过；家园/史莱姆/物理/PBF/生态/生活全部 28 个专项测试套件 **134 / 134 PASS**（注：共享工作区并行日常关卡的 `tests/january-match.test.ts` 存在 1 项非本任务失败）；独立无头 Chrome 连接 `http://127.0.0.1:5180/` 最新生产构建（0 控制台/页面报错），留存 9 张多角度及昼夜验收截图至 `qa/evidence/polish-11-*.jpg`。下一步待用户本机试玩确认画面、手感、秋千摇晃与四段刀光观感。
+
+## 2026-11-27 · 1 月 6 日至 10 日六门
+
+1 月 6–10 日的 30 扇门逐日登记完毕，台账累计 45 天。留存 150 张实机图、五张逐日拼图、30 份正式／练习回执、30 页 F1 回执。1 月 6 日海岸拼桌补验原失败种子，1 月 7 日车渡贴地复核接轨，1 月 10 日邮局在竖屏用纯触控通关。类型、目录、内容和生产构建通过。全量测试 2,073/2,073，关卡与 F1 专项 63/63。实体设备画面与手感待玩家定稿。[逐门试玩](../days/0106-0110-six.md) · [逐日验收](../../tasks/reports/0106-0110-six.md)
+
+## 2026-11-27 · 1 月 2 日至 5 日六门
+
+四天 24 扇门、25 个入口已逐日完成，台账累计 40 天。保留 1 月 2 日二号门两章。关卡与 F1 专项 31 项通过，类型、内容、目录及构建通过，五视图、正式与练习、旧档回港和触屏帮助均有记录。全库 2,020/2,021，唯一失败为并行角色的斩击角度，按用户意见留给角色任务。下一步由玩家在实体设备确认画面与手感。[试玩入口](../days/0102-0105-six.md) · [分门验收与项目检查](../../tasks/reports/0102-0105-six.md)
+
+## 2026-11-27 · 柳岸钓台与史莱姆号
+
+已接入家园远海航次、三类可登陆岛屿、船钓潜水、逐波舷炮战和一次性返港结算。对照 Pirate Ship Sunset 加入船形生浪、世界坐标泡沫历史、含气水与随浪反光；玩家船和敌船共用。后台生产浏览器已跑通两波、读档、钓鱼入包、登岛回船与返港。下一步由玩家确认扬帆转向、浪花观感、舷炮射界和触屏布局。[任务卡](../../tasks/cards/slime-voyage.md) · [实景与验收](../../tasks/reports/slime-voyage.md) · [本机试玩](http://127.0.0.1:5292/)
+
+## 12 月 22 日至 31 日六门
+
+已完成月底十天共 60 关，原史题、存档键和入口核对一致。12 月全部 31 天的六门已逐日登记，含既有 1 月 1 日与 11 月 27–30 日，台账累计 36 天。新批次每关留存五机位、正式与练习、40 种子、旧档回港及 F1 证据。竖屏纯轻点完成暗房两色套印；三消帮助附实盘示意。封版全量测试 1,961 项通过，类型、内容、目录和构建均通过。实体设备上的画面与手感待玩家试玩。[分门设计与入口](../days/1222-1231-six.md) · [验收结果](../../tasks/reports/1222-1231-six.md) · [台账](../six-gate-polish.md)
+
+
+## 2026-11-27（夜·终）· 地形道路无缝拼接、田垄动态禁草、Meadow 风格草花树冠/花尘升级与 SimPond 夜间光照修复
+
+- **1. 地形与道路拼接修复 + Meadow 地面笔触**：
+  - [jiangnan.ts](../../src/home/jiangnan.ts)：移除叠在 `gardenRoads` 之上的 6 块生硬矩形 `nativeLane` 石板 `groundTile`；为玩家建造铺设的 `groundTile()` 增加基于世界坐标多尺度噪波边缘羽化与湿润过渡土边。
+  - [garden-regions.ts](../../src/home/garden-regions.ts) & [terrain-mesh.ts](../../src/world/terrain-mesh.ts)：新增统一的 `sampleTerrainRoadWeight()`，使石埠北向支路平滑跨过 `harbor`/`park` 的 `z = 30` 分区边界并自然汇入公园主道；清除汇入路口横穿中线的 `path-stones-fx` 路缘石；为全部分区内部接缝统一计算连续 `inland()` 解析法线；地形片元着色器新增草地底层画笔笔触（brush dabs）、双频噪波路肩破边、潮湿深色过渡泥唇与碎石颗粒。
+- **2. 实时 GPU 田垄/建筑禁草遮罩（零杂草穿模）**：
+  - [grass-ism.ts](../../src/home/foliage/grass-ism.ts)：新增最多支持 48 个任意旋转朝向 OBB 的实时 GPU 禁草/禁花遮罩（`updateGrassExclusions`、`grassExclusionUniforms`、`isPointGrassExcluded`），种植床新建、移动或拆除下一帧即时生效，零几何重建开销。
+  - [builder.ts](../../src/home/builder.ts)：在 `syncCollisionAndHabitats()` 与 `syncTiles()` 自动按优先级同步全部 `farmBed` 种植床、实心建筑、玩家铺装与原生建筑轮廓至禁草遮罩。
+  - [farm.ts](../../src/zones/farm.ts)、[harbor.ts](../../src/zones/harbor.ts)、[park.ts](../../src/zones/park.ts)：加宽梯田菜地（`4.18 × 2.62`）、石埠花坛、临水凉亭与道路边缘静态安全裕量。
+- **3. Meadow 风格草地、4 种 3D 野花簇、体积树冠与飘浮花尘**：
+  - [grass-ism.ts](../../src/home/foliage/grass-ism.ts)：草地升级为 Voronoi 丛心双层分布（28% 高草丛 + 72% 贴地草毯）、俯视防薄化后仰增宽、折叶左右明暗微差与暖稻草金/冷翡翠杂化；野花升级为 4 种真 3D 物种花簇飘带（`daisy` 11 瓣雏菊、`poppy` 双层杯状虞美人、`lupin` 6 层螺旋羽扇豆、`buttercup` 5 瓣毛茛），共享风摇、史莱姆踩踏与 GPU 禁草遮罩。
+  - [tree-ism.ts](../../src/home/foliage/tree-ism.ts)：升级阔叶树冠为 4 团块体积内芯（UV 落在 Q0 实心叶区，兼容 `forest.ts` `alphaTest`）+ 32 张球面传递法线外层叶簇，保留树干嵌入下冠射线不变量，并新增 4 板根树干与顶光暖绿/底冠冷影/逆光金边着色。
+  - 新增 [atmosphere-motes.ts](../../src/home/foliage/atmosphere-motes.ts) 并接入 [garden-stage.ts](../../src/home/garden-stage.ts)：420 粒镜头环绕 GPU 飘浮花尘（日间暖金逆光微尘、夜间柔和萤火粉尘，雨雪天自动淡出隐藏）。
+- **4. SimPond 生物夜间发黑根治**：
+  - [simpond-assets.ts](../../src/home/simpond-assets.ts)：新增 `normalizeSimPondMaterial()` 与 `simpondLighting`（由 `garden-stage.ts` 每帧同步 `daylight`/`sunDir`），强制 `metalness = 0`、`metalnessMap = null`（根治 `common-frog.glb` / `smooth-newt.glb` 的 glTF 2.0 默认 `metallicFactor = 1.0` 金属黑化缺陷），约束粗糙度 `[0.46, 0.78]`、提亮 `envMapIntensity = 1.25` 与柔和色基，并为全部 22 种生物注入仅夜间生效的月光漫反射补底与菲涅尔轮廓光。
+  - [ibl.ts](../../src/home/render/ibl.ts) & [pipeline.ts](../../src/home/render/pipeline.ts)：温和抬升夜间天空 IBL、下半球反弹底噪、`environmentIntensity` 与半球光暗部基线。
+- **验证与证据**：新增 [meadow-upgrade-and-night.test.ts](../../tests/meadow-upgrade-and-night.test.ts)；`npm run check`、`npm run build`、全量 `npm test`（**1,961 / 1,961 PASS**）全部通过；独立无头 Chrome（生产构建，0 报错，实测 60 个 SimPond 模型 `hasMetalMap = 0`、`maxMetalness <= 0.02`）留存 8 张多角度与深夜证据截图至 `qa/evidence/meadow-*.jpg`。下一步待用户本机试玩确认画面、植物密度与昼夜观感。
+
+## 12 月 17 日至 21 日六门
+
+30 关均从原来的港口及史书入口进入。已验证正式、练习、局部补救、40 种子、旧存档回港，以及键盘和触屏 F1。三消的帮助能显示当前可解目标与可交换坐标。十个历史展台按手机画幅取景，12 月 19 日天平已在 390×844 下通过轻点去皮、左右托运样盒、封签全流程。全量测试 1,850 项通过，内容、目录、类型和生产构建检查通过。台账累计 26 天，下一批从 12 月 22 日起。画面与手感待玩家试玩。[逐日验收](../../tasks/reports/1217-1221-six.md) · [优化台账](../six-gate-polish.md)
+
+
+## 2026-11-27（夜·续）· 引入 SimPond 生物模型、骨骼/顶点动画与多物种 AI 状态机
+
+- **模型与贴图引入**（[public/models/simpond/](../../public/models/simpond/)，共 24 个资源 / 3.33 MB，含 [NOTICE.txt](../../public/models/simpond/NOTICE.txt) 许可声明）：
+  - **带真实骨骼动画的两栖类**：`common-frog.glb`（5 段骨骼动画：`sit / croak / hop / swim / float`）、`smooth-newt.glb`（4 段骨骼动画：`rest / walk / swim / court`）。
+  - **淡水与海洋鱼类（`_lo.glb`）**：红白锦鲤 `koi-kohaku`、昭和锦鲤 `koi-showa`、彗星金鱼 `goldfish-comet`、金雅罗鱼 `golden-orfe`、河鲈 `perch`、蓝鳃太阳鱼 `bluegill`；以及 CC0 Fish Kit 海洋鱼类 `madai`、`kurodai`、`aji`、`saba`、`kasago`、`suzuki`。
+  - **水生/飞虫与甲壳/软体生物**：帝王蜻蜓 `dragonfly-emperor`、红蜻蜓 `dragonfly-darter`（配 `dragonfly-wings.webp` / `damselfly-wings.webp` 四翼透明翅脉）、水黾 `water-strider`、豉甲 `whirligig-beetle`、岸蟹 `shore-crab`、寄居蟹 `hermit-crab`、信号小龙虾 `crayfish-signal`、池塘蜗牛 `pond-snail`。
+- **骨骼/顶点动画加载器与多物种 AI 状态机**：
+  - [simpond-assets.ts](../../src/home/simpond-assets.ts)：`GLTFLoader` 异步流式缓存 + `SkeletonUtils.clone` 独立骨骼实例与 `AnimationMixer` 淡入淡出切换；为鱼类与甲壳类注入 GPU 顶点着色器波浪摆尾/足部划动变形；为 Fish Kit 鱼鳍修正 `alphaTest` 深度排序，为蜻蜓装配四翼透明翅脉扑动。
+  - [simpond-ai.ts](../../src/home/simpond-ai.ts)：实现 5 套可单测 AI 有限状态机——两栖类水陆切换（受惊抛物线跃水→游泳→漂浮/求偶回岸）、鱼群 Boids 集群+水面觅食+遇敌冲刺逃逸（`flee_dart` 加速摆尾）、水黾/豉甲脉冲滑行与受惊散开、蜻蜓巡航/悬停/突刺/停栖、岸蟹横行/寄居蟹缩壳僵直/龙虾退水，并封装 `SimPondEcosystem` 接入镜湖、河道与东/南海岸沙滩。
+- **全生态无缝融合**：升级 [water-fish.ts](../../src/home/water-fish.ts)（镜湖/河道/扩建荷塘接入锦鲤/河鱼 GLB + Boids 逃逸 FSM，100% 兼容既有图鉴与单测）、[ocean-life.ts](../../src/home/ocean-life.ts)（潜水礁区接入 CC0 Fish Kit GLB 与近距加速逃逸）、[critter-field.ts](../../src/zones/critter-field.ts)（青蛙与蜻蜓接入骨骼/翅脉模型）及 [game.ts](../../src/game/game.ts) 主循环挂载。
+- **验证与证据**：新增 [simpond-ecology.test.ts](../../tests/simpond-ecology.test.ts)，`npm run check`、`npm run build` 与全量 `npm test` 全部通过；无头 Chrome 实机确认 0 报错、60 个 SimPond 模型实例（含 13 个骨骼蒙皮网格、23 种生物节点）正常加载与动画播放，留存截图至 `qa/evidence/simpond-*.jpg`。
+
+## 2026-11-27（夜）· 凝露港七项体验精修与碰撞/性能治理
+
+- **1. 去除冗余开始界面，进门/回港直接开玩**：[game.ts](../../src/game/game.ts) 启动及 `?from=` 回港直接进入可操控状态，单目标时光门跳过二次确认卡片；全部 20+ 关卡运行时（`explore`、`runner`、`lander`、`flyby`、`landmark`、`almanac`、`solstice`、`folio`、`ability`、`chronicle`、`atlas`、`mode-world`、`jan01-chapter`、`season-skirmish`、`january-skirmish`、`january-rpg`、`mode-match`、`battle-preview`、`january-defense`、`defense`）均在 `onReady` 后直接进入 `play`。
+- **2. 禁用浏览器右键菜单 + 家园右键向前冲刺**：[character.ts](../../src/slime/character.ts) 全局拦截游戏区 `contextmenu`，在家园模式（`homeDash: true`）将右键改为 `17.5 m/s × 0.18 s` 短距离向前突进，采用 `<= 0.06 m` 细步长射线检测 + `moveCapsule` + `support` 贴地防穿模防掉地下；同步更新 [game-ui.ts](../../src/ui/game-ui.ts) 与 [guide-catalog.ts](../../src/ui/guide-catalog.ts) 按键说明。
+- **3. Niagara 风格精细粒子技能与斩击特效**：重写 [skill-vfx.ts](../../src/slime/skill-vfx.ts)（2,600 粒子统一 HDR 加法 GPU 粒子系统、5 种程序化粒子贴片、旋涡/引力场与寿命色带渐变、细刃冲击波/旋转法阵/薄膜干涉泡罩/多分支折线闪电/螺旋火柱/冲刺尾迹）并升级 [slash-vfx.ts](../../src/slime/slash-vfx.ts)（360 粒子精细星芒火星替换粗糙八面体碎块）。
+- **4. 解决月洞墙卡顿 + 零分配流体表面优化 + 树木不可攀爬 + 建筑屋顶防悬空**：
+  - [surface.ts](../../src/slime/surface.ts) 复用 `blurred`/`vals` 类型数组，彻底消除 Marching Cubes 主循环每帧数万次临时数组分配，并在细边缘垂挂时自适应网格密度避免顶点溢出递归重建；[world.ts](../../src/slime/world.ts) 预计算 `CachedBox` 零分配 OBB 查询；[jiangnan.ts](../../src/home/jiangnan.ts) 将 3 面月洞粉墙合并为单 OBB（实测 Chrome WebGL 墙顶解算 `simAvgMs = 6.16 ms`、`meshAvgMs = 1.83 ms`）。
+  - [types.ts](../../src/slime/types.ts)、[height-field.ts](../../src/slime/height-field.ts)、[world.ts](../../src/slime/world.ts)、[bake.ts](../../src/world/bake.ts)、[build-catalog.ts](../../src/home/build-catalog.ts)：新增 `Box.climbable` 与 `HeightField.noCling` 掩码，所有树木保持实心阻挡但不可贴墙攀爬，建筑全部保留可攀爬。
+  - [prop-structures.ts](../../src/world/linqi/prop-structures.ts)、[builder.ts](../../src/home/builder.ts)、[farm.ts](../../src/zones/farm.ts)、[lake.ts](../../src/zones/lake.ts)：按 GLB 三角网格逐层截面标定全部坡屋顶/攒尖顶建筑为轻量 2 层阶梯碰撞（`build-thatch`、`pack-pavilion`、`build-teahall`、`build-huizhou`、`pack-greenhouse`、`watermill`、`pack-windmill`、`build-red-pagoda`、`waterside-stilt-house`、`pasture-shelter`、`build-covered-bridge`、`build-lighthouse`、`farm-barn`、`lake-pavilion`），去除 `builder.ts` 重复错比例凉亭盒，消除屋檐悬空。
+- **5. 场景生物高精度建模**：重构 [critter-field.ts](../../src/zones/critter-field.ts) 全 10 种生物，补齐翅脉蝴蝶、七星鞘翅瓢虫、四翼蜻蜓、池蛙、绒兔、松鼠、刺猬、独角仙、萤火虫与猫头鹰的程序化纹理与多段关节模型。
+- **6. 修复镜湖木桶等单面透视模型**：[lake.ts](../../src/zones/lake.ts) 木桶改为 20 段厚壁闭合 `LatheGeometry`；[plaza-life.ts](../../src/zones/plaza-life.ts) 铁锅与招牌改为厚壁/双面实体；[park.ts](../../src/zones/park.ts) 与 [forest.ts](../../src/zones/forest.ts) 蘑菇伞盖改为闭合厚底；[ocean-life.ts](../../src/home/ocean-life.ts) 水母钟罩补齐双面材质。
+- **7. 梯田麦田可交互 GPU 倒伏与防穿模**：[farm.ts](../../src/zones/farm.ts) 将静态烘焙麦秆升级为 3 秆弯茎+麦叶+6 面金穗 `InstancedMesh`，接入 `uTime`/`uWind`/`uSlimePos` 实现随风麦浪与史莱姆拨开倒伏交互。
+- **验证与证据**：`npm run check`、`npm test`（**1,791 / 1,791 PASS**，含新增 [home-experience-fixes.test.ts](../../tests/home-experience-fixes.test.ts)）、`npm run build` 全通过；无头 Chrome（0 报错）验证并留存多机位截图至 `qa/evidence/home-exp-*.jpg`。下一步待用户本机试玩确认画面、手感与特效观感。
+
+## 12 月 12 日至 16 日 · 六门已逐日登记
+
+三十关均完成三维主场、中段操作、可触发结尾和 F1。复测了每门的正式、练习及 40 个种子；纪念庭用手机画幅从护烛一直点按到纸鹤入水，领取原收藏并确认不计时。港口与史书均已核对原门位回港。本轮最终类型、内容、目录、构建检查及 1,792 项全量测试通过。后续日期从 12 月 17 日开始，实体设备上的画面与手感待玩家确认。[五日制作页](../days/1212-1216-six.md) · [台账](../six-gate-polish.md) · [验收记录](../../tasks/reports/1212-1216-six.md)
+
+## 12 月 7 日至 11 日 · F1 与三十关
+
+五天六门已逐日登记，30 关正式与练习、40 种子、60 次实体门或史书进出均已核对。台账内 16 天、98 个可玩页面均已用键盘和触屏打开帮助。下一项为实体设备试玩。共享工作区的全量测试另有家园月洞墙性能用例未达 25 毫秒，家园任务负责底层修复，本卡保留集成复测。[台账](../six-gate-polish.md) · [实机记录](../../tasks/reports/1207-1211-help.md)
+
+## 12 月 2 日至 6 日 · 六门逐日验收
+
+五天共 30 关已走通正式与练习模式。每关保存五个机位或阶段的截图，并按日核对从港口进门及返回的位置。六号门铝冠收尾改为向上取景，三号门和四号门的铁路双洞保留穿行与接缝回归。当前待玩家在实体设备确认画面与手感。[六门台账](../six-gate-polish.md) · [逐日记录](../../tasks/reports/1202-1206-six.md)
+
+## 11 月 27 日至 12 月 1 日 · 每日六门精修
+
+1 月 1 日及 11 月 27 日至 12 月 1 日共六天，在[六门优化台账](../six-gate-polish.md)均为 6/6。新五天的二至六号门各有可操作的三维主场、中段选择和原收尾；五个日期分别完成后台逐门验收。旧存档、原门位回港和正式／练习分账已复测。下一项是玩家在实体设备上确认画面与手感。[制作页](../days/1127-1201-worlds.md) · [逐日实机报告](../../tasks/reports/season-main-stages.md)
+
+## 2026-11-27（晚）· 凝露港四项核心体验升级（精确 OBB 碰撞 / 海浪浮力摇晃 / 无船自由下潜 / UE 风格 HDR 传送门 VFX）
+
+- **1. 家园建筑与立方体精确 3D/OBB 碰撞修复**：
+  - [types.ts](../../src/slime/types.ts)、[world.ts](../../src/slime/world.ts)、[height-field.ts](../../src/slime/height-field.ts)、[bake.ts](../../src/world/bake.ts)：`Box` 原生支持 `yaw` 旋转 OBB（`support`、`projectPoint`、`moveCapsule`、`cast`、`wallHit` 全面支持局部 6 面碰撞）；`HeightField.pushOut` 消除 `0.38–0.45m` 顶部死区并将逃逸搜索半径由 `0.2m` 扩至 `0.5m`；新增 `userData.skipHeightBake` 防止 2.5D 高度场烘焙破坏空心/架空 3D OBB 结构。
+  - [prop-structures.ts](../../src/world/linqi/prop-structures.ts)、[build-catalog.ts](../../src/home/build-catalog.ts)、[jiangnan.ts](../../src/home/jiangnan.ts)、[layout.ts](../../src/home/layout.ts)、[portals.ts](../../src/home/portals.ts)、[props.ts](../../src/home/props.ts)、[home-world.ts](../../src/world/home-world.ts) 及 [src/zones/](../../src/zones/)：实测全部 DreamWorld GLB 顶点包络并补齐所有实心建筑与 16 处程序化 POI 的精确多段结构碰撞，修复未列建筑 `0.36` 缩箱与 `0.88` 矮箱问题；为 3 面月洞粉墙（含可通行圆洞与 `y = 1.98` 压顶）、4 座石花坛、临水凉亭、6 扇时光门、史书台及各分区架空/遮檐建筑补齐精确 3D OBB 碰撞。
+- **2. 史莱姆与海舟同步海浪起伏摇晃**：
+  - [fft-ocean.ts](../../src/home/render/fft-ocean.ts)、[character.ts](../../src/slime/character.ts)、[solver.ts](../../src/slime/solver.ts)、[render.ts](../../src/slime/render.ts)、[pipeline.ts](../../src/home/render/pipeline.ts)、[postprocess.ts](../../src/home/render/postprocess.ts)：新增 CPU–GPU 共用 6 分量方向性 Gerstner 涌浪（含海岸 SDF 近岸衰减），史莱姆在开放海域通过平滑阻尼浮力弹簧紧跟浪峰/浪谷起伏、随浪坡产生微弱漂移，并在 PBF 求解器内按海面法线倾斜粒子晶格且跳过 `SEA_LEVEL - 0.14` 固定平面锁死；海舟改为 3 点波面采样同步纵倾横摇；水下后处理同步相机处实时动态浪高 `uSeaLevel`。同时修复 [pipeline.ts](../../src/home/render/pipeline.ts) 动态分辨率换档时 WebGL2 不可变 `DepthTexture` 未重建导致的 `GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS (1286)` 黑屏问题。
+- **3. 无船自由上浮/下潜与 3D 游泳**：
+  - [ocean-adventure.ts](../../src/home/ocean-adventure.ts)、[character.ts](../../src/slime/character.ts)、[game.ts](../../src/game/game.ts)：水深 `>= 0.85m` 时不召唤海舟也可直接按 `C` 潜入水下，松手自然中性悬停，`空格` 上浮、`C/Shift` 下潜，上浮至实时浪面自动无缝切回随浪漂浮（含 `0.28s` 防误跳锁）；水下与海面状态均禁用 `C` 摊开与空中化伞，HUD 提示与深度/海洋生物计数同步更新。
+- **4. UE 风格多层 HDR 时光门 VFX 升级**：
+  - 新增 [portal-vfx.ts](../../src/home/portal-vfx.ts) 并升级 [portals.ts](../../src/home/portals.ts)：3 层切线空间视差深空星云与双旋涡裂隙、沿精确石拱 SDF 展开的高对比 HDR 事件视界光边（接入真实 `HomePostProcess` 彩色 RGB Bloom 且限制夜曝过白）、外缘细微引力透镜折射、3D 拱内流光丝带（防 `pow` 负数 `NaN` 黑点）、台基星盘符文光池、全 6 门单次合批 264 粒子 GPU 粒子场，以及拱顶棱晶宝石、铜饰环、暖光屋檐灯笼与旋转金环模式徽章，零共面 Z-fighting。
+- **验证与多机位视觉证据**：
+  - 新增 [home-collision-ocean-portal.test.ts](../../tests/home-collision-ocean-portal.test.ts)，`npm run check`、`npm run build` 与全量 `npm test`（**1,561/1,561 PASS**）均通过；
+  - 后台独立无头 Chrome（1280×720 High，0 控制台报错，动态分辨率 `1280→1152` 换档 `glErr: 0`）验证流体史莱姆（6,948 顶点）、月洞墙压顶（`y = 1.98`）常规与贴壁斜看双角度、开放海面随浪起伏、无船按 `C` 下潜至珊瑚中层（`-5.45m`）与 `空格` 自动浮出水面，以及正午/近景悬停/黄昏六门实景，留存 7 张证据至 `qa/evidence/home-upgrade-*.jpg`。
+- **下一步**：待用户本机试玩确认建筑碰撞贴合度、海面摇晃与无船下潜手感、以及六扇时光门昼夜观感（预览命令：`npm run build; node scripts/serve.mjs --port=5180`）。
+
+## 2026-11-27 · 1 月 1 日六门手工关卡
+
+- 原入口已接入两章专用玩法和四门专属机关。六关任务卡以 `tasks/cards/jan01-` 为前缀，事实、演绎范围和试玩地址见[1 月 1 日设计页](../days/0101.md)。
+- 本机生产预览在 [5190 端口](http://127.0.0.1:5190/?date=0101)。独立无头验收覆盖正式与练习记录、两条折页和放飞路线、两翼射门、旧收藏、首胜及回港位置。[验收报告](../../tasks/reports/jan01-worlds.md) · [实机总览](../../qa/evidence/jan01-six-worlds.jpg)
+- 待玩家确认画面与手感。先看印匣试纸的缺角提示与揭纸停留，再看花车迁塔的时机、竖屏落币的可读性和门将的重心变化。
+
+## 2026-11-27（下午）· 凝露港水体与渲染重整（任务卡 [home-water-render](../../tasks/cards/home-water-render.md)）
+
+- **帧图重写**（[pipeline.ts](../../src/home/render/pipeline.ts)）：每帧全场景绘制从约 13 次降到 3 次，分别是云全景分帧切片、一张共享平面反射（斜裁近平面，`REFLECT_MASK` 只画 1、4 层）和主 HDR MSAA 通道。不透明颜色与深度在第一块水体的 `onBeforeRender` 内拷贝；GTAO 改从深度重建法线；PMREM 复用并限频；着色器预热；静态合批；动态分辨率（EMA 0.035）。新增逐帧细节剔除：屏幕上小于 2.5 px 的物体隐藏，回到 3.2 px 再显示。镜像通道跳过整体位于水面下的物体、仅在 1 层的细小实例和镜像分辨率下小于 3.5 px 的物体。[graphics.ts](../../src/game/graphics.ts) 的反射档位已接回新通道。
+- **史莱姆倒影修复**：镜像相机只开反射层，史莱姆所在的默认 0 层原先一像素都不画。现在调用 `reflectActor` 前临时开全部层。镜像目标是线性 HDR，史莱姆按显示范围着色，所以经 `actorRT` 做 Reinhard 往返：先映射到显示范围画史莱姆，再写回线性。已在镜像目标中逐像素确认：游泳时露出水面的部分会画出来，水下部分被裁掉。
+- **统一水体**（[water-surface.ts](../../src/home/render/water-surface.ts)、[lake-water.ts](../../src/zones/lake-water.ts)、[fft-ocean.ts](../../src/home/render/fft-ocean.ts)）：海、湖、河、塘、水洼共用一套 `WaterShared` 着色，含深度色带、泡沫、闪烁和平面反射，平面反射缺失时回落屏幕空间反射，再回落天空。水洼改为噪声积水，边缘解析淡出，`uWet` 随天气湿度缓变，干燥时只剩湿石，不再是蓝色圆片。海岸接触泡沫改为 fbm 团块；焦散改用双采样旋转并加 mip 偏置，去掉了浅礁上的龟甲网纹。
+- **海岸、湖岸与草地**（[island-coast.ts](../../src/world/island-coast.ts)、[terrain-mesh.ts](../../src/world/terrain-mesh.ts)、[grass-ism.ts](../../src/home/foliage/grass-ism.ts)）：去掉静态正弦焦散（网格感的来源）；沙滩加随时间进退的冲刷湿线，湖岸加拍岸湿带。草色降饱和、降荧光。草按距离分层：用 `aRank` 属性加分块 `mesh.count`，14–62 m 内密度降到 30%，超过 104 m 整块不画；草三角形从 4.3M 降到 1.8M。
+- **调色**（[calibrated-params.ts](../../src/home/render/calibrated-params.ts)、[postprocess.ts](../../src/home/render/postprocess.ts)）：天空散射重新校准，GTAO 0.5，饱和度 1.08，起雾距离 42 m 改为 180 m，朝“清透绘本海岛”收敛。
+- **性能（4K High，无头 RTX 4090）**：基线船上海面 p50 52 ms、p99 133 ms。空闲复测 `qa/evidence/home-perf-after.json` 为 14.4 / 18.2 ms（有一帧 34 ms）。同日再复测 `qa/evidence/home-perf-retest.json`：船上海面 p50 13.9、p99 17.4、最大 19.6、0 次超过 33 ms；出生广场 8.2 / 12、湖边 6.4 / 10、东岸 4.7 / 8.5、飞越 8.2 / 12.1；五处都是 3/3 全场景绘制，零报错。船上海面 p99 仍略高于 16.7 ms。1080p 低档、中档和手机视口的同轮结果在 `home-perf-1080p-low.json`、`home-perf-1080p-medium.json`、`home-perf-phone-low.json`。
+- **验证**：`npm run check`、`npm test`（1549/1549，含新增 [home-water-render.test.ts](../../tests/home-water-render.test.ts)）、`npm run build` 通过。截图在 `qa/evidence/home-water-after-*`（干燥）、`home-water-wet-puddles-*`（湿水洼）、`home-water-after-slime-mirror-*`（湖中史莱姆），每处都有常规与贴地斜看两个角度。截图与性能脚本为 [qa-home-water.py](../../scripts/qa-home-water.py) 和 [qa-home-perf.py](../../scripts/qa-home-perf.py)。
+- **卡点与注意**：
+  - 船上海面受 CPU 和 draw call 限制（主通道约 1033 次、镜像约 390 次），p99 18.2 ms 略超 16.7 ms 目标，30 秒里有一帧 34 ms。下一步可以合批海舟与海洋生物，或把镜像改为隔帧更新。
+  - 动态分辨率换档时会重建渲染目标，产生约 35 ms 的卡顿；目前只用慢 EMA 缓解，彻底解决要改成固定大小目标加视口。
+  - 无头 GPU 有快慢两种状态，绝对值相差约 2 倍；机器上有其他程序占用 4090 时，测量也会大幅波动（傍晚复测时旧版与新版同样出现 p99 40–100 ms）。只看同一轮内的 A/B 对比。
+  - `jiangnan.ts` 往着色器注入 `#include <tonemapping_fragment>`，现在已不起作用；该文件不在本卡范围内，未改。
+- **下一步**：等用户本机试玩，确认水色、浪花、水洼和草色的观感，以及 4K 下是否还有掉帧。
+
+## 2026-11-27 · 凝露港家园体验与渲染精修（时光门/雾效/海岸入海/海底后处理与海洋生物/海舟垂钓下潜/蘑菇跳床/建筑与风车地形）
+
+- **1. 时光门防闪烁、移除顶部浮牌、下调交互提示高度 + 轻量风格化雾效**：
+  - [pipeline.ts](../../src/home/render/pipeline.ts)：在半分辨率 GTAO 法线通道中自动剔除 `Sprite`、透明/无深度写入材质与 `alphaTest` 植被片，根治时光碎片深色方形黑框、时光门 GTAO 闪烁与远景树叶发脏问题；渲染前钳制 `camera.near >= 0.14` 恢复 3.5× 深度缓冲精度。
+  - [portals.ts](../../src/home/portals.ts)：消除拱心石与横梁（`z = ±0.25`）及柱础/台座间的共面重叠，去除门面 8 Hz 噪点，并移除 6 扇门顶部受雾遮挡的 3D 浮牌。
+  - [game.ts](../../src/game/game.ts)：将时光门接近时的 `[F]` 提示锚点从 `3.05m` 下调至 `1.25m`（史书台 `1.45m`、一般交互点 `+0.95m`），贴合低矮史莱姆自然视线。
+  - [postprocess.ts](../../src/home/render/postprocess.ts)、[garden-stage.ts](../../src/home/garden-stage.ts)、[calibrated-params.ts](../../src/home/render/calibrated-params.ts)：新增 `42m` 起雾距离与陆地远树雾上限，显著减轻晴/雨/雾天雾效与 GTAO 脏感，保持清新明快的风格化通透画面。
+- **2. 平滑海岸斜坡入海、海底碰撞、水上水下后处理、预设海洋生物与深海海舟（垂钓 + 按深度下潜）**：
+  - [island-coast.ts](../../src/world/island-coast.ts)、[terrain-mesh.ts](../../src/world/terrain-mesh.ts)、[home-world.ts](../../src/world/home-world.ts)、[expansion.ts](../../src/world/expansion.ts)：统一内陆与海岸边界草色、微纹理及解析连续法线，消除硬直海岸接缝；构建平滑 C1 入海斜坡与 4 条外围海岸/海底碰撞带（`buildCoastalCollisionSurfaces`）及外海浮力域（`buildOceanFluidVolumes`），扩充可行走/下潜边界至 `±72m`、`y ∈ [-24, 65]`，走入深海不掉出不重置。
+  - [postprocess.ts](../../src/home/render/postprocess.ts) & [fft-ocean.ts](../../src/home/render/fft-ocean.ts)：新增水下 HDR 后处理（光谱吸收、动态海底焦散、水下丁达尔光束、微浮游光点与水波折射）以及双面海面水下斯涅尔之窗（Snell's Window）与全内反射。
+  - 新增 [ocean-life.ts](../../src/home/ocean-life.ts) 与 [ocean-adventure.ts](../../src/home/ocean-adventure.ts)（样式见 [ui.css](../../src/ui/ui.css)）：在近海礁台预设海带、珊瑚与 28 只常驻海洋生物（小丑鱼、蓝倒吊、绿海龟、海月水母、蝠鲼、深海灯笼鱼）；游至深海弹出召唤海舟提示，登船后支持 `WASD` 划行、`F` 星露谷式海上垂钓、`C` 潜入海底（`空格` 上浮 / `C`/`Shift` 下潜），下潜时根据距水面实时深度在史莱姆周围程序化生成阳光浅海/珊瑚中层/幽蓝深海对应海洋生物。
+- **3. 蘑菇跳床 5 倍冲天弹跳 + 修复“拆开”建筑与压平风车底座山丘**：
+  - [park.ts](../../src/zones/park.ts)：蘑菇弹跳竖直初速由 `9.5` 提升至 `23.5 m/s`（约 5.5× 腾空高度）并放宽触发窗口与挤压弹性动画；为风车前平台补齐落地石砌台基。
+  - [map.ts](../../src/world/map.ts)：将风车公园 `(20, 64)` 尖顶土丘改为 `r ≤ 4.6m` 水平平顶台地，使风车与前甲板严丝合缝坐落在平地上。
+  - [model-pack.ts](../../src/home/model-pack.ts) & [garden-regions.ts](../../src/home/garden-regions.ts)：修补 `build-teahall` 墙顶与屋檐间 `0.21m` 镂空缝及 `pack-pavilion` 檐口接缝，并为全部实体建筑 GLB 自动补齐内缩石砌落地基础裙边防止斜坡悬空；微调风车旁茶舍坐标避让石阶。
+- **4. 原神/鸣潮式明亮通透风格化渲染升级**：
+  - [postprocess.ts](../../src/home/render/postprocess.ts)：替换为保留明快蓝天与翠绿饱和度的风格化 Filmic 色调映射曲线，新增软阈值 RGB HDR Bloom（太阳/云缘/水光/碎片光晕）、暖阳冷影色温分离、智能鲜明度（Vibrance）与微对比清晰度；调整自动曝光测光权重避免亮天空拉暗地面。
+  - [atmosphere.ts](../../src/home/render/atmosphere.ts)、[clouds.ts](../../src/home/render/clouds.ts)、[pipeline.ts](../../src/home/render/pipeline.ts)、[calibrated-params.ts](../../src/home/render/calibrated-params.ts)：提升天蓝冷色半球补光（`hemiIntensity: 0.64`）、海面天光反弹与 IBL 环境反射，调清天顶蔚蓝渐变并提亮体积云白度对比。
+  - [terrain-mesh.ts](../../src/world/terrain-mesh.ts)、[grass-ism.ts](../../src/home/foliage/grass-ism.ts)、[climate-material.ts](../../src/home/climate-material.ts)、[park.ts](../../src/zones/park.ts)、[bamboo-ism.ts](../../src/home/foliage/bamboo-ism.ts)、[pbr-materials.ts](../../src/home/render/pbr-materials.ts)：将草坪、草叶、树冠与竹林从偏灰橄榄色升级为明快清透的阳光翠绿/暖金高光，抬高草根 AO 避免暗沉。
+- **5. 参考 `crazytoolsteam/ThreeJSAI` 开源案例的草地、三层地形、海岸过渡、实时倒影与垂钓精修**：
+  - **调研核实**：`@zavrenn` 的 `Stillwater`（`stillwater.zavrenn.chatgpt.site` 返回 401）与 `Pine & Parcel` 未公开源码；重点拆解了 `ThreeJSAI/showcases` 中直接相关的开源项目 **`dedekpo/stylized-scene`**（WebGPU/TSL 三层 UE 风格路肩过渡、不翻转天空法线草、草地冠层 AO）与 **`Humpalumps/Ultra-Water`**（mipmap 平面反射、沙滩波纹法线、3D 岩壁噪声）。
+  - **修复出生点广场异常融合**（[jiangnan.ts](../../src/home/jiangnan.ts)、[terrain-mesh.ts](../../src/world/terrain-mesh.ts)）：根治 `buildQuay` 着色注入顺序早于地形贴图叠加导致的“方形广场被染绿 + X 形石板路穿插”问题；广场改为在 `// __TERRAIN_SPLAT_END__` 后独立绘制暖色灰岩条石，并清零半径 `9.55m` 内的交叉道路权重。
+  - **三层 UE 风格 PBR 地形与 3D 法线倒角**（[terrain-splat.ts](../../src/home/render/terrain-splat.ts)、[terrain-mesh.ts](../../src/world/terrain-mesh.ts)）：所有道路采用「草地+冠层 AO → 踩踏暖土/苔藓路肩 → 高度混合 Voronoi 石板+缝隙 AO」三层过渡，接入 `uTurfNorm` / `uFlagNorm` / `uSandNorm` 世界空间法线扰动。
+  - **风格化草地重构**（[grass-ism.ts](../../src/home/foliage/grass-ism.ts)）：9 叶弧形草簇、`normal` 与 `nonPerturbedNormal` 同步定向朝上（彻底消除双面黑草）、根部精确采样内陆地形顶点色并叠加冠层 AO、行进风浪高光与视角防锯齿增宽；野花改用正面朝上花瓣避免黑面。
+  - **海岸零接缝 + 实时海面角色倒影 + 垂钓细节**（[island-coast.ts](../../src/world/island-coast.ts)、[harbor.ts](../../src/zones/harbor.ts)、[pipeline.ts](../../src/home/render/pipeline.ts)、[fft-ocean.ts](../../src/home/render/fft-ocean.ts)、[ocean-life.ts](../../src/home/ocean-life.ts)、[fishing-spot.ts](../../src/zones/fishing-spot.ts)、[ocean-adventure.ts](../../src/home/ocean-adventure.ts)）：使用逐顶点 `aCoastSand` 保证 `x=31` 边界与内陆着色逐位一致，叠加沙滩波纹法线、620 枚圆润鹅卵石、240 株香蒲芦苇与自然越界草皮，并限制海带高度防止穿出水面；新增半分辨率 mipmap 实时平面反射通道（含 `reflectActor` 映射流体史莱姆、海舟与岛屿）；码头与海舟垂钓补齐 3D 竹竿与浮漂双环涟漪。
+- **验证与证据**：`npm run check`、`npm test`（**全量通过**）、`npm run build` 全通过；后台独立无头 Chrome 0 报错验证并留存 `qa/evidence/home-stylized-upgrade.jpg`、`qa/evidence/home-ocean-reflection-shore.jpg`、`qa/evidence/home-bright-stylized.jpg`、`qa/evidence/home-polish-*.jpg`。下一步待用户本机试玩确认画面、手感与是否借助本地 Blender/MCP 替换核心地标与码头资产。
+
+## 2026-11-26 · 凝露港升级为“无限海域岛屿”（AAA 物理渲染管线 / 双级联 GPU FFT 海洋 / ISM 植被 / OKLCH 数学校准）
+
+- **Phase 1（家园独立物理渲染底座，零侵入 `src/slime/`、`src/game/game.ts`、`src/level/stage.ts`）**：新增 [params.ts](../../src/home/render/params.ts)、[calibrated-params.ts](../../src/home/render/calibrated-params.ts)、[atmosphere.ts](../../src/home/render/atmosphere.ts)（Hillaire 2020 Transmittance / Multi-Scattering / Sky-View LUT）、[ibl.ts](../../src/home/render/ibl.ts)（实时天空 PMREM IBL + 海面/地表反弹 GI）、[pbr-materials.ts](../../src/home/render/pbr-materials.ts) 与 [pipeline.ts](../../src/home/render/pipeline.ts)，接入 [garden-stage.ts](../../src/home/garden-stage.ts) 与 [climate-material.ts](../../src/home/climate-material.ts) 雨雪粗糙度联动；`resolvedTarget` 以线性显示空间输出给 `SlimeCharacter.render()`，流体史莱姆零改动完美适配。
+- **Phase 2（动态海岸 SDF + 双级联 GPU Stockham FFT 无限海洋）**：新增 [island-coast.ts](../../src/world/island-coast.ts)（动态 `256×256` 岛屿 SDF 与海底深度场 + 分层灰白岩崖/南港东湾沙滩/水下礁石群，随 `FrontierRenderer.sync()` 无限扩建实时外扩，零共面 Z-fighting）与 [fft-ocean.ts](../../src/home/render/fft-ocean.ts)（WebGL2 Ping-Pong Stockham Radix-2 IFFT 双级联 `180m / 31m` JONSWAP 频谱 + 径向 `2800m` CDLOD 网格 + Beer-Lambert 透底碧蓝吸收 + 浪峰 SSS + 贴岸碎浪与日光闪烁路径）；移除旧版硬直 `inland-skirt` 与 2D 远山环；修复 [lake-water.ts](../../src/zones/lake-water.ts) 镜湖倒影隐藏外海网格与切机位即时刷新。
+- **Phase 3（AAA 级 ISM 植被系统）**：新增 [foliage-atlas.ts](../../src/home/foliage/foliage-atlas.ts)（`1024×1024` 四象限防黑边 Alpha 植被图集）、[grass-ism.ts](../../src/home/foliage/grass-ism.ts)（`24m×24m` 视锥剔除分块弧形 7 叶草簇 ISM，含行进风浪、史莱姆踩压弯折、距离淡出与逆光金边 SSS）、[tree-ism.ts](../../src/home/foliage/tree-ism.ts)（球面转移软法线 26 跨片阔叶冠与分层松针羽枝 ISM，100% 兼容 `tests/home-waterside.test.ts` 射线单测）与 [bamboo-ism.ts](../../src/home/foliage/bamboo-ism.ts)（常绿海岸竹林与崖缘蕨类 ISM），替换 [kit.ts](../../src/zones/kit.ts)、[forest.ts](../../src/zones/forest.ts) 并为 [harbor.ts](../../src/zones/harbor.ts) 补齐草坡与竹林。
+- **Phase 4（体积云与电影级 HDR 后处理）**：新增 [clouds.ts](../../src/home/render/clouds.ts)（半分辨率 20 步 Beer-Powder + 双瓣 HG 光线步进体积云）、[gtao.ts](../../src/home/render/gtao.ts)（Jimenez 2016 半分辨率 GTAO + 深度双边降噪）、[postprocess.ts](../../src/home/render/postprocess.ts)（Multi-Bounce AO + 高度指数体积雾/大气透视/太阳散射 + GPU Log-Luminance 自动曝光 + UE Local Exposure 局部色调映射 + AgX Filmic）；扩展 [graphics.ts](../../src/game/graphics.ts) 四档画质分级，并支持 `?tune=1` 实时物理调参浮层。
+- **Phase 5（Steps 4–8 数学驱动 OKLCH 最小二乘校准闭环）**：新增 [oklch.ts](../../src/home/render/oklch.ts)、[targets.json](../../qa/calibration/targets.json) 与 [calibrate-home.py](../../scripts/calibrate-home.py)，实机跑通 2 轮完整雅可比 Levenberg-Marquardt 拟合（`RMSE_OKLCH: 0.2024 → 0.1880`），参数自动写回 `calibrated-params.ts`，并支持日后向 `qa/references/` 放入自定义参考帧一键重拟合。
+- **验证与证据**：`npm run check`、`npm test`（**1,542 / 1,542 PASS**，含新增 [home-ocean-pipeline.test.ts](../../tests/home-ocean-pipeline.test.ts) SDF/Stockham IFFT/ISM 几何/OKLCH 与 LM 求解器单测）、`npm run build`、`npm run catalog:check` 全通过；后台独立无头 Chrome（RTX 4090，1280×720 High 档，0 报错）测得均值 **12.77 ms/帧（~78 FPS）**，流体史莱姆网格正常生成（6,972 顶点）且动态扩建海岸重算通过。多机位与校准证据已存至 `qa/evidence/home-ocean-overview.jpg`、`qa/evidence/home-ocean-calibration.jpg`、`qa/evidence/home-ocean-expanded-coast.jpg`。下一步待用户本机试玩确认画面、海浪节奏与手感（可运行 `npm run build && node scripts/serve.mjs --port=5180` 打开 `http://127.0.0.1:5180/` 或加 `?tune=1` 实时微调）。
+
+## 2026-11-25 · 家园长线玩法重构（活的 POI 加工链 / 绘本轻体素建造 / 稀兽遭遇与牧场 / 星露谷进阶垂钓 / 时光博物苑）
+
+- **Phase 1（活的 POI、手工加工链与时光博物苑）**：新增 [artisan.ts](../../src/life/artisan.ts)、[museum.ts](../../src/life/museum.ts)、[poi-visuals.ts](../../src/home/poi-visuals.ts)，扩充 [catalog.ts](../../src/life/catalog.ts)、[cooking.ts](../../src/life/cooking.ts) 与 [build-catalog.ts](../../src/home/build-catalog.ts)。水磨坊、炒茶坊、酿造桶、窑烤面包房、蜂箱（周边 9m 花卉定蜜种）、腌渍缸、织布机支持 20 套 2.5–4× 价值手工加工与元素挥砍/按 F 主动加速出金标；新增露天温泉、观星授时台、乘风热气球台、传送风铃柱、时光博物苑展台；食谱扩至 24 道并接入 15 分钟生活 Buff；新增「凝露港·时光博物苑」6 大展厅捐献与永久港湾增益。
+- **Phase 2（绘本风轻体素 / 榫卯积木建造）**：新增 [voxel-catalog.ts](../../src/home/voxel-catalog.ts)（24 款江南绘本与历史主题积木、8 色染色、3 套内置蓝图）、[voxel-mesher.ts](../../src/home/voxel-mesher.ts)（Chunk 面剔除 + 2D Greedy Meshing 零共面 Z-fighting + 3D AABB 碰撞盒自动合并 + 闭合木栅栏牧场自动识别）与 [voxel-engine.ts](../../src/home/voxel-engine.ts)（贴面叠高、Shift 直线拉墙、Alt 吸管、撤销重做、自定义蓝图保存与四季雨雪着色），挂载至 `V` 键「🧱积木」工坊，零改动 `src/slime/`。
+- **Phase 3（稀有动物生态遭遇与牧场养殖）**：新增 [ranch.ts](../../src/life/ranch.ts) 与 [ranch-runtime.ts](../../src/home/ranch-runtime.ts)，按季节/天气/时段/历史日生成野外发光稀兽遭遇，支持按 C 潜行/元素共鸣/投喂驯服解锁收养；牧场容量结合牧舍/鹿苑与玩家自建体素围栏牧场自动叠加，支持每日轻抚喂食、亲密度成长、每日产奶/蛋/绒/松露/温泉露及宠物跟随散步；[critter-field.ts](../../src/zones/critter-field.ts) 野外小动物升级为多部件绘本造型。
+- **Phase 4（星露谷进阶垂钓、生态鱼塘与每日史事联动）**：升级 [fishing.ts](../../src/life/fishing.ts) 与 [fishing-spot.ts](../../src/zones/fishing-spot.ts) 至 4 大水域、28 种鱼类（含 4 条四季鱼王）、3 阶钓竿、4 种鱼饵、5 种鱼类游动 AI 动态追鱼滑块与水中打捞宝箱（100% 兼容原有经典张力单测）；新增 [fishpond.ts](../../src/life/fishpond.ts)（活鱼繁育、心愿扩容、鱼籽与河珠产出）与 [daily-history-link.ts](../../src/life/daily-history-link.ts)（每日史事风物祝福 + 灯塔潮汐历史漂流瓶）。[life-ui.ts](../../src/ui/life-ui.ts) 升级为 5 页签手账（手账/博物苑/稀兽牧场/工坊集市/全图鉴）。
+- **验证与多机位视觉证据**：`npm run check`、`npm test`（**1,538 / 1,538 PASS**，含新增 [home-longterm-systems.test.ts](../../tests/home-longterm-systems.test.ts) 全四期测试与零共面重叠几何断言）、`npm run build`、`npm run catalog:check` 全通过；后台独立无头 Chrome 0 报错验证流体角色、66 块轻体素、1 座自动识别围栏牧场与 8 座活的 POI，留存俯瞰、贴地斜看特写及三套 UI 实景图至 `qa/evidence/home-longterm-*.jpg`。待用户实机试玩确认画面、手感与节奏。
+
+## 2026-11-25 · 镜湖、河道与家园结构修整
+
+- 家园水面接入 Three.js 的 Water2 着色器，使用自制法线、折射场景和包含角色的镜像。镜湖、河道与江南扩建荷塘使用同一材质。入水按速度激起薄水冠、透明飞滴和局部波前，移动才产生尾波。
+- 锦鲤在镜湖与荷塘活动，溪鳟在河道游动。首次身体接触登记农鱼图鉴，独立存档重进已核对两种鱼。扩建荷塘的水位、游鱼和圆形物理水域一起随地块增减。
+- 晴日保留蓝天、远山和秋日金绿分色。树干伸入主冠，围栏横杆连接两端实际地面高度。月洞门侧墙、廊桥分段桥板、开放建筑和树干采用结构碰撞。实景射线核对了门洞、侧墙和树干旁的空地，廊桥三处桥面支撑高度与可见网格误差均小于 1 毫米。
+- 独立版本 `codex/waterside-polish` 通过类型检查、1,533 项测试与生产构建。在独立 Chrome、RTX 4090、800×480 高画质下，同一栈桥机位预热后 21 帧的中位耗时从 8.2 ms 到 8.3 ms。固定相机与时间切换角色倒影，308 个像素的 RGB 最大通道差超过 8。最终画面与手感待玩家试玩。
+- [水面同机位对照](../../qa/evidence/home-waterside-dock-comparison.jpg) · [实际入水动图](../../qa/evidence/home-waterside-entry.webp) · [树干近景](../../qa/evidence/home-waterside-after-trunk.jpg) · [侧视](../../qa/evidence/home-waterside-after-side.jpg) · [扩建荷塘](../../qa/evidence/home-waterside-expanded-pond.jpg) · [任务卡](../../tasks/cards/home-waterside.md)
+
 ## 2026-11-25 · 软体化伞与全套表情
 
 - 主体与高空自然返回的分身使用已有流体粒子舒展为六瓣伞面，外缘下垂，内侧拱起。现有属性折射、颜色、高光、表情及共享几何的阴影和倒影沿用同一身体。连续开合保留原有输入、回收和下降限速。

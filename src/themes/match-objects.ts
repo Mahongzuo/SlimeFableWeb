@@ -20,28 +20,57 @@ export function buildMatchObjects(stage:Stage,day:string){
    plate.position.set(x,y,z);p.add(plate);
  }
  if(day==='0101'){
+   root.name='coin-counter';
    const wood='#a96647',jade='#7bb1a3';
-   k.box(root,wood,0,.65,0,5.2,1.3,1.62);k.box(root,ivory,0,1.35,0,5.42,.13,1.84);
-   for(let x=-2.3;x<2.5;x+=.46)k.box(root,'#d39364',x,.66,.823,.04,1.06,.036);
+   // Shop window, ribbed canvas awning and a shelf of wrapped rolls. The
+   // counter floats in a miniature shop with a recognisable front and back.
+   k.box(root,'#76948a',0,2.65,-2.3,7.8,5.3,.2);
+   for(let i=0;i<8;i++){
+     const x=(i-3.5)*.83;
+     k.box(root,i%2?'#c3d9c1':'#d1dfc9',x,2.55,-2.16,.78,2.3,.075);
+     k.put('box',root,'toon',i%2?'#bd5946':'#f4d8a0',x,4.05,-1.57,.83,.12,1.58,.19);
+     k.box(root,i%2?'#a34339':'#e5c98c',x,3.81,-.81,.82,.27,.12);
+   }
+   k.box(root,'#866248',0,1.25,-1.88,7.3,.16,.63);
+   for(let i=0;i<12;i++){
+     const x=-2.95+(i%6)*.42, y=1.51+Math.floor(i/6)*.37;
+     k.put('round',root,'toon','#dfbc8b',x,y,-1.81,.175,.46,.175,Math.PI/2);
+     k.put('round',root,'toon','#b1966b',x,y,-1.568,.13,.02,.13,Math.PI/2);
+   }
+   k.box(root,wood,1.7,.65,.85,9,1.3,3.72);k.box(root,ivory,1.7,1.35,.85,9.14,.13,3.84);
+   for(let x=-2.5;x<6.1;x+=.46)k.box(root,'#d39364',x,.66,2.724,.04,1.06,.036);
+   k.box(root,teal,1.7,1.17,2.719,9.02,.09,.016);
    for(const side of [-1,1]){k.cyl(root,gold,side*2.34,2.19,-.56,.055,1.64);k.ball(root,ivory,side*2.34,3.05,-.56,.13);}
    k.beam(root,gold,[-2.34,3.01,-.56],[2.34,3.01,-.56],.05);
    placard(root,0,2.57,-.52,2.95,.83,'€　零钱柜台','01 · 01 · 2002',teal);
-   const register=k.group(root,1.42,1.43,-.06);
+   const register=k.group(root,.80,1.43,-.08);
    k.box(register,jade,0,.32,0,1.08,.64,.75);k.box(register,teal,0,.73,-.12,.92,.33,.48);
    placard(register,0,.75,.128,.78,.23,'€','EURO',dark);
    for(let x=0;x<4;x++)for(let z=0;z<2;z++)k.cyl(register,ivory,-.32+x*.21,.658,.12+z*.13,.057,.041);
-   const drawer=k.group(register,0,.11,.26);k.box(drawer,wood,0,0,0,.9,.17,.55);
-   k.box(drawer,gold,0,0,.29,.33,.05,.035);
+   k.box(register,'#283f38',0,.14,.387,.9,.14,.023);
+   for(let i=0;i<3;i++)k.box(register,gold,-.26+i*.26,.665,.245,.076,.055,.052);
    const stacks:T.Group[]=[];
    for(let i=0;i<3;i++){
      const x=-1.6+i*.74;
      k.cyl(root,dark,x,1.45,.3,.33,.065);k.ring(root,gold,x,1.49,.3,.33,Math.PI/2);
      const pile=k.group(root,x,1.5,.3);stacks.push(pile);
-     for(let j=0;j<4+i;j++){k.cyl(pile,gold,0,.029+j*.064,0,.238,.058);k.cyl(pile,ivory,0,.061+j*.064,0,.16,.016);}
+     k.cyl(pile,i===1?ivory:gold,0,.032,0,.237,.06);
+     k.cyl(pile,i===1?gold:ivory,0,.067,0,.145,.012);
+     for(let j=0;j<=i;j++)k.box(pile,wood,-.06+j*.043,.079,0,.014,.009,.12);
    }
    // A printed stack of change envelopes beside the till.
    for(let i=0;i<5;i++){k.box(root,i===4?jade:ivory,-1.62,1.442+i*.028,-.37,.88,.025,.4,.07);}
-   updates.push((_t,p,f)=>{for(let i=0;i<3;i++)stacks[i].visible=p*3>=i+.95;drawer.position.z=.26+Math.min(1,f*1.6)*.48;});
+   const landing=[-1,-1,-1];
+   updates.push((t,p,f)=>{
+     for(let i=0;i<3;i++){
+       const pile=stacks[i];pile.visible=p*3>=i+.95;
+       if(!pile.visible){landing[i]=-1;continue;}
+       if(landing[i]<0)landing[i]=t;
+       const age=t-landing[i],amplitude=Math.exp(-4*age);
+       pile.rotation.z=amplitude*Math.sin(age*18)*.45;
+       pile.position.y=1.5+amplitude*.19*Math.abs(Math.sin(age*9));
+     }
+   });
    return finish((step:number)=>target.set(-1.6+step*.74,1.71,-1.2));
  }
  const sea='#4cbdba',stone='#c5ac85',iron='#3d6469',wood='#916b4b';

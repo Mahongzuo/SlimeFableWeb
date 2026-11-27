@@ -1,0 +1,5 @@
+.season-plate{width:min(550px,94vw);max-height:94dvh;overflow:auto;border:1px solid #77745f;border-radius:8px;background:#f6eedc;color:#303c39;padding:16px;box-shadow:0 18px 64px #1e2b2b55;font:15px/1.5 system-ui,sans-serif}
+.season-plate::backdrop{background:#182927ac}.season-plate h2{margin:0 0 4px;font:700 24px/1.3 Georgia,SimSun,serif}.season-plate p{margin:5px 0 10px}
+.season-plate canvas{display:block;width:100%;height:auto;touch-action:none}.season-plate footer{position:static;display:flex;gap:6px;flex-wrap:wrap;align-items:center}.season-plate button,.season-preview{font:inherit;min-height:38px;cursor:pointer;border:1px solid #8a8671;border-radius:4px;padding:4px 12px;background:#f7f0dd;color:#263e39}
+.season-plate output{display:block;min-height:1.6em;color:#475448;font-weight:600}.season-plate .season-main{background:#355b51;color:#fff7e4}.season-plate .season-exit{margin-left:auto}.season-preview{display:block;margin:5px 0;pointer-events:auto;font-size:13px}
+@media(max-height:560px){.season-plate{padding:7px 12px}.season-plate canvas{max-height:44dvh;object-fit:contain;width:auto;max-width:100%;margin:auto}.season-plate p{margin:2px 0}}
