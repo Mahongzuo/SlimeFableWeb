@@ -7,6 +7,7 @@ import type {FluidVolume, GroundSurface} from '../slime/world';
 import {inland, WORLD} from './map';
 import {preserveRects,preserveHeight,type PreserveRect,expansionGroundAt, expansionHeight, expansionSegments, slotForTile, type ExpansionSlot} from './expansion';
 import {SEA_LEVEL} from '../home/layout';
+import {sportLand,sportsGroundHeight} from './expansion';
 import {riverCenter} from '../home/waterway';
 import {climateMaterial} from '../home/climate-material';
 import {getTerrainSplatTextures} from '../home/render/terrain-splat';
@@ -20,6 +21,7 @@ export interface TerritoryRect {
   biome?: string;
   slot?: ExpansionSlot;
   theme?: ExpandedTile['theme'];
+  sports?: boolean;
 }
 
 export interface IslandSDFData {
@@ -55,7 +57,7 @@ export function collectTerritoryRects(expansions: ExpandedTile[] = []): Territor
       theme: tile.theme,
     });
   }
-  return rects.concat(preserveRects(expansions));
+  return rects.concat(preserveRects(expansions),sportLand(expansions).map(r=>({...r,sports:true})));
 }
 
 /** Exact signed distance to the union of owned rectangular territory tiles (< 0 inside, > 0 outside). */
@@ -159,6 +161,7 @@ function ownedHeightAt(x: number, z: number, rects: TerritoryRect[]): number {
   }
   for (let i = 1; i < rects.length; i++) {
     const r = rects[i];
+    if(r.sports && x>=r.minX && x<=r.maxX && z>=r.minZ && z<=r.maxZ)return sportsGroundHeight(x,z);
     if(r.biome && x>=r.minX && x<=r.maxX && z>=r.minZ && z<=r.maxZ)return preserveHeight(r as PreserveRect,x,z);
     if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ && r.slot && r.theme) {
       return expansionHeight(x, z, r.slot, r.theme);
@@ -173,7 +176,7 @@ function ownedHeightAt(x: number, z: number, rects: TerritoryRect[]): number {
     const d = Math.hypot(x - cx, z - cz);
     if (d < bestD) {
       bestD = d;
-      bestH = r.biome ? preserveHeight(r as PreserveRect,cx,cz) : r.slot && r.theme ? expansionHeight(cx, cz, r.slot, r.theme) : inland(cx, cz);
+      bestH = r.sports ? sportsGroundHeight(cx,cz) : r.biome ? preserveHeight(r as PreserveRect,cx,cz) : r.slot && r.theme ? expansionHeight(cx, cz, r.slot, r.theme) : inland(cx, cz);
     }
   }
   return bestH;

@@ -95,6 +95,35 @@ export interface ExpansionSlot {
 }
 
 export const TILE_SIZE = 40;
+// Bound to the actual home's expansion list so previews and independent worlds stay isolated.
+const sportSites = new WeakMap<ExpandedTile[], number>();
+export function bindSportSite(tiles: ExpandedTile[], saved?:number, objects:ReadonlyArray<{x:number;z:number}>=[]) {
+  const owned=tiles.map(slotForTile).filter((s):s is ExpansionSlot=>!!s);
+  let gx=Number.isSafeInteger(saved)&&saved!>=1?saved!:1;
+  if(saved!==gx) {
+    while(owned.some(s=>s.gz>=0&&s.gz<=1&&s.gx>=gx&&s.gx<gx+4) ||
+      objects.some(p=>p.z>=26&&p.z<=146&&p.x>=tileXBounds(gx)[0]-4&&p.x<=tileXBounds(gx+3)[1]+4)) gx++;
+  }
+  sportSites.set(tiles,gx);
+  return gx;
+}
+export function sportLand(tiles:ExpandedTile[]) {
+  const gx=sportSites.get(tiles);
+  if(gx===undefined)return [];
+  const minX=tileXBounds(gx)[0];
+  const land=[{minX,minZ:30,maxX:minX+160,maxZ:142}];
+  // Any intervening purchased ground already has its own surface.
+  const owned=new Set(tiles.map(slotForTile).filter(Boolean).map(s=>tileKey(s!.gx,s!.gz)));
+  for(let i=1;i<gx;i++)if(!owned.has(tileKey(i,0))){
+    const [minX,maxX]=tileXBounds(i);land.push({minX,maxX,minZ:56,maxZ:61});
+  }
+  return land;
+}
+export function sportsGroundHeight(x:number,z:number) {
+  // Reach the level lawn before the nearest authored plinth begins at x = 33.
+  const t=Math.min(1,Math.max(0,(x-31)/2));
+  return inland(31,Math.min(142,Math.max(30,z)))*(1-t)+.65*t;
+}
 export const EXPANSION_COST_CAP = 50;
 
 /** Exact non-overlapping X bounds for any integer grid coordinate gx (-∞..+∞). */
@@ -252,6 +281,10 @@ export function computeDynamicFrontier(
   }
 
   const reserved=new Set(preserveLayout(expansions).map(p=>tileKey(p.slot.gx,p.slot.gz)));
+  const sports=sportSites.get(expansions);
+  if(sports!==undefined)for(let x=1;x<sports+4;x++){
+    reserved.add(tileKey(x,0));if(x>=sports)reserved.add(tileKey(x,1));
+  }
   const candidates = new Map<string, {slot: ExpansionSlot; dist: number}>();
   for (const [gx, gz] of seeds) {
     for (const [dx, dz, edge] of DIRS) {

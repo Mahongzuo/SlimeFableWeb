@@ -221,6 +221,7 @@ export interface HomeBuildState {
 }
 
 export interface LifeData {
+  sports?: import('./sports').SportsLog;
   sailing?: import('./voyage').SailingLog;
   earnedShells?: number;
   capacityFloor?: number;

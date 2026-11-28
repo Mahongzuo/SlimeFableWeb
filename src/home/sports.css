@@ -1,0 +1,17 @@
+body.sports-open #game-ui .hud,body.sports-open .slime-hud,body.sports-open .voyage-controls,body.sports-open #life-ui,body.sports-open #orchard-ui {visibility:hidden}
+.sports-panel {position:fixed;z-index:50;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(540px,94vw);box-sizing:border-box;max-height:84dvh;overflow:auto;overscroll-behavior:contain;color:#253f39;background:#fff9eaf5;border:2px solid #456b5d;border-radius:16px;padding:14px 18px;font:15px/1.45 system-ui,sans-serif;box-shadow:0 6px 24px #15332e44;pointer-events:auto}
+.sports-panel[hidden]{display:none}
+.sports-panel h2,.sports-panel p {margin:0 0 7px}
+.sports-panel h2{font-size:20px}
+.sports-panel fieldset{border:1px solid #a7b6a4;border-radius:9px;margin:6px 0;padding:4px 9px}
+.sports-panel label{display:flex;align-items:center;gap:8px;margin:4px 0}
+.sports-panel select,.sports-panel button{font:inherit;color:inherit;border:1px solid #859d88;background:#fffdf4;border-radius:8px;padding:5px 8px;cursor:pointer}
+.sports-panel small{font-size:11px}
+.sport-actions{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 0}
+.sport-actions button:first-child{background:#326858;color:white}
+.sports-panel.playing{left:auto;right:10px;transform:none;width:min(400px,65vw);padding:8px 12px;background:#fff9eae6;overflow:visible;touch-action:none}
+.sports-panel.playing progress{height:6px;width:100%;accent-color:#33836e}
+.sport-stick{position:fixed;bottom:12px;left:14px;height:92px;width:92px;border:2px solid #e5eddd;box-shadow:0 1px 10px #304d4650;border-radius:50%;background:#23423888;display:grid;place-items:center;touch-action:none}
+.sport-stick i{border-radius:50%;height:36px;width:36px;background:#f6efd5bb}
+@media(pointer:fine){.sport-stick{display:none}}
+@media(max-width:500px){.sports-panel.playing{font-size:12px}.sports-panel.playing h2{font-size:16px}.sport-actions button{min-height:34px}.sports-panel label{flex-wrap:wrap}}

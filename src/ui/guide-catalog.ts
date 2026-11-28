@@ -6,6 +6,8 @@
  * `registerGuideSection(section)` at startup.
  */
 
+import {disciplines,sportsNames,sportHelp} from '../life/sports';
+
 export interface GuideKeybind {
   keys: string[];
   label: string;
@@ -32,6 +34,10 @@ export interface GuideSection {
 }
 
 export const BUILTIN_GUIDE_SECTIONS: GuideSection[] = [
+  {id:'home-sports',order:9,icon:'🏅',title:'东岸运动公园',subtitle:'从风车公园东侧路牌向东，走到球场或泳池边按 F 邀请动物。',cards:[
+    {icon:'🐇',title:'邀请、换阵与训练',summary:'可手选每位队友和对手，也能重新配队。完赛有贝壳；每天前四场运动能力各升一点，跨项目共享，累计十个满额训练日可超过 89 点的高手。'},
+    ...disciplines.map(s=>({icon:'🏅',title:sportsNames[s],summary:sportHelp[s]}))
+  ],tip:'手机用左摇杆和右侧动作按钮。场内随时点 F1 帮助，关闭后继续同一回合。'},
   {
     id:'companions',order:8,icon:'🏡',title:'第一只宠物与临水小院',subtitle:'从领养、备粮到陪玩，和伙伴一起探索北部自然区。',
     keybinds:[{keys:['B'],label:'农鱼手账 → 稀兽与牧场 → 伙伴照料与召唤'},{keys:['F'],label:'在门前、食槽或自然区空地互动'}],

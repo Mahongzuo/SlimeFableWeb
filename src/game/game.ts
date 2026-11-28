@@ -8,6 +8,9 @@ import {houseLot} from '../home/ninglu-layout';
 import {Homestead,HOUSE} from '../home/homestead';
 import {BiomePreserves} from '../home/biome-preserves';
 import {CompanionPanel} from '../ui/companion-panel';
+import {SportsPark} from '../home/sports-park';
+import {SportsSession} from '../home/sports-session';
+import {bindSportSite} from '../world/expansion';
 import {advanceRescue} from '../life/companion-care';
 import {HomeOrchard} from '../home/orchard';
 import {buildHomeWorld} from '../world/home-world';
@@ -58,6 +61,8 @@ export class Game {
   readonly cottage:Homestead;
   readonly preserves:BiomePreserves;
   readonly companions:CompanionPanel;
+  readonly sportsPark:SportsPark;
+  readonly sports:SportsSession;
   private guideFromCompanions=false;
   private careAt=0;
   private carePlayed=0;
@@ -130,6 +135,8 @@ export class Game {
     home.footprints.push({id:'native-personal-cottage',itemId:'build-huizhou',x:HOUSE.x,y:HOUSE.y,z:HOUSE.z-.12*HOUSE.scale,yaw:0,scale:1,nativeFootprint:houseLot});
     this.preserves=new BiomePreserves(ctx,this.save.data.life,()=>this.save.write(),s=>this.ui.toast(s,3500));
     // Keep only inland river/lake fluids as base; outer ocean fluids are dynamically composed with expansions & diving
+    this.sportsPark=new SportsPark(ctx,this.save.data.life,c=>this.sports.open(c));
+    world.boxes.push(...this.sportsPark.boxes);home.footprints.push(...this.sportsPark.footprints);
     this.nativeFluids=(world.fluids??[]).filter(f=>f.min[0]>=WORLD.min[0]-1&&f.max[0]<=WORLD.max[0]+1&&f.min[1]>=WORLD.min[1]-1&&f.max[1]<=WORLD.max[1]+1);
     this.fx = new SeaFX(ctx);
     this.fish=new WaterFish(ctx.scene,id=>{
@@ -159,6 +166,10 @@ export class Game {
     ctx.reflectActor=(renderer:any,camera:any,target:any)=>{
       if(this.slime.running)this.slime.renderer.renderReflection(renderer,camera,target);
     };
+    this.sports=new SportsSession({ctx,slime:this.slime,life:this.save.data.life,day:localDayKey,
+      save:()=>{this.save.write();this.life.refresh(this.save.data.life);},
+      splash:(x,z,y)=>this.fx.splash([x,y,z],2.5,y)});
+    this.save.write();
     ctx.rainSurface=(x:number,z:number)=>{
       const world=this.slime.world;
       const solid=world.support(x,z,Infinity,true)??ctx.groundY(x,z);
@@ -354,7 +365,7 @@ export class Game {
   }
 
   private orchardPlaying() {
-    return this.state === 'play' && !this.life.dexOpen && !this.ui.quickMenuOpen &&
+    return !this.sports?.active && this.state === 'play' && !this.life.dexOpen && !this.ui.quickMenuOpen &&
       this.oceanAdventure?.mode === 'idle' && !this.oceanAdventure.angling.active;
   }
 
@@ -372,6 +383,10 @@ export class Game {
     this.coastalSurfaces = buildCoastalCollisionSurfaces(expansions, 96);
     this.fish.sync(expansions);
     this.oceanAdventure?.syncExpansions(expansions);
+    bindSportSite(expansions,this.save.data.life.sports?.site);
+    // Build undo restores a cloned tile array, so rebind before baking its coast and previews.
+    if(this.builder && expansions!==this.currentExpansions)
+      this.builder.frontier.sync(expansions,this.builder.selectedTheme);
     this.applyDynamicWorld();
     this.shardLayoutDirty=true;
   }
@@ -397,6 +412,8 @@ export class Game {
       for(const r of this.preserves.rects)bounds.max[2]=Math.max(bounds.max[2],r.maxZ+55);
     }
     this.oceanAdventure?.islands.extend(surfaces,fluids,bounds,this.oceanBuoyancy);
+    surfaces.push(...this.sportsPark.surfaces);fluids.unshift(...this.sportsPark.fluids);
+    bounds.max[0]=Math.max(bounds.max[0],this.sportsPark.courts[4].x+116);
     this.slime.setDynamicSurfaces(surfaces, bounds, fluids);
   }
 
@@ -513,6 +530,7 @@ export class Game {
     if (this.state === 'build') { this.builder.exit(); this.buildUI.show(false); }
     this.life.dex(null);
     this.ui.dismissKeysHint();
+    if(this.sports?.active){this.sports.toggleHelp();return;}
     this.panelFrom = this.state === 'title' || this.state === 'loading' ? 'title' : this.state === 'pause' ? 'pause' : this.state === 'shop' ? 'shop' : 'play';
     if (this.panelFrom === 'shop') this.buildUI.setShopHelpOpen(true);
     this.state = 'guide';
@@ -643,6 +661,10 @@ export class Game {
     if(this.waterImpact){
       const wSample=this.app.ctx.ocean?.isOceanAt?.(s.position[0],s.position[2])?this.app.ctx.ocean.sampleWave(s.position[0],s.position[2],t):null;
       const splashY=wSample?wSample.seaLevel+wSample.height:(s.world.fluid(s.position[0],s.position[2])??undefined);
+    if(this.sports.active && this.state==='play'){
+      s.update(t,dt);this.sports.update(dt);this.followSun();this.fx.update(dt,s);
+      this.ui.prompt(null);this.ui.setCrosshair(false,true,false);return;
+    }
       this.fx.splash(s.position,this.waterImpact,splashY);
       this.waterImpact=0;
     }
@@ -703,6 +725,7 @@ export class Game {
     let spotPrompt: {title: string; sub: string} | null = null;
     if (!best) {
       const allSpots = [
+        ...this.sportsPark.spots,
         ...this.preserves.spots(),
         ...this.preserves.plots().map((p,i):Interactable=>({id:'natural-plot-'+i,position:[p.x,this.slime.world.terrain(p.x,p.z)??0,p.z],radius:3.4,
           prompt:()=>({title:p.name,sub:'按 F 选择植物与种植位置'}),act:()=>this.companions.openPlot(i)})),

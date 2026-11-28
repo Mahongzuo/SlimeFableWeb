@@ -1,0 +1,234 @@
+{
+  "wide": {
+    "land": {
+      "pool": 0.638,
+      "bed": -0.8599999999999999,
+      "water": 0.638,
+      "land": 0.65,
+      "models": [
+        5,
+        4,
+        5,
+        6,
+        6
+      ]
+    },
+    "walk": [
+      52.062849999999436,
+      0.65,
+      58
+    ],
+    "paths": {
+      "badminton": [
+        51.135546820170305,
+        0.65,
+        53.600914429824684
+      ],
+      "basketball": [
+        51.13570302276119,
+        0.65,
+        62.599231737025264
+      ],
+      "tennis": [
+        51.13519320823814,
+        0.65,
+        90.39941806689146
+      ],
+      "swim": [
+        51.13523586398982,
+        0.65,
+        114.89906364483757
+      ],
+      "football": [
+        70.3718223399895,
+        0.65,
+        58.54592460880354
+      ]
+    },
+    "seams": {
+      "entry": 0.2646264912188059,
+      "entryPhysics": 0.26462649915995656,
+      "apron": 0.7960000000521541,
+      "grass": 0.6499999761581421,
+      "dry": 0.79
+    },
+    "freeSwim": {
+      "swimming": true,
+      "body": [
+        54,
+        0.478,
+        129
+      ],
+      "step": 0.79,
+      "water": 0.638,
+      "dry": null,
+      "ramp": [
+        0.6833333333333318,
+        0.2566666666666667,
+        -0.16999999999999849,
+        -0.7033333333333318
+      ]
+    },
+    "football": {
+      "score": [
+        9,
+        0
+      ],
+      "rank": 1,
+      "time": 180.0150000000354,
+      "touches": 103,
+      "athletes": 10,
+      "passes": 9,
+      "abilityBefore": 50,
+      "ability": 51,
+      "coins": 18,
+      "payout": 18
+    },
+    "basketball": {
+      "score": [
+        11,
+        4
+      ],
+      "rank": 1,
+      "time": 19.0650000000002,
+      "touches": 16,
+      "athletes": 6,
+      "passes": 0,
+      "abilityBefore": 51,
+      "ability": 52,
+      "coins": 32,
+      "payout": 14
+    },
+    "tennis": {
+      "score": [
+        1,
+        7
+      ],
+      "rank": 2,
+      "time": 311.41333333337883,
+      "touches": 269,
+      "athletes": 2,
+      "passes": 0,
+      "abilityBefore": 52,
+      "ability": 53,
+      "coins": 35,
+      "payout": 3
+    },
+    "badminton": {
+      "score": [
+        11,
+        0
+      ],
+      "rank": 1,
+      "time": 133.67999999999853,
+      "touches": 197,
+      "athletes": 4,
+      "passes": 0,
+      "abilityBefore": 53,
+      "ability": 54,
+      "coins": 45,
+      "payout": 10
+    },
+    "swim": {
+      "score": [
+        0,
+        0
+      ],
+      "rank": 5,
+      "time": 19.673333333333503,
+      "touches": 0,
+      "athletes": 6,
+      "passes": 0,
+      "abilityBefore": 54,
+      "ability": 54,
+      "coins": 48,
+      "payout": 3
+    }
+  },
+  "portrait": {
+    "football": {
+      "score": [
+        8,
+        0
+      ],
+      "rank": 1,
+      "time": 180.0150000000354,
+      "touches": 103,
+      "athletes": 10,
+      "passes": 8,
+      "abilityBefore": 50,
+      "ability": 51,
+      "coins": 18,
+      "payout": 18
+    },
+    "basketball": {
+      "score": [
+        10,
+        11
+      ],
+      "rank": 2,
+      "time": 31.148333333332847,
+      "touches": 32,
+      "athletes": 6,
+      "passes": 0,
+      "abilityBefore": 51,
+      "ability": 52,
+      "coins": 23,
+      "payout": 5
+    },
+    "tennis": {
+      "score": [
+        1,
+        7
+      ],
+      "rank": 2,
+      "time": 188.54666666670886,
+      "touches": 161,
+      "athletes": 2,
+      "passes": 0,
+      "abilityBefore": 52,
+      "ability": 53,
+      "coins": 26,
+      "payout": 3
+    },
+    "badminton": {
+      "score": [
+        11,
+        0
+      ],
+      "rank": 1,
+      "time": 99.6966666666623,
+      "touches": 153,
+      "athletes": 2,
+      "passes": 0,
+      "abilityBefore": 53,
+      "ability": 54,
+      "coins": 36,
+      "payout": 10
+    },
+    "swim": {
+      "score": [
+        0,
+        0
+      ],
+      "rank": 5,
+      "time": 19.673333333333503,
+      "touches": 0,
+      "athletes": 6,
+      "passes": 0,
+      "abilityBefore": 54,
+      "ability": 54,
+      "coins": 39,
+      "payout": 3
+    }
+  },
+  "legacy": {
+    "gx": 2,
+    "ability": 50,
+    "coins": 123,
+    "oldBuilding": 49,
+    "oldLot": "exp-e-s",
+    "poolX": 91,
+    "namedPet": true
+  }
+}
