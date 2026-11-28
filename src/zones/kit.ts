@@ -9,10 +9,19 @@ import type {ZoneContext} from './types';
  */
 export function signpost(z: ZoneContext, x: number, zz: number, yaw: number, title: string, sub = '') {
   const {T} = z, g = new T.Group(); g.name = 'signpost'; g.position.set(x, z.ground(x, zz), zz); g.rotation.y = yaw;
-  for (const dx of [-.62, .62]) { const post = new T.Mesh(new T.CylinderGeometry(.06, .08, 2.1, 6), z.toon(0x8a6a48)); post.position.set(dx, 1.05, 0); post.castShadow = true; g.add(post); }
+  g.userData.signTitle = title;
+  const panelY = 1.75, panelHeight = .75, panelDepth = .16;
+  const postHeight = panelY - panelHeight / 2 + .045;
+  const wood = z.toon(0x8a6a48);
+  const leg = new T.CylinderGeometry(.060, .080, postHeight, 6);
+  for (const dx of [-.62, .62]) {
+    const post = new T.Mesh(leg, wood); post.name = 'sign-support';
+    post.position.set(dx, postHeight / 2, 0); post.castShadow = true; g.add(post);
+  }
   const tex = tagTexture(T, (c, w, h) => { paperCard(c, w, h); c.fillStyle = '#2f2a24'; c.textAlign = 'center'; c.font = `700 74px ${SERIF}`; c.fillText(title, w / 2 - 6, sub ? 118 : 150); if (sub) { c.font = `500 34px ${SERIF}`; c.fillStyle = '#6b5f50'; c.fillText(sub, w / 2 - 6, 180); } });
-  const board = new T.Mesh(new T.BoxGeometry(1.5, .75, .06), [z.toon(0x8a6a48), z.toon(0x8a6a48), z.toon(0x8a6a48), z.toon(0x8a6a48), z.toon(0xffffff, {map: tex}), z.toon(0xffffff, {map: tex})]);
-  board.position.y = 1.75; board.castShadow = true; g.add(board); return g;
+  const paper = z.toon(0xffffff, {map: tex});
+  const board = new T.Mesh(new T.BoxGeometry(1.5, panelHeight, panelDepth), [wood, wood, wood, wood, paper, paper]);
+  board.name = 'sign-panel'; board.position.y = panelY; board.castShadow = true; g.add(board); return g;
 }
 /**
  * Wind sway for instanced foliage: bends each vertex by its height above the instance origin, phase-shifted per

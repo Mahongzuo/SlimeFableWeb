@@ -13,6 +13,7 @@ import {ensureHome, type ExpansionThemeId, type LifeData} from '../life/state';
 import {isBuildItemUnlocked, isPresetUnlocked, nextLevelXp} from '../life/unlocks';
 import {buySeed, shopSeedList} from '../life/cultivation';
 import {CROP_META, CROPS, ITEMS, type CropCategory} from '../life/catalog';
+import {TREE_SPECIES, buySapling, type TreeSpecies} from '../life/orchard';
 import {
   computeDynamicFrontier,
   EXPANSION_COST_CAP,
@@ -22,6 +23,7 @@ import {
 } from '../world/expansion';
 
 export interface BuildUIHandlers {
+  openOrchardHelp?(): void;
   setTool(tool: BuildTool): void;
   restore(redo: boolean): void;
   transform(scale: boolean): void;
@@ -72,8 +74,10 @@ const CATS: [DockTab, string][] = [
   ['expand', '扩建'],
 ];
 
-const SHOP_CATS: [CropCategory | 'all', string][] = [
-  ['all', '全部'],
+type ShopTab = CropCategory | 'all' | 'trees';
+const SHOP_CATS: [ShopTab, string][] = [
+  ['all', '全部作物'],
+  ['trees', '树苗'],
   ['veg', '蔬果'],
   ['fruit', '瓜果'],
   ['grain', '谷茶'],
@@ -93,7 +97,7 @@ export class BuildUI {
   private collapsed = false;
   private open = false;
   private shopOpen = false;
-  private shopCat: CropCategory | 'all' = 'all';
+  private shopCat: ShopTab = 'all';
   private lastLife: LifeData | null = null;
   private state: BuildUIState = {
     selectedId: '',
@@ -340,13 +344,22 @@ export class BuildUI {
       const catTabs = SHOP_CATS.map(([k, label]) =>
         `<button class="b-tab ${this.shopCat === k ? 'on' : ''}" data-scat="${k}">${label}</button>`,
       ).join('');
+      const treeCards = this.shopCat === 'trees' ? Object.entries(TREE_SPECIES).map(([id, spec]) => {
+        const stock = life.bag[spec.saplingId] ?? 0;
+        const buttons = [1, 5].map(qty =>
+          `<button class="btn small ${qty === 1 ? 'primary' : ''}" data-sapling="${id}" data-qty="${qty}" ${life.coins < qty * spec.price ? 'disabled' : ''}>买 ${qty} 株 · 🐚${spec.price * qty}</button>`
+        ).join('');
+        return `<div class="seed-item"><div class="s-top"><b>${spec.icon} ${spec.name}苗</b><span class="chip mute">背包 ${stock}</span></div>
+          <small>${spec.fruitId ? '20 分钟可采首果，每 15 分钟再结果' : '15 分钟成树'} · 树冠宽约 ${(spec.crownRadius * 2).toFixed(1)} 米</small>
+          <div class="s-buy-row">${buttons}</div></div>`;
+      }).join('') : '';
       this.shopEl.innerHTML = `<div class="overlay"><div class="seed-shop card grain">
         <header>
-          <div><h2>🌱 家园种子铺（32 种作物）</h2><small>收获后可投入水磨坊/茶坊/酿造桶/窑炉加工至 3 倍价值</small></div>
-          <div class="row"><span>🐚 ${life.coins}</span><button class="btn small" data-sclose>关上</button></div>
+          <div><h2>🌱 家园种子铺</h2><small>${this.shopCat === 'trees' ? '带树苗到已购扩建地，选「种树」亲手栽下或让史莱姆逐棵造林。' : '32 种作物 · 收获后可投入水磨坊、茶坊、酿造桶或窑炉加工'}</small></div>
+          <div class="row"><span>🐚 ${life.coins}</span>${this.shopCat === 'trees' ? '<button class="btn small" data-shop-help>F1 帮助</button>' : ''}<button class="btn small" data-sclose>关上</button></div>
         </header>
         <div class="b-tabs shop-tabs">${catTabs}</div>
-        <div class="seed-grid">${filtered.map(s => {
+        <div class="seed-grid">${treeCards}${filtered.map(s => {
           const owned = life.bag[s.id] ?? 0;
           const elTag = EL_BADGES[s.preferredElement] ?? '💧水';
           return `<div class="seed-item ${s.special ? 'special' : ''}">
@@ -369,10 +382,16 @@ export class BuildUI {
     };
     draw();
     this.shopEl.onclick = (e: Event) => {
-      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-buy],[data-sclose],[data-scat]');
+      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-buy],[data-sapling],[data-sclose],[data-scat],[data-shop-help]');
       if (!t) return;
-      if (t.dataset.scat) { this.shopCat = t.dataset.scat as CropCategory | 'all'; draw(); return; }
+      if (t.dataset.shopHelp !== undefined) { this.h.openOrchardHelp?.(); return; }
+      if (t.dataset.scat) { this.shopCat = t.dataset.scat as ShopTab; draw(); return; }
       if (t.dataset.sclose !== undefined) { this.closeSeedShop(); onClose(); return; }
+      if (t.dataset.sapling) {
+        const species = t.dataset.sapling as TreeSpecies, qty = Number(t.dataset.qty);
+        if (buySapling(life, species, qty)) { onBought(`购入${TREE_SPECIES[species].name}苗 ×${qty}`); draw(); }
+        return;
+      }
       if (t.dataset.buy) {
         const qty = Number(t.dataset.qty ?? 1) || 1;
         const res = buySeed(life, t.dataset.buy, qty);
@@ -428,6 +447,10 @@ export class BuildUI {
         onClose();
       }
     };
+  }
+
+  setShopHelpOpen(open: boolean) {
+    this.shopEl.classList.toggle('hidden', open || !this.shopOpen);
   }
 
   closeSeedShop() {

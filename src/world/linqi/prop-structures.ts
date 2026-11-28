@@ -36,11 +36,18 @@ for(let i=0;i<6;i++){
   const a=i*Math.PI/3;pavilion.push([1.65*Math.cos(a),-1.65*Math.sin(a)+.05,.19,.19,.35,2.62,'post']);
 }
 
-// In the shelter, the middle bay at the front opens onto the ground.
-const shelter:Part[]=[[0,-1.12,3.82,.16,0,1.7,'wall'],[-1.83,0,.16,2.4,0,1.6,'wall'],
-  [0,0,4.36,3.10,1.95,2.48,'roof'],[0,0,4.36,1.80,2.46,3.02,'roof-top'],
-  [-.46,-.58,2.06,.78,0,1.0,'bales'],[1.13,.76,1.05,.48,0,.62,'trough']];
-for(const x of [-1.83,0,1.83])for(const z of [-1.13,1.13])shelter.push([x,z,.16,.16,0,2.05,'post']);
+// The adapted cattle shed has a front opening and a gable running along Z.
+const shelter:Part[]=[[0,-1.46,4.12,.16,0,2.0,'wall'],[0,0,4.36,3.10,1.95,2.44,'roof'],
+  [0,0,2.52,3.10,2.44,2.77,'roof-mid'],[0,0,1.06,3.10,2.77,3.03,'roof-top']];
+for(const x of [-2.04,2.04])shelter.push([x,0,.14,2.94,0,1.98,'wall']);
+
+// The greenhouse entrance faces +Z. Keep the centre aisle open between the two beds.
+const greenhouse:Part[]=[[0,-1.81,4.45,.10,0,2.61,'back'],[0,2.11,1.05,.10,0,.28,'sill'],
+  [0,2.11,1.05,.10,2.76,3.45,'lintel'],[0,.15,2.00,3.97,3.17,3.48,'roof-top']];
+for(const side of [-1,1])greenhouse.push(
+  [side*1.39,2.11,1.72,.10,0,2.66,'front'],[side*2.19,.15,.14,3.97,0,1.86,'side'],
+  [side*1.03,.13,1.04,3.08,0,.34,'bed'],[side*1.98,.15,.60,3.97,1.86,2.66,'eave'],
+  [side*1.37,.15,.76,3.97,2.66,3.17,'roof']);
 
 const stilt:Part[]=[
   [0,.04,4.36,3.05,.71,.91,'floor'],
@@ -105,11 +112,7 @@ export const propStructures:Record<string,Structure>={
     [0,0,3.10,4.24,2.50,3.25,'roof-mid'],
     [0,0,1.50,4.24,3.23,3.88,'roof-top'],
   ]},
-  'pack-greenhouse':{span:4.70,parts:[
-    [0,.08,4.54,3.76,0,2.50,'walls'],
-    [0,0,4.62,3.66,2.48,2.88,'roof'],
-    [0,0,2.20,3.68,2.86,3.48,'roof-top'],
-  ]},
+  'pack-greenhouse':{span:4.70,parts:greenhouse},
   'watermill':{span:4.84,parts:[
     [-.38,.06,3.45,3.08,0,2.48,'walls'],
     [-.42,0,4.00,3.60,2.46,2.92,'roof'],

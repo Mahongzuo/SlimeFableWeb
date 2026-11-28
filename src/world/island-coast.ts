@@ -1,9 +1,11 @@
+import coastalFeet from '../home/coast-rock-supports.json';
+import {MarineModels} from '../home/marine-models';
 import * as THREE from 'three';
 import type {ExpandedTile} from '../life/state';
 import type {Box} from '../slime/types';
 import type {FluidVolume, GroundSurface} from '../slime/world';
 import {inland, WORLD} from './map';
-import {expansionHeight, slotForTile, type ExpansionSlot} from './expansion';
+import {preserveRects,preserveHeight,type PreserveRect,expansionGroundAt, expansionHeight, expansionSegments, slotForTile, type ExpansionSlot} from './expansion';
 import {SEA_LEVEL} from '../home/layout';
 import {riverCenter} from '../home/waterway';
 import {climateMaterial} from '../home/climate-material';
@@ -15,6 +17,7 @@ export interface TerritoryRect {
   minZ: number;
   maxX: number;
   maxZ: number;
+  biome?: string;
   slot?: ExpansionSlot;
   theme?: ExpandedTile['theme'];
 }
@@ -52,7 +55,7 @@ export function collectTerritoryRects(expansions: ExpandedTile[] = []): Territor
       theme: tile.theme,
     });
   }
-  return rects;
+  return rects.concat(preserveRects(expansions));
 }
 
 /** Exact signed distance to the union of owned rectangular territory tiles (< 0 inside, > 0 outside). */
@@ -114,6 +117,14 @@ export function coastalHeightAt(x: number, z: number, edgeY: number, dBox: numbe
   return coastalProfile(x, z, edgeY, dBox, ext, beach);
 }
 
+/** Offshore depth in metres beyond the home shoreline. Each shelf joins with zero end slope. */
+export function offshoreDepth(distance: number): number {
+  if (distance < 100) return 14.5 + .5 * smoothstep(64,100,distance);
+  if (distance < 1000) return 15 + 105 * smoothstep(100,1000,distance);
+  if (distance < 3000) return 120 + 730 * smoothstep(1000,3000,distance);
+  return 850 + 1150 * smoothstep(3000,5000,distance);
+}
+
 function coastalProfile(x: number, z: number, edgeY: number, dBox: number, ext: number, beach: number): number {
   const t = dBox / Math.max(ext, 1.0);
   // Smooth C1-continuous walkable coastal ramp everywhere into the sea (no harsh drop-off or sharp border crease!)
@@ -133,7 +144,7 @@ function coastalProfile(x: number, z: number, edgeY: number, dBox: number, ext: 
       0.42 * Math.sin(x * 0.085 + z * 0.065) * Math.cos(x * 0.048 - z * 0.105) +
       0.20 * Math.sin(x * 0.21 - z * 0.17);
     const shelf = SEA_LEVEL - 0.68 - 2.6 * smoothstep(0, 24, seaDist) + reefUndulation * (1 - smoothstep(18, 42, seaDist));
-    const deep = SEA_LEVEL - 14.5;
+    const deep = SEA_LEVEL - offshoreDepth(dBox - ext);
     const targetSea = shelf + (deep - shelf) * smoothstep(20, 64, seaDist);
     const blend = smoothstep(0.78, 1.18, t);
     y = y + (targetSea - y) * blend;
@@ -148,6 +159,7 @@ function ownedHeightAt(x: number, z: number, rects: TerritoryRect[]): number {
   }
   for (let i = 1; i < rects.length; i++) {
     const r = rects[i];
+    if(r.biome && x>=r.minX && x<=r.maxX && z>=r.minZ && z<=r.maxZ)return preserveHeight(r as PreserveRect,x,z);
     if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ && r.slot && r.theme) {
       return expansionHeight(x, z, r.slot, r.theme);
     }
@@ -161,7 +173,7 @@ function ownedHeightAt(x: number, z: number, rects: TerritoryRect[]): number {
     const d = Math.hypot(x - cx, z - cz);
     if (d < bestD) {
       bestD = d;
-      bestH = r.slot && r.theme ? expansionHeight(cx, cz, r.slot, r.theme) : inland(cx, cz);
+      bestH = r.biome ? preserveHeight(r as PreserveRect,cx,cz) : r.slot && r.theme ? expansionHeight(cx, cz, r.slot, r.theme) : inland(cx, cz);
     }
   }
   return bestH;
@@ -173,9 +185,10 @@ export function coastalSeabedHeightAt(x: number, z: number, expansions: Expanded
   return combinedHeightWithRects(x, z, rects);
 }
 
-function combinedHeightWithRects(x: number, z: number, rects: TerritoryRect[]): number {
+export function combinedHeightWithRects(x: number, z: number, rects: TerritoryRect[]): number {
   const dBox = territoryBoxSDF(x, z, rects);
   if (dBox <= 0) return ownedHeightAt(x, z, rects);
+  if (dBox > 100) return SEA_LEVEL - offshoreDepth(dBox-coastExtensionAt(x,z));
   const edgeY = ownedHeightAt(x, z, rects);
   return coastalHeightAt(x, z, edgeY, dBox);
 }
@@ -342,12 +355,12 @@ export class IslandCoastSystem {
   readonly root: THREE.Group;
   sdf: IslandSDFData;
   private coastMesh: THREE.Mesh | null = null;
-  private reefMesh: THREE.InstancedMesh | null = null;
+  readonly marineModels = new MarineModels();
+  private reefs = new THREE.Group();
   private pebbleMesh: THREE.InstancedMesh | null = null;
   private reedStalkMesh: THREE.InstancedMesh | null = null;
   private reedHeadMesh: THREE.InstancedMesh | null = null;
   private coastMat: THREE.MeshStandardMaterial;
-  private reefMat: THREE.MeshStandardMaterial;
   private pebbleMat: THREE.MeshStandardMaterial;
   private reedMat: THREE.MeshStandardMaterial;
   private reedHeadMat: THREE.MeshStandardMaterial;
@@ -362,10 +375,6 @@ export class IslandCoastSystem {
     this.coastMat.vertexColors = true;
     climateMaterial(this.coastMat, 'terrain');
     this.patchCoastMaterial(this.coastMat, true);
-
-    this.reefMat = ctx.mats.toon(0x9ca49f, {noCache: true, roughness: 0.82, metalness: 0.03});
-    climateMaterial(this.reefMat, 'structure');
-    this.patchCoastMaterial(this.reefMat, false);
 
     this.pebbleMat = ctx.mats.toon(0xffffff, {noCache: true, roughness: 0.80, metalness: 0.02});
     climateMaterial(this.pebbleMat, 'structure');
@@ -435,8 +444,7 @@ export class IslandCoastSystem {
             float grassAmt = (1.0 - sandAmt) * smoothstep(-0.65, -0.20, vCoastWorld.y);
             vec3 meadowCol = diffuseColor.rgb * mix(vec3(1.0), turfTex * 1.05, 0.86) * mix(0.88, 1.0, sandAmt);
             diffuseColor.rgb = mix(diffuseColor.rgb, meadowCol, grassAmt);
-            float drySand = sandAmt * smoothstep(-2.4, -0.55, vCoastWorld.y);
-            diffuseColor.rgb = mix(diffuseColor.rgb, sandTex * 1.02, drySand * 0.78);
+            diffuseColor.rgb = mix(diffuseColor.rgb, sandTex, sandAmt * 0.84);
             ` : ''}
             // 3D world-space stratified coastal rock (Ultra-Water technique: zero vertical texture stretching!)
             float steep = 1.0 - smoothstep(0.45, 0.80, vCoastNormal.y);
@@ -478,7 +486,7 @@ export class IslandCoastSystem {
             '#include <roughnessmap_fragment>',
             `#include <roughnessmap_fragment>
             float tidalWet = 1.0 - smoothstep(-0.50, -0.08, vCoastWorld.y);
-            roughnessFactor = mix(roughnessFactor, 0.18, tidalWet * 0.82);
+            roughnessFactor = mix(roughnessFactor, 0.24, tidalWet * smoothstep(-1.1, -0.52, vCoastWorld.y));
             roughnessFactor = mix(roughnessFactor, 0.07, coastFresh);`,
           );
     };
@@ -492,11 +500,7 @@ export class IslandCoastSystem {
       this.coastMesh.geometry.dispose();
       this.coastMesh = null;
     }
-    if (this.reefMesh) {
-      this.reefMesh.removeFromParent();
-      this.reefMesh.geometry.dispose();
-      this.reefMesh = null;
-    }
+    this.releaseReefs();
     for (const m of [this.pebbleMesh, this.reedStalkMesh, this.reedHeadMesh]) {
       if (m) { m.removeFromParent(); m.geometry.dispose(); }
     }
@@ -508,17 +512,26 @@ export class IslandCoastSystem {
     // Build an exterior coastal + seabed mesh with exact boundary alignment, matched inland grass vertex color,
     // organic noise-perturbed grass-to-sand blend, and analytic smooth normals so ZERO straight border seam exists!
     const step = 2.0;
-    // Align grid to odd coordinates so x=31 & z=-31 land directly on coastal mesh vertices
-    const gridMinX = Math.floor(minX) | 1;
-    const gridMinZ = Math.floor(minZ) | 1;
-    const cols = Math.ceil((maxX - gridMinX) / step);
-    const rows = Math.ceil((maxZ - gridMinZ) / step);
+    // Put every owned boundary on an actual grid line. Individual quads can then be
+    // discarded by their centre, including the internal seams of adjacent purchases.
+    const axis=(lo:number,hi:number,dim:'X'|'Z')=>{
+      const values=new Set<number>();
+      for(let v=Math.floor(lo);v<=Math.ceil(hi)+step;v+=step)values.add(v);
+      for(const r of rects){
+        const start=r['min'+dim as 'minX'|'minZ'], end=r['max'+dim as 'maxX'|'maxZ'];
+        const n=r.slot?expansionSegments(start,end,dim==='X'?0:1):Math.round(end-start);
+        for(let i=0;i<=n;i++)values.add(start+(end-start)*i/n);
+      }
+      return [...values].sort((a,b)=>a-b);
+    };
+    const xs=axis(minX,maxX,'X'), zs=axis(minZ,maxZ,'Z');
+    const cols=xs.length-1,rows=zs.length-1;
     const vertCount = (cols + 1) * (rows + 1);
     const verts = new Float32Array(vertCount * 3);
     const normals = new Float32Array(vertCount * 3);
     const colors = new Float32Array(vertCount * 3);
     const sandWeights = new Float32Array(vertCount);
-    const insideFlags = new Uint8Array(vertCount);
+
 
     const cSand = new THREE.Color(0xe6d6ac);
     const cRock = new THREE.Color(0x9ca6a0);
@@ -528,19 +541,16 @@ export class IslandCoastSystem {
     const tint = new THREE.Color();
 
     for (let j = 0; j <= rows; j++) {
-      const z = gridMinZ + j * step;
+      const z = zs[j];
       for (let i = 0; i <= cols; i++) {
-        const x = gridMinX + i * step;
+        const x = xs[i];
         const idx = i + j * (cols + 1);
         const dBox = territoryBoxSDF(x, z, rects);
-        // Mark vertices strictly inside owned territory (> 2.2m inside) so interior triangles are omitted completely
-        insideFlags[idx] = dBox < -2.2 ? 1 : 0;
-
+        if(dBox < -0.001)continue; // no exterior face uses a strictly interior vertex
         let y: number;
         if (dBox <= 0) {
-          // Exact height at dBox = 0; tiny -0.008m tuck ONLY strictly interior (dBox < -0.5) so no step or Z-fight!
-          const tuck = dBox < -0.5 ? -0.012 * smoothstep(-0.5, -2.0, dBox) : 0;
-          y = ownedHeightAt(x, z, rects) + tuck;
+          const r=rects.find(r=>r.slot && x>=r.minX && x<=r.maxX && z>=r.minZ && z<=r.maxZ);
+          y=r?.slot&&r.theme?expansionGroundAt(x,z,r.slot,r.theme):ownedHeightAt(x,z,rects);
         } else {
           const edgeY = ownedHeightAt(x, z, rects);
           y = coastalHeightAt(x, z, edgeY, dBox);
@@ -597,7 +607,8 @@ export class IslandCoastSystem {
         const c = a + (cols + 1);
         const d = c + 1;
         // Skip any quad fully inside owned land (zero overlap with inland-ground or expanded tiles!)
-        if (insideFlags[a] && insideFlags[b] && insideFlags[c] && insideFlags[d]) continue;
+        const cx=(xs[i]+xs[i+1])*.5, cz=(zs[j]+zs[j+1])*.5;
+        if(rects.some(r=>cx>r.minX&&cx<r.maxX&&cz>r.minZ&&cz<r.maxZ))continue;
         indices.push(a, c, b, b, c, d);
       }
     }
@@ -738,55 +749,72 @@ export class IslandCoastSystem {
     }
   }
 
-  private buildCoastalReefs(rects: TerritoryRect[]) {
-    const rockGeo = new THREE.DodecahedronGeometry(1, 1);
-    const pos = rockGeo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const vx = pos.getX(i), vy = pos.getY(i), vz = pos.getZ(i);
-      const n = 1 + 0.18 * Math.sin(vx * 3.1 + vz * 2.7) + 0.12 * Math.cos(vy * 4.5 - vx * 2.2);
-      // Slightly stratified flatter boulder silhouette
-      pos.setXYZ(i, vx * n, vy * n * 0.62, vz * n);
+  private releaseReefs() {
+    this.reefs.removeFromParent();
+    for (const mesh of this.reefs.children as THREE.InstancedMesh[]) {
+      mesh.geometry.dispose();
+      mesh.dispose();
     }
-    rockGeo.computeVertexNormals();
+    this.reefs.clear();
+  }
 
+  surfaceAt(x:number,z:number) {
+    const position=this.coastMesh?.geometry.attributes.position;
+    if(!position)return undefined;
+    const minX=position.getX(0),minZ=position.getZ(0);
+    const cols=Math.ceil((this.sdf.maxX-minX)/2),rows=Math.ceil((this.sdf.maxZ-minZ)/2);
+    const u=(x-minX)/2,v=(z-minZ)/2,col=Math.floor(u),row=Math.floor(v);
+    if(col<0 || row<0 || col>=cols || row>=rows)return undefined;
+    const j=row*(cols+1)+col,tx=u-col,tz=v-row;
+    const b=position.getY(j+1),c=position.getY(j+cols+1);
+    return tx+tz<=1?position.getY(j)*(1-tx-tz)+b*tx+c*tz:position.getY(j+cols+2)*(tx+tz-1)+b*(1-tz)+c*(1-tx);
+  }
+
+  private buildCoastalReefs(rects: TerritoryRect[]) {
     const {minX, minZ, maxX, maxZ} = this.sdf;
     const poses = computeCoastalReefPosesForRects(rects, minX, minZ, maxX, maxZ);
-
-    const mesh = new THREE.InstancedMesh(rockGeo, this.reefMat, Math.max(1, poses.length));
-    mesh.name = 'island-coastal-reefs';
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.layers.set(1);
-
-    const dummy = new THREE.Object3D();
-    const col = new THREE.Color();
-    let tiltSeed = 19307;
-    const tiltRand = () => ((tiltSeed = (Math.imul(1664525, tiltSeed) + 1013904223) | 0) >>> 0) / 4294967296;
-    poses.forEach((r, i) => {
-      dummy.position.set(r.x, r.y, r.z);
-      dummy.rotation.set((tiltRand() - 0.5) * 0.25, r.yaw, (tiltRand() - 0.5) * 0.25);
-      dummy.scale.set(r.sx, r.sy, r.sz);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-      col.setRGB(0.68 * r.shade, 0.73 * r.shade, 0.71 * r.shade);
-      mesh.setColorAt(i, col);
-    });
-    mesh.count = poses.length;
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    this.reefMesh = mesh;
-    this.root.add(mesh);
+    const group = this.reefs = new THREE.Group();
+    group.name = 'island-coastal-reefs';
+    this.root.add(group);
+    void this.marineModels.load('rocks').then(asset => {
+      if (!group.parent) return;
+      asset.scene.updateMatrixWorld(true);
+      const variants: THREE.Mesh[] = [];
+      asset.scene.traverse(node => { if (node instanceof THREE.Mesh) variants.push(node); });
+      const dummy = new THREE.Object3D();
+      variants.forEach((rock, variant) => {
+        const sites = poses.filter((_,i) => i % variants.length === variant);
+        if (!sites.length) return;
+        const geo = rock.geometry.clone().applyMatrix4(rock.matrixWorld);
+        geo.computeBoundingBox();
+        const box = geo.boundingBox!, mid = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+        geo.translate(-mid.x, -mid.y, -mid.z).scale(2/size.x, 2/size.y, 2/size.z);
+        const batch = new THREE.InstancedMesh(geo, rock.material, sites.length);
+        batch.name = 'shore-reef-' + variant;
+        batch.layers.set(1);
+        batch.castShadow = batch.receiveShadow = true;
+        sites.forEach((r, j) => {
+          dummy.position.set(r.x,r.y,r.z);
+          dummy.rotation.y = r.yaw;
+          dummy.scale.set(r.sx,r.sy*.60,r.sz);
+          dummy.updateMatrix();
+          batch.setMatrixAt(j,dummy.matrix);
+        });
+        batch.computeBoundingSphere();
+        group.add(batch);
+      });
+    }).catch(e => console.warn('Coastal rocks:',e));
   }
 
   dispose() {
     this.sdf.texture.dispose();
     this.coastMesh?.geometry.dispose();
-    this.reefMesh?.geometry.dispose();
+    this.releaseReefs();
+    this.marineModels.dispose();
     this.pebbleMesh?.geometry.dispose();
     this.reedStalkMesh?.geometry.dispose();
     this.reedHeadMesh?.geometry.dispose();
     this.coastMat.dispose();
-    this.reefMat.dispose();
     this.pebbleMat.dispose();
     this.reedMat.dispose();
     this.reedHeadMat.dispose();
@@ -813,6 +841,12 @@ function computeCoastalReefPosesForRects(
   maxZ: number,
 ): CoastalReefPose[] {
   const poses: CoastalReefPose[] = [];
+  const cache=new Map<number,Map<number,number>>();
+  const corner=(x:number,z:number)=>{
+    let row=cache.get(z);if(!row){row=new Map();cache.set(z,row);}
+    let h=row.get(x);if(h===undefined){h=combinedHeightWithRects(x,z,rects);row.set(x,h);}
+    return h;
+  };
   let seed = 88421;
   const rand = () => ((seed = (Math.imul(1664525, seed) + 1013904223) | 0) >>> 0) / 4294967296;
   const mouthX = riverCenter(-31);
@@ -836,8 +870,17 @@ function computeCoastalReefPosesForRects(
     const sy = sx * (0.42 + rand() * 0.45);
     const sz = sx * (0.65 + rand() * 0.65);
     // Submerged shallow reef boulders sit slightly proud of seabed so turquoise water shows them clearly
-    const y = bedY + sy * 0.25;
-    poses.push({x, y, z, sx, sy, sz, yaw: rand() * Math.PI * 2, shade: 0.72 + rand() * 0.32});
+    const yaw=rand()*Math.PI*2;
+    let y=bedY+sy*.18;
+    for(const [u,h,v] of coastalFeet[poses.length%coastalFeet.length]){
+      const px=x+sx*u*Math.cos(yaw)+sz*v*Math.sin(yaw),pz=z+sz*v*Math.cos(yaw)-sx*u*Math.sin(yaw);
+      const ix=2*Math.floor((px-1)/2)+1,iz=2*Math.floor((pz-1)/2)+1,tx=(px-ix)/2,tz=(pz-iz)/2;
+      const b=corner(ix+2,iz),c=corner(ix,iz+2);
+      const floor=tx+tz<=1?corner(ix,iz)*(1-tx-tz)+b*tx+c*tz:
+        corner(ix+2,iz+2)*(tx+tz-1)+b*(1-tz)+c*(1-tx);
+      y=Math.min(y,floor-sy*.60*h-.018);
+    }
+    poses.push({x, y, z, sx, sy, sz, yaw, shade: 0.72 + rand() * 0.32});
   }
   return poses;
 }
@@ -865,7 +908,7 @@ export function buildCoastalReefBoxes(expansions: ExpandedTile[] = []): Box[] {
   const boxes: Box[] = [];
   for (let i = 0; i < poses.length; i++) {
     const r = poses[i];
-    // Dodecahedron radius=1 flattened by 0.62 in Y -> snug inscribed OBB (0.78 XZ, 0.54 Y)
+    // The seven imported rocks share this normalized footprint and a 0.60 vertical half-extent.
     const hx = r.sx * 0.78;
     const hy = r.sy * 0.54;
     const hz = r.sz * 0.78;

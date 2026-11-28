@@ -1,3 +1,4 @@
+import {changeShells} from './shell-wallet';
 import {CROP_LIST, CROP_META, CROPS, ITEMS, type CropCategory} from './catalog';
 import {growth, phase, water, WATER_MS} from './farming';
 import {addItem, ensureHome, record, type LifeData, type PlotState} from './state';
@@ -69,10 +70,10 @@ export function shopSeedList(life: LifeData, dayKey: string): ShopSeedEntry[] {
 
 export function buySeed(life: LifeData, seedId: string, count = 1): {ok: boolean; reason?: string} {
   const def = ITEMS[seedId];
-  if (!def || def.kind !== 'seed') return {ok: false, reason: 'invalid'};
+  if (!Number.isSafeInteger(count) || count < 1 || !def || def.kind !== 'seed') return {ok: false, reason: 'invalid'};
   const cost = def.price * count;
   if (life.coins < cost) return {ok: false, reason: 'coins'};
-  life.coins -= cost;
+  changeShells(life, -(cost), 'spend');
   addItem(life, seedId, count);
   return {ok: true};
 }
@@ -312,6 +313,6 @@ export function harvestEnhanced(
   addItem(life, s.crop, n);
   record(life, s.crop, n);
   const bonusCoins = rare ? Math.round((ITEMS[s.crop]?.price ?? 6) * 1.5) : 0;
-  if (bonusCoins > 0) life.coins += bonusCoins;
+  if (bonusCoins > 0) changeShells(life, bonusCoins, 'earn');
   return {item: s.crop, n, rare, bonusCoins};
 }

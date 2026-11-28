@@ -1,4 +1,15 @@
+import {changeShells} from './shell-wallet';
 import type {LifeData} from './state';
+
+/** Speeds in m/s. Reversing first brakes to rest; the next step can take up reverse thrust. */
+export function approachSailingSpeed(speed: number, target: number, dt: number) {
+  const reversing = speed * target < 0;
+  const goal = reversing ? 0 : target;
+  const slowing = Math.abs(goal) < Math.abs(speed);
+  const rate = reversing ? 7 : slowing ? 2.4 + .24 * Math.abs(speed) : goal < 0 ? 1.4 : 3.2;
+  const change = Math.min(Math.abs(goal - speed), rate * dt);
+  return speed + Math.sign(goal - speed) * change;
+}
 
 export interface EnemyShip {
   x: number;
@@ -42,7 +53,7 @@ export const seaInterval = (roll: number) => 300 + Math.min(1700, Math.floor(rol
 export function buyRounds(life: LifeData) {
   const log = sailingLog(life);
   if (log.run || log.reserve + 6 > 24 || life.coins < 6) return false;
-  life.coins -= 6;
+  changeShells(life, -(6), 'spend');
   log.reserve += 6;
   return true;
 }
@@ -118,7 +129,7 @@ export function finishVoyage(life: LifeData, safe: boolean) {
   if (!run) return 0;
   const payout = safe ? run.cargo : 0;
   log.reserve = safe ? Math.min(run.purchased ?? 0, run.ammo) : 0;
-  life.coins += payout;
+  changeShells(life, payout, 'earn');
   life.records['voyage-distance'] = Math.max(life.records['voyage-distance'] ?? 0, Math.floor(run.farthest));
   life.records['voyage-waves'] = Math.max(life.records['voyage-waves'] ?? 0, run.cleared);
   log.run = null;

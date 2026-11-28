@@ -15,11 +15,10 @@ function makeRng(seed: number) {
 }
 
 /**
- * Generates a crisp 1024x1024 4-quadrant procedural foliage alpha-cutout atlas:
+ * Generates a 1024x1024 procedural foliage alpha-cutout atlas:
  * - Q0 [0..0.5, 0.5..1]: Broadleaf tree sprig clusters
  * - Q1 [0.5..1, 0.5..1]: Pine needle bough fans
  * - Q2 [0..0.5, 0..0.5]: Graceful Jiangnan bamboo leaf fronds
- * - Q3 [0.5..1, 0..0.5]: Coastal ferns & wildflower clusters
  *
  * Uses alpha-bleed dilation (green RGB painted into transparent texels) so mipmaps never get dark halos.
  */
@@ -167,37 +166,6 @@ export function getFoliageAtlas(): FoliageAtlasBundle {
         fanAng,
         `rgb(${Math.round(126 * sh)},${Math.round(176 * sh)},${Math.round(98 * sh)})`,
         `rgba(${Math.round(170 * sh)},${Math.round(212 * sh)},${Math.round(128 * sh)},0.65)`,
-      );
-    }
-  }
-  ctx.restore();
-
-  // --- Quadrant 3 (Bottom-Right in canvas => UV x:[0.5..1], y:[0..0.5]): Coastal Fern & Petals ---
-  ctx.save();
-  ctx.translate(H, H);
-  ctx.beginPath();
-  ctx.rect(0, 0, H, H);
-  ctx.clip();
-  ctx.strokeStyle = '#5c7c48';
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(H * 0.5, H * 0.94);
-  ctx.quadraticCurveTo(H * 0.52, H * 0.5, H * 0.5, H * 0.08);
-  ctx.stroke();
-  for (let row = 0; row < 16; row++) {
-    const t = row / 15;
-    const py = H * (0.88 - t * 0.76);
-    const span = (1 - t * 0.72) * 165;
-    for (const side of [-1, 1]) {
-      const sh = 0.75 + t * 0.32;
-      drawLeaf(
-        H * 0.5,
-        py,
-        span,
-        15 * (1 - t * 0.45),
-        side > 0 ? -0.25 : Math.PI + 0.25,
-        `rgb(${Math.round(115 * sh)},${Math.round(172 * sh)},${Math.round(95 * sh)})`,
-        `rgba(180,220,145,0.45)`,
       );
     }
   }

@@ -3,6 +3,74 @@ import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {spawnPackModel, type SpawnedPackModel} from './model-pack';
 import {voyageNoise} from '../life/voyage';
 
+const hullRows = [
+  [-4.25, 0.86],
+  [-3.7, 1.24],
+  [-2.65, 1.47],
+  [-1, 1.58],
+  [1.35, 1.5],
+  [2.9, 1.16],
+  [4.15, 0.54],
+  [4.9, 0.04],
+];
+const hullSection = [
+  [-1, 1.18],
+  [-1.01, 0.98],
+  [-0.98, 0.81],
+  [-0.84, 0.16],
+  [-0.51, -0.47],
+  [0, -0.72],
+  [0.51, -0.47],
+  [0.84, 0.16],
+  [0.98, 0.81],
+  [1.01, 0.98],
+  [1, 1.18],
+];
+
+export const HELM_Z = -2.14;
+
+// The deck planks follow the strakes; the raised stern is a single walkable step.
+export function walkableDeck(x: number, z: number) {
+  if (z < -4 || z > 4.1) return false;
+  const row = hullRows.findIndex(([end]) => end >= z);
+  const [a, wa] = hullRows[row - 1], [b, wb] = hullRows[row];
+  const width = wa + (wb - wa) * (z - a) / (b - a);
+  if (Math.abs(x) > width * .965 - .21) return false;
+  if (Math.hypot(x, z - .45) < .32) return false; // mast
+  if (Math.abs(x) < .54 && Math.abs(z - HELM_Z) < .22) return false;
+  // Gun carriages and the barrels above them extend to either rail.
+  return Math.abs(x) < .61 || (Math.abs(z + .4) >= .42 && Math.abs(z - 1.22) >= .42);
+}
+
+export function deckHeight(x: number, z: number) {
+  return Math.abs(x) <= 1.14 && Math.abs(z + 3.2) <= .825 ? 1.27 : .96;
+}
+
+// Signed distance to the ship's horizontal section at capsule shoulder height.
+// The end faces close the bow and stern. Positive distances are outside the timber.
+export function hullContact(x: number, footY: number, z: number) {
+  const lift = Math.max(0, (Math.abs(z) - 2) * .095);
+  const shoulder = footY + .42 - lift;
+  if (shoulder < -.72 || footY > 1.45 + lift) return null;
+  const section = hullSection;
+  let width = 1;
+  for (let i = 6; i < section.length; i++) {
+    const [f, h] = section[i], [pf, ph] = section[i - 1];
+    if (shoulder <= h) { width = pf + (f - pf) * (shoulder - ph) / (h - ph); break; }
+  }
+  let distance = hullRows[0][0] - z, nx = 0, nz = -1;
+  const bow = z - hullRows[hullRows.length - 1][0];
+  if (bow > distance) { distance = bow; nz = 1; }
+  for (let i = 1; i < hullRows.length; i++) {
+    const [a, wa] = hullRows[i - 1], [b, wb] = hullRows[i];
+    const slope = (wb - wa) * width / (b - a);
+    const length = Math.hypot(1, slope);
+    const d = (Math.abs(x) - wa * width - slope * (z - a)) / length;
+    if (d > distance) { distance = d; nx = (x < 0 ? -1 : 1) / length; nz = -slope / length; }
+  }
+  return {distance, nx, nz, keel: lift - .72};
+}
+
 function painted(width: number, height: number, draw: (c: CanvasRenderingContext2D) => void) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -137,34 +205,13 @@ export class VoyageShip {
       return m;
     };
     // Each adjoining strake shares its edge with the next. Deck planks are separate non-overlapping strips.
-    const rows = [
-      [-4.25, 0.86],
-      [-3.7, 1.24],
-      [-2.65, 1.47],
-      [-1, 1.58],
-      [1.35, 1.5],
-      [2.9, 1.16],
-      [4.15, 0.54],
-      [4.9, 0.04],
-    ];
+    const rows = hullRows;
     const shell = new T.BufferGeometry(),
       points: number[] = [],
       indices: number[] = [];
     for (const [z, w] of rows) {
       const lift = Math.max(0, (Math.abs(z) - 2) * 0.095);
-      for (const [f, y] of [
-        [-1, 1.18],
-        [-1.01, 0.98],
-        [-0.98, 0.81],
-        [-0.84, 0.16],
-        [-0.51, -0.47],
-        [0, -0.72],
-        [0.51, -0.47],
-        [0.84, 0.16],
-        [0.98, 0.81],
-        [1.01, 0.98],
-        [1, 1.18],
-      ])
+      for (const [f, y] of hullSection)
         points.push(f * w, y + lift, z);
     }
     for (let j = 0; j < rows.length - 1; j++)
@@ -217,6 +264,13 @@ export class VoyageShip {
     beam([0, 0.97, 0.45], [0, 5.68, 0.45], 0.105, wood);
     beam([-2, 4.63, 0.45], [2, 4.63, 0.45], 0.065, wood);
     for (const side of [-1, 1]) {
+      if (!rival) {
+        for (const z of [-.35, .35]) beam([side * 1.58, -.36, z], [side * 1.67, 1.2, z], .032, rope);
+        for (let i = 0; i < 5; i++) {
+          const x = side * (1.59 + .018 * i), y = -.21 + .30 * i;
+          beam([x, y, -.35], [x, y, .35], .045, oak);
+        }
+      }
       beam([side * 1.36, 1.19, -2.2], [0, 5.25, 0.45], 0.023, rope);
       beam([side * 1.34, 1.19, 1.8], [0, 5.25, 0.45], 0.023, rope);
       for (let j = 0; j < rows.length - 1; j++) {
@@ -296,7 +350,7 @@ export class VoyageShip {
       put(new T.CylinderGeometry(0.14, 0.11, 0.27, 6), lamp, side, 1.87, -3.67);
       put(new T.ConeGeometry(0.19, 0.19, 6), brass, side, 2.09, -3.67);
     }
-    const helm = put(new T.TorusGeometry(0.32, 0.045, 8, 20), brass, 0, 1.68, -2.14);
+    const helm = put(new T.TorusGeometry(0.32, 0.045, 8, 20), brass, 0, 1.68, HELM_Z);
     for (let i = 0; i < 4; i++) {
       const a = (i * Math.PI) / 4;
       beam(
@@ -322,14 +376,14 @@ export class VoyageShip {
       m.map = name;
       this.textures.push(name);
       put(new T.BoxGeometry(1.48, 0.38, 0.07), m, 0, 1.19, -4.29);
-      for (const [id, x, y, z, size] of [
-        ['meadow-hare', 0, 1, 2.85, 0.83],
-        ['pack-red-panda', 0.72, 1, -0.25, 0.86],
-        ['fauna-capybara', -0.69, 1, -1.4, 1.05],
+      for (const [id, x, z, size] of [
+        ['ranch-hare', 0, 2.85, 0.83],
+        ['ranch-red-panda', 0.72, 2.05, 0.86],
+        ['ranch-capybara', -0.69, -1.4, 1.05],
       ] as const) {
         const pet = spawnPackModel(T, id, size, {outline: false});
         this.crew.push(pet);
-        pet.group.position.set(x, y, z);
+        pet.group.position.set(x, deckHeight(x, z), z);
         this.group.add(pet.group);
       }
       for (const z of [-1.4, -0.78]) beam([-1.58, 1.22, z], [-1.7, -0.05, z], 0.037, wood);

@@ -1,3 +1,4 @@
+import {changeShells} from '../life/shell-wallet';
 import {ensureHome, type LifeData} from '../life/state';
 
 /** Only state owned by a build transaction is journalled. Crop clocks outside a removed bed keep running. */
@@ -23,7 +24,8 @@ export class BuildHistory {
     if(!change)return false;
     const target=redo?change.after:change.before,other=redo?change.before:change.after;
     const {plots,coins,...home}=structuredClone(target);
-    Object.assign(ensureHome(life),home); life.coins+=coins-other.coins;
+    if (!changeShells(life, coins-other.coins, 'refund')) { (redo?this.forward:this.back).push(change); return false; }
+    Object.assign(ensureHome(life),home);
     for(const id of new Set([...Object.keys(plots),...Object.keys(other.plots)])){
       if(JSON.stringify(plots[id])===JSON.stringify(other.plots[id]))continue;
       if(id in plots)life.plots[id]=plots[id];else delete life.plots[id];

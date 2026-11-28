@@ -1,3 +1,6 @@
+import {nativeBuildingMaterial} from '../home/architecture-surfaces';
+import {approachWear} from '../home/preserve-trails';
+import {slopedWaterLevel,valleyWater} from './lake-water';
 import {pathDistance} from '../world/map';
 import {getNativeTreeSpots} from '../home/garden-regions';
 import {signpost, trees, tufts, windy} from './kit';
@@ -5,13 +8,14 @@ import {createLeafCardMaterial, getSharedPineBoughGeometry, buildBroadleafCanopy
 import type {Box} from '../slime/types';
 import type {ZoneBuilder} from './types';
 import {critterField} from './critter-field';
+import {orchardGeometry} from '../home/foliage/orchard-trees';
 
 /** Mixed woodland; repeated scenery is batched and decorative names skip collision baking. */
 export const forest: ZoneBuilder = z => {
   const {T} = z, P = z.ctx.P, root = new T.Group();
   type Pose = [number, number, number, number, number, number, number?, number?, number?];
   const batch = (name: string, geometry: any, color: number, poses: Pose[]) => {
-    const mesh = new T.InstancedMesh(geometry, z.toon(color, /foliage/.test(name) ? {noCache: true} : {}), poses.length);
+    const mesh = new T.InstancedMesh(geometry, nativeBuildingMaterial(z, name, color, /foliage/.test(name) ? {noCache: true} : {}), poses.length);
     mesh.name = name;
     const matrix = new T.Matrix4(), rotation = new T.Quaternion(), tint = new T.Color();
     poses.forEach(([x, y, zz, sx, sy, sz, yaw = 0, pitch = 0, roll = 0], i) => {
@@ -46,25 +50,13 @@ export const forest: ZoneBuilder = z => {
         pebbles.push([px, z.ground(px, pz) + .08, pz, .16 + z.rand() * .2, .12, .22, z.rand() * 6]);
       }
     }
-    if (i > 0) { const k = i * 2; indices.push(k - 2, k, k - 1, k - 1, k, k + 1); }
+    if (i > 0) { const k = i * 2; indices.push(k - 2, k - 1, k, k - 1, k + 1, k); }
   });
   const waterGeometry = new T.BufferGeometry();
   waterGeometry.setAttribute('position', new T.Float32BufferAttribute(vertices, 3)); waterGeometry.setIndex(indices); waterGeometry.computeVertexNormals();
-  // Posterised moving reflection bands and shore foam, following lake-water's vocabulary.
-  // The creek follows terrain, so it cannot share the lake's horizontal reflection plane.
-  const waterMat = z.toon(0x4c91a0, {side: T.DoubleSide, noCache: true});
-  const waterPatch = waterMat.onBeforeCompile;
-  waterMat.onBeforeCompile = (sh: any, renderer: any) => {
-    waterPatch?.call(waterMat, sh, renderer);
-    sh.uniforms.uCreekTime = z.ctx.U.uTime;
-    sh.vertexShader = 'varying vec3 vCreek;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvCreek = position;');
-    sh.fragmentShader = 'uniform float uCreekTime; varying vec3 vCreek;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-      float ripple = sin(vCreek.x * 5.0 + vCreek.z * 3.0 - uCreekTime * 1.4);
-      diffuseColor.rgb *= .88 + .22 * step(.62, ripple);
-      diffuseColor.rgb += vec3(.12, .17, .14) * step(.96, ripple);`);
-  };
-  waterMat.customProgramCacheKey = () => 'forest-creek-bands';
-  const water = new T.Mesh(waterGeometry, waterMat); water.name = 'forest-water'; root.add(water);
+  // The creek follows the hills. Resolve its local interface on the same triangles the camera sees.
+  const water=valleyWater(z.ctx,waterGeometry,0,0,0,.07,.81,{levelAt:slopedWaterLevel(vertices,indices),calm:.44,shoreFoam:.025});
+  water.name='forest-water';root.add(water);
   batch('creek-pebbles-fx', new T.IcosahedronGeometry(1, 0), 0x929185, pebbles);
 
   const spots: [number, number, number][] = [];
@@ -76,8 +68,38 @@ export const forest: ZoneBuilder = z => {
     if (spots.some(([px, pz]) => Math.hypot(px - x, pz - zz) < 2.9)) continue;
     spots.push([x, zz, s]);
   }
+  for(let i=spots.length-1;i>=0;i--)if(approachWear(spots[i][0],spots[i][1])>.04)spots.splice(i,1);
   const pineCount = Math.round((spots.length + 1) * .6), pines = spots.slice(0, pineCount);
-  root.add(trees(z, spots.slice(pineCount), [0x386844, 0x487647, 0x527a48, 0x315c40]));
+  const broadleaf=spots.slice(pineCount);
+  const edgeTrees=broadleaf.filter(([x,zz])=>pathDistance(x,zz)<13 && pathDistance(x,zz)>4.7).slice(0,14);
+  root.add(trees(z,broadleaf.filter(p=>!edgeTrees.includes(p)),[0x386844,0x487647,0x527a48,0x315c40]));
+  const groveBoxes:Box[]=[];
+  const shrubs:Pose[]=[];
+  for(const [kind,k] of [['oak',0],['poplar',1]] as const){
+    for(const variant of [0,1] as const){
+      const shape=orchardGeometry(kind,variant),poses:Pose[]=[];
+      for(let i=2*variant+k;i<edgeTrees.length;i+=4){
+        const [x,zz,size]=edgeTrees[i],y=z.ground(x,zz),scale=size*(kind==='oak'?.53:.61),r=scale*(kind==='oak'?.51:.29);
+        poses.push([x,y,zz,scale,scale,scale,i*1.63]);
+        groveBoxes.push({name:'meadow-'+kind+'-trunk-'+i,min:[x-r,y-.12,zz-r],max:[x+r,y+3*scale,zz+r],camera:true,climbable:false});
+        const cx=x+1.3,cz=zz+.7;
+        if(pathDistance(cx,cz)>4 && creekDistance(cx,cz)>2.5){
+          for(let b=0;b<7;b++){
+            const turn=b*2.3999+i,reach=b===0?0:.72;
+            const bx=cx+Math.sin(turn)*reach,bz=cz+Math.cos(turn)*reach;
+            shrubs.push([bx,z.ground(bx,bz)+.30,bz,.65,.42+(b%3)*.12,.64,turn]);
+          }
+        }
+      }
+      if(!poses.length)continue;
+      const bark=batch('meadow-'+kind+'-bark',shape.trunk,0xffffff,poses);
+      bark.material=new T.MeshStandardMaterial({vertexColors:true,roughness:.9});bark.userData.walkThrough=true;
+      const foliage=batch('meadow-'+kind+'-leaf',shape.canopy,0xffffff,poses);
+      foliage.material=new T.MeshStandardMaterial({vertexColors:true,roughness:.88,side:T.DoubleSide});
+      windy(z,foliage.material,.011);
+    }
+  }
+  batch('meadow-shrub-foliage',new T.IcosahedronGeometry(1,1),0x608d48,shrubs);
   batch('pine-trunks', new T.CylinderGeometry(.18, .28, 1, 7).translate(0, .5, 0), 0x685039,
     pines.map(([x, zz, s]) => [x, z.ground(x, zz), zz, s, s * 4.5, s]));
   // Long limbs and flattened needle clusters leave sightlines under mature pines.
@@ -104,7 +126,7 @@ export const forest: ZoneBuilder = z => {
   const pineTips = batch('pine-foliage-tips', needles, 0x56825c, tips);
   pineTips.material = pineLeafMat;
 
-  const zoneBoxes: Box[] = [];
+  const zoneBoxes: Box[] = groveBoxes;
   const base = z.ground(-70, 95), deck = base + 4;
   batch('treehouse-trunk', new T.CylinderGeometry(.65, .95, 8.5, 9).translate(0, 4.25, 0), 0x624832, [[-70, base, 95, 1, 1, 1]]);
   const thCanopy = batch('treehouse-foliage', buildBroadleafCanopyGeometry(), 0x3f6e44, [[-70, base + 1.4, 95, 2.5, 2.3, 2.5]]);
@@ -280,7 +302,7 @@ export const forest: ZoneBuilder = z => {
 
   const forestNativeTrees = getNativeTreeSpots('forest');
   root.add(signpost(z, -33, 53, -Math.PI / 2, '松果林', '轻手轻脚，小动物会躲'));
-  root.add(tufts(z, 7000, {min: [-105, 31], max: [-31, 141]}, (x, zz) => pathDistance(x, zz) < 2.4
+  root.add(tufts(z, 7000, {min: [-106, 30], max: [-30, 142]}, (x, zz) => pathDistance(x, zz) < 2.4
     || creekDistance(x, zz) < 1
     || Math.hypot(x + 70, zz - 95) < 1.65 // giant treehouse trunk
     || (Math.abs(x + 89) < 2.6 && Math.abs(zz - 77) < 2.2) // ranger cabin footprint

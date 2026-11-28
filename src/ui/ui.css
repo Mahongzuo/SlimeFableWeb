@@ -59,16 +59,47 @@ body>canvas{display:block}
 .objective .diamond{color:var(--stamp);font-size:12px}
 .shards{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;font:800 14px/1 var(--sans)}
 .shards b{color:#b9831c}
-.hud-buttons{position:absolute;right:20px;top:18px;display:flex;gap:10px}
-.icon-btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px 0 8px;border:2px solid var(--ink);border-radius:999px;background:var(--paper);box-shadow:var(--shadow);font:800 14px/1 var(--sans)}
+.hud-buttons{position:absolute;right:20px;top:18px;display:flex;align-items:flex-start;gap:8px;z-index:20}
+.icon-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px 0 8px;border:2px solid var(--ink);border-radius:999px;background:var(--paper);box-shadow:var(--shadow);font:800 14px/1 var(--sans);transition:transform .12s,box-shadow .12s,background .15s,border-color .15s}
+.icon-btn:hover{transform:translate(-1px,-1px);background:#fffaf0;box-shadow:5px 6px 0 rgba(47,42,36,.22)}
+.icon-btn:active{transform:translate(2px,3px);box-shadow:1px 1px 0 rgba(47,42,36,.2)}
+.icon-btn.open{background:#e6f4f0;border-color:var(--sea-deep);color:var(--sea-deep)}
+.icon-btn.nudge{animation:help-nudge .95s ease}
+@keyframes help-nudge{0%{transform:scale(1);box-shadow:var(--shadow)}28%{transform:scale(1.07);background:#fff4cc;border-color:var(--stamp);box-shadow:0 0 0 5px rgba(242,193,78,.42),var(--shadow)}100%{transform:scale(1);box-shadow:var(--shadow)}}
+.quick-menu-wrap{position:relative}
+.qm-caret{font-size:11px;line-height:1;margin-left:-2px;transition:transform .16s ease}
+.icon-btn.open .qm-caret{transform:rotate(180deg)}
+.quick-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:218px;padding:8px;display:flex;flex-direction:column;gap:4px;pointer-events:auto;z-index:30;border-radius:16px;animation:qm-pop .16s ease both}
+@keyframes qm-pop{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.qm-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:1.5px solid transparent;border-radius:11px;background:transparent;text-align:left;transition:background .12s,border-color .12s,transform .1s}
+.qm-item:hover{background:#fffaf0;border-color:var(--ink);transform:translateX(-1px)}
+.qm-item:active{transform:translateX(0)}
+.qm-item .key{min-width:28px;height:24px;flex:none;background:var(--paper-2)}
+.qm-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.qm-text b{font:800 13.5px/1.2 var(--sans);color:var(--ink)}
+.qm-text small{font:600 11px/1.2 var(--sans);color:var(--ink-2)}
+.qm-sep{height:1px;margin:3px 6px;background:rgba(47,42,36,.18)}
+body.quick-menu-open #life-ui .coins{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
 .arpg-target-label{position:fixed;transform:translate(-50%,-100%);padding:4px 8px;border-radius:10px;background:rgba(28,24,22,.78);color:#fff8ec;font:700 11px/1.2 var(--sans);pointer-events:none;z-index:12;min-width:74px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.3)}
 .arpg-target-label .t-head{display:flex;align-items:center;justify-content:center;gap:4px;margin-bottom:3px}
 .arpg-target-label .aura{display:none;padding:1px 5px;border-radius:999px;font:800 10px/1.2 var(--sans);color:#fff}
 .arpg-target-label .bar{height:5px;border-radius:999px;background:rgba(255,255,255,.22);overflow:hidden}
 .arpg-target-label .fill{height:100%;background:#ff6b57;transition:width .12s ease}
-.keys{position:absolute;left:20px;bottom:20px;padding:12px 14px;display:grid;grid-template-columns:auto auto;gap:7px 12px;align-items:center;font:600 12px/1 var(--sans);color:var(--ink-2);transition:opacity .6s}
-.keys.dim{opacity:.28}
+.keys{position:absolute;left:20px;bottom:20px;padding:12px 14px;display:grid;grid-template-columns:auto auto;gap:7px 12px;align-items:center;font:600 12px/1 var(--sans);color:var(--ink-2);transition:opacity .65s ease,transform .65s ease,visibility 0s linear 0s}
+.keys.fade-out{opacity:0;transform:translateY(8px);pointer-events:none;visibility:hidden;transition:opacity .65s ease,transform .65s ease,visibility 0s linear .65s}
 .keys .k{display:flex;gap:4px;justify-content:flex-end}
+.immersive-peek{display:none;position:fixed;right:20px;top:18px;z-index:25;opacity:0;transition:opacity .2s ease}
+body.ui-immersive #game-ui .hud > :not(.crosshair),
+body.ui-immersive #game-ui .prompt,
+body.ui-immersive #life-ui .coins,
+body.ui-immersive .ocean-hud,
+body.ui-immersive .voyage-controls:not(:has(.voyage-guide:not([hidden]))){opacity:0!important;pointer-events:none!important;visibility:hidden!important}
+body.ui-immersive:not(:has(#game-ui .overlay)):not(:has(#life-ui .dex:not(.hidden))):not(:has(#build-ui .build-dock:not(.hidden))) .immersive-peek{display:inline-flex;pointer-events:auto}
+body.ui-immersive .immersive-peek:hover,
+body.ui-immersive .immersive-peek:focus-visible{opacity:.94}
+@media(hover:none){
+  body.ui-immersive .immersive-peek{opacity:.22}
+}
 .prompt{position:absolute;transform:translate(-50%,-100%);display:flex;align-items:center;gap:10px;padding:8px 14px 8px 8px;white-space:nowrap;animation:pop .18s ease both}
 .prompt .key{width:30px;height:30px;font-size:14px;background:var(--sun)}
 .prompt strong{display:block;font:800 15px/1.2 var(--sans)}
@@ -83,8 +114,8 @@ body>canvas{display:block}
 .crosshair.blocked{opacity:.42}
 .crosshair.blocked i{background:#d4cbbd}
 .crosshair.recoil{transform:translate(-50%,-50%) scale(1.32)}
-.toast{position:absolute;left:50%;top:22px;transform:translate(-50%,-140%);max-width:min(560px,80vw);padding:11px 20px;font:700 14px/1.45 var(--sans);text-align:center;transition:transform .35s cubic-bezier(.2,.9,.25,1.2)}
-.toast.show{transform:translate(-50%,0)}
+.toast{position:absolute;left:50%;top:22px;transform:translate(-50%,calc(-100% - 40px));opacity:0;max-width:min(560px,80vw);padding:11px 20px;font:700 14px/1.45 var(--sans);text-align:center;transition:transform .32s cubic-bezier(.2,.9,.25,1.2),opacity .24s ease}
+.toast.show{transform:translate(-50%,0);opacity:1}
 /* ---------- panels ---------- */
 .overlay{position:absolute;inset:0;pointer-events:auto;display:grid;place-items:center;background:rgba(47,42,36,.32);backdrop-filter:blur(3px);animation:fade .2s ease both;padding:24px}
 .pause{width:min(380px,92vw);padding:28px 28px 24px;text-align:center}
@@ -322,6 +353,9 @@ body>canvas{display:block}
 #game-ui .keys {bottom:112px}
 @media(max-width:760px) {
   #game-ui .keys {display:none}
+  #game-ui .hud-buttons {right:10px;top:12px;gap:5px}
+  #game-ui .icon-btn {height:34px;padding:0 9px 0 6px;gap:5px;font-size:12.5px}
+  #game-ui .quick-menu {min-width:196px}
 }
 @media(max-width:600px) {
   #game-ui .overlay:has(.book) {grid-template-columns:minmax(0,1fr);padding:50px 16px 16px}
@@ -351,6 +385,8 @@ body:has(#game-ui .overlay) #life-ui .coins {visibility:hidden}
 
 /* ---- Extensible Gameplay Tutorial Guide Modal ---- */
 .guide-modal{position:relative;width:min(1040px,96vw);height:min(650px,88vh);display:grid;grid-template-columns:255px 1fr;overflow:hidden;background:var(--paper)}
+.overlay:has(.guide-modal){grid-template-columns:minmax(0,1fr)}
+.guide-modal{max-width:100%}
 .g-side{display:flex;flex-direction:column;background:var(--paper-2);border-right:2px solid var(--ink);min-height:0}
 .g-side-head{padding:20px 18px 14px;border-bottom:1.5px dashed rgba(47,42,36,.28)}
 .g-side-head h3{margin:6px 0 2px;font:900 22px/1.15 var(--serif);color:var(--ink)}
@@ -384,11 +420,13 @@ body:has(#game-ui .overlay) #life-ui .coins {visibility:hidden}
 .g-page-num{font:700 12.5px var(--sans);color:var(--ink-2)}
 .g-foot-acts{display:flex;gap:8px;flex-wrap:wrap}
 @media(max-width:760px){
-  .guide-modal{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:min(92vh,760px)}
-  .g-side{border-right:none;border-bottom:2px solid var(--ink)}
+  .guide-modal{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);height:min(92dvh,760px)}
+  .g-side{min-width:0;border-right:none;border-bottom:2px solid var(--ink)}
+  .overlay:has(.guide-modal){padding:8px}
   .g-side-head{padding:12px 14px 8px}
   .g-nav{flex-direction:row;overflow-x:auto;padding:8px 10px}
-  .g-nav-item{width:auto;white-space:nowrap;padding:7px 10px}
+  .g-nav-item{flex:none;width:auto;white-space:nowrap;padding:7px 10px}
+  .g-cards{grid-template-columns:minmax(0,1fr)}
   .g-main-head{padding:14px 52px 10px 16px}
   .g-scroll{padding:12px 16px}
   .g-foot{padding:10px 16px}
@@ -494,3 +532,12 @@ body:has(#game-ui .overlay) #life-ui .coins {visibility:hidden}
 
 .sailing-voyage .slime-hud,.sailing-voyage .hud-day{display:none}
 .sailing-voyage .voyage-controls{bottom:max(16px,env(safe-area-inset-bottom))}
+
+body.home-angling #game-ui .hud,body.home-angling .slime-hud,body.home-angling .voyage-controls { visibility:hidden }
+#harbor-angling button { background:#fff9e9;border:1.5px solid #5e5845;color:#322f24;border-radius:1em;padding:.38em .8em;margin:.15em;touch-action:none }
+#harbor-angling [data-act=pull] {background:#bbded1;font-weight:bold}
+#harbor-angling progress {accent-color:#36857e}
+@media(max-width:550px){#harbor-angling button{min-height:36px}}
+
+body.home-angling #life-ui .dex {top:6dvh;transform:translateX(-50%);max-height:61dvh}
+body.home-angling #life-ui .dex-tabs {display:none}

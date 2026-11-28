@@ -1,4 +1,5 @@
 import {climateMaterial} from '../home/climate-material';
+import {approachWear} from '../home/preserve-trails';
 import {gardenRoads} from '../home/garden-regions';
 import {riverDistance} from '../home/waterway';
 import {getTerrainSplatTextures} from '../home/render/terrain-splat';
@@ -56,8 +57,10 @@ export function sampleTerrainRoadWeight(x: number, zz: number): number {
 }
 
 /** Ground meshes for every home zone (1 m grid) plus the island skirt round the new outline. */
-export function buildInlandGround(ctx: any) {
-  const T = ctx.THREE, group = new T.Group(); group.name = 'inland-ground';
+const meadowGroundMaterials=new WeakMap<object,any>();
+export function meadowGroundMaterial(ctx:any) {
+  const cached=meadowGroundMaterials.get(ctx);if(cached)return cached;
+  const T=ctx.THREE;
   const mat = ctx.mats.toon(0xffffff, {noCache: true, roughness: 0.90, metalness: 0.01}); climateMaterial(mat,'terrain'); mat.vertexColors = true;
   const splat = getTerrainSplatTextures();
   // Inject 3-layer UE-Landscape PBR splatting (learned from stylized-scene + Pine & Parcel + Meadow):
@@ -98,9 +101,10 @@ export function buildInlandGround(ctx: any) {
       float pebbleS = fract(sin(dot(floor(vTurfWorld.xz * 8.5), vec2(127.1, 311.7))) * 43758.5453);
 
       // 3-layer UE-Landscape weights: Meadow (0..0.38) -> Trampled Earth/Moss Shoulder (0.16..0.68) -> Flagstones (0.48..1.0)
-      float pVal = clamp(vSplat.x, 0.0, 1.0);
+      float pVal = clamp(abs(vSplat.x), 0.0, 1.0);
       float stoneBias = (flagTex.a - 0.45) * 0.36 + (edgeN - 0.5) * 0.18;
       float roadW = smoothstep(0.45, 0.72, pVal + stoneBias) * smoothstep(0.18, 0.42, pVal);
+      if(vSplat.x<0.) roadW=0.;
       float coverW = smoothstep(0.08, 0.52, pVal + (edgeN - 0.5) * 0.22);
       float soilW = clamp(coverW - roadW, 0.0, 1.0);
       float grassW = clamp(1.0 - coverW, 0.0, 1.0);
@@ -113,6 +117,10 @@ export function buildInlandGround(ctx: any) {
       vec3 earthBase = mix(vec3(0.65, 0.54, 0.39), vec3(0.52, 0.42, 0.31), soilN);
       vec3 soilCol = mix(earthBase, vec3(0.51, 0.57, 0.34), mossN * 0.52) * (0.90 + 0.18 * flagTex.a);
       soilCol *= 0.92 + 0.16 * smoothstep(0.72, 0.94, pebbleS) - 0.12 * smoothstep(0.24, 0.06, pebbleS);
+      if(vSplat.x<0.) {
+        vec3 dirt=mix(vec3(.286,.172,.084),vec3(.46,.32,.178),soilN);
+        soilCol=mix(dirt,vec3(.41,.37,.23),mossN*.27)*(0.92+.14*pebbleS);
+      }
       // Damp darker transition lip where turf meets trampled verge (gives crisp organic grounding)
       float lip = smoothstep(0.06, 0.28, coverW) * (1.0 - smoothstep(0.28, 0.62, coverW));
       // Layer 3: Sunlit Voronoi limestone flagstones with soft crevice AO
@@ -147,6 +155,13 @@ export function buildInlandGround(ctx: any) {
   };
   mat.customProgramCacheKey = () => prevKey + '-pbr-splat-v5';
   mat.needsUpdate = true;
+  meadowGroundMaterials.set(ctx,mat);
+  return mat;
+}
+
+export function buildInlandGround(ctx:any){
+  const T=ctx.THREE,group=new T.Group(),mat=meadowGroundMaterial(ctx);
+  group.name='inland-ground';
   const c = new T.Color(), tint = new T.Color();
   for (const z of ZONES) {
 
@@ -170,7 +185,8 @@ export function buildInlandGround(ctx: any) {
         if (!inSpawnQuay && edge < 4.8 && zz < 31.5) sandW = Math.max(sandW, Math.min(1, (4.8 - edge) / 1.4));
       }
       colors.set([c.r, c.g, c.b], i * 3);
-      splats.set([pathW, sandW], i * 2);
+      const approach=approachWear(x,zz);
+      splats.set([approach>0 && pathW<.3 ? -.80*approach : pathW, sandW], i * 2);
     }
     geo.setAttribute('color', new T.BufferAttribute(colors, 3));
     geo.setAttribute('aSplat', new T.BufferAttribute(splats, 2));

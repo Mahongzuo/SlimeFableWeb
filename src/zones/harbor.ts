@@ -4,7 +4,7 @@ import {coastalSeabedHeightAt} from '../world/island-coast';
 import {SEA_LEVEL} from '../home/layout';
 import {fishingSpot} from './fishing-spot';
 import {signpost, tufts} from './kit';
-import {buildCoastalBambooAndFernsISM} from '../home/foliage/bamboo-ism';
+import {buildCoastalBambooISM} from '../home/foliage/bamboo-ism';
 import type {ZoneBuilder} from './types';
 
 export const harbor: ZoneBuilder = z => {
@@ -16,7 +16,7 @@ export const harbor: ZoneBuilder = z => {
     tufts(
       coastalCtx,
       4100,
-      {min: [-29, -34], max: [36, 30]},
+      {min: [-30, -34], max: [36, 30]},
       (x, zz) => {
         const gy = coastalSeabedHeightAt(x, zz);
         const jitter = 0.22 * Math.sin(x * 0.45 + zz * 0.35);
@@ -45,7 +45,7 @@ export const harbor: ZoneBuilder = z => {
       [0x6fb84d, 0xffe066, 0xffb8cc, 0xffffff],
     ),
   );
-  root.add(buildCoastalBambooAndFernsISM(z));
+  root.add(buildCoastalBambooISM(z));
   function landing(id: string, x: number, zz: number, toward: number, label: string) {
     const floor = Math.max(riverLevel + .35, z.ground(x, zz) + .08);
     const pier = new T.Group();
@@ -66,7 +66,7 @@ export const harbor: ZoneBuilder = z => {
       timber(new T.TorusGeometry(.113, .024, 5, 10), 0xb6a07d, dx, floor + .30, dz).rotation.x = Math.PI / 2;
     }
     root.add(signpost(z,x-2.15*toward,zz+1.2,Math.PI/2*toward,label,id==='fish-harbor-pier'?'F 钓鱼 · H 史莱姆号启航':'钓鱼 · 靠近木台按 F'));
-    return fishingSpot(z,id,[x,floor,zz],[toward,0],'harbor');
+    return fishingSpot(z,id,[x,floor,zz],[toward,0],id==='fish-harbor-pier'?'canal':'waterfall');
   }
   const willow = landing('fish-harbor-pier',-11.1,8,1,'柳岸钓台');
   const creek = landing('fish-harbor-pontoon',-2.5,-16,-1,'南溪浅湾');

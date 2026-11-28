@@ -1,3 +1,4 @@
+import {architectureMap} from '../home/architecture-surfaces';
 import {inland, pathDistance, TERRACE} from '../world/map';
 import {fence, signpost, trees, tufts} from './kit';
 import {climateMaterial} from '../home/climate-material';
@@ -178,7 +179,7 @@ function buildInteractiveWheatField(z: ZoneContext) {
         vec2 toStalk = instPos.xz - uSlimePos.xz;
         float dSlime = length(toStalk);
         float pushRad = uSlimePos.w + 0.82;
-        if (dSlime < pushRad && abs(instPos.y - uSlimePos.y) < 1.6) {
+        if (uSlimePos.w > 0.0 && dSlime < pushRad && abs(instPos.y - uSlimePos.y) < 1.6) {
           float push = 1.0 - dSlime / pushRad;
           float push2 = push * push;
           vec2 pushDir = dSlime > 0.01 ? toStalk / dSlime : vec2(1.0, 0.0);
@@ -547,7 +548,8 @@ export const farm: ZoneBuilder = z => {
         normalMatrix.getNormalMatrix(matrix);
         for (const group of groups) {
           const material = materials[group.materialIndex], map = material.map;
-          const key = map ? 'farm-signs' : passable ? 'farm-details-fx' : 'farm-structures';
+          const finish = mesh.name === 'barn-wall' ? 'boards' : /^(barn-roof|roof-tiles|barn-eave|barn-ridge)$/.test(mesh.name) ? 'shingles' : undefined;
+          const key = finish ?? (map ? 'farm-signs' : passable ? 'farm-details-fx' : 'farm-structures');
           if (!surfaces.has(key)) surfaces.set(key, {position: [], normal: [], color: [], uv: []});
           const surface = surfaces.get(key)!;
           let slot = 0;
@@ -561,8 +563,16 @@ export const farm: ZoneBuilder = z => {
             vertex.fromBufferAttribute(pos, k).applyMatrix4(matrix);
             normal.fromBufferAttribute(normals, k).applyMatrix3(normalMatrix).normalize();
             surface.position.push(vertex.x, vertex.y, vertex.z); surface.normal.push(normal.x, normal.y, normal.z);
-            surface.color.push(base.r, base.g, base.b);
-            surface.uv.push(map ? (slot + uv.getX(k)) / 3 : 0, map ? uv.getY(k) : 0);
+            if (finish) {
+              surface.color.push(.94, .92, .88);
+              // Project in world metres across adjacent bricks and roof courses.
+              const u = Math.abs(normal.x) > .7 ? vertex.z : vertex.x;
+              const v = Math.abs(normal.y) > .6 ? vertex.z : vertex.y;
+              surface.uv.push(u * .55, v * .55);
+            } else {
+              surface.color.push(base.r, base.g, base.b);
+              surface.uv.push(map ? (slot + uv.getX(k)) / 3 : 0, map ? uv.getY(k) : 0);
+            }
           }
         }
       }
@@ -574,7 +584,10 @@ export const farm: ZoneBuilder = z => {
       const geometry = new T.BufferGeometry();
       for (const [key, values] of Object.entries(data)) geometry.setAttribute(key, new T.Float32BufferAttribute(values, key === 'uv' ? 2 : 3));
       geometry.computeBoundingSphere();
-      const material = z.toon(0xffffff, {noCache: true, ...(name === 'farm-signs' ? {map: atlasTexture} : {})});
+      let map = null;
+      if (name === 'farm-signs') map = atlasTexture;
+      if (name === 'boards' || name === 'shingles') map = architectureMap(T, name);
+      const material = z.toon(0xffffff, {noCache: true, map});
       material.vertexColors = true;
       const mesh = new T.Mesh(geometry, material); mesh.name = name;
       mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh);
@@ -584,11 +597,10 @@ export const farm: ZoneBuilder = z => {
   consolidate(root, true);
   atlasTexture.needsUpdate = true;
   root.add(buildInteractiveWheatField(z));
-  // Eight scenery submissions: solid, detail, signs, rooster, canopy and three grass batches.
-  // farmLoop + critterField add at most 36 + 36, keeping the colour pass at 80 calls.
+  // The barn walls and roof each share one tiled material across all their courses.
   const update = farmLoop(z, root, plots, {x: stall.x, z: stall.z + 1.4});
   const farmNativeTrees = [[-76, 20, 1.05], [-51, 28.1, 1.05], [-86, -19, 1.05]] as const;
-  root.add(tufts(z, 4500, {min: [-105, -30], max: [-31, 29]}, (x, zz) => pathDistance(x, zz) < 2.4 ||
+  root.add(tufts(z, 4500, {min: [-106, -31], max: [-30, 30]}, (x, zz) => pathDistance(x, zz) < 2.4 ||
     plots.some(p => Math.abs(x - p.x) < 4.18 && Math.abs(zz - p.z) < 2.62) ||
     treeSpots.some(([tx, tz, ts]) => Math.hypot(x - tx, zz - tz) < Math.max(0.82, ts * 0.58 + 0.38)) ||
     farmNativeTrees.some(([tx, tz, r]) => Math.hypot(x - tx, zz - tz) < r) ||

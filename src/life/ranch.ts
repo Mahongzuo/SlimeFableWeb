@@ -1,3 +1,7 @@
+import {companionSpecies,starterIds} from './companion-catalog';
+import {newCare,feedNow} from './companion-care';
+import {capacityProgress} from './shell-wallet';
+import {changeShells} from './shell-wallet';
 import {ITEMS} from './catalog';
 import {hasBuff} from './cooking';
 import {isMuseumHallRestored} from './museum';
@@ -15,10 +19,9 @@ export interface RanchSpeciesDef {
   icon: string;
   tier: RanchTier;
   housing: HousingKind;
-  /** DreamWorld GLB asset id (plus optional tint for rare variants). */
+  /** Local animated field-guide model and thumbnail. */
   asset: string;
   size: number;
-  tint?: number;
   favoriteItem: string;
   productId: string;
   bonusProductId?: string;
@@ -38,70 +41,71 @@ export interface RanchSpeciesDef {
 export const RANCH_SPECIES: RanchSpeciesDef[] = [
   {
     id: 'ranch-hare', name: '草甸野兔', icon: '🐇', tier: 'common', housing: 'coop',
-    asset: 'meadow-hare', size: 0.56, favoriteItem: 'crop-carrot', productId: 'prod-wool', adoptCost: 18,
+    asset: 'ranch-hare', size: 0.56, favoriteItem: 'crop-carrot', productId: 'prod-wool', adoptCost: 18,
     resonateElement: 1, zones: ['park', 'farm'], shyness: 0.45,
     desc: '温顺活泼的田园野兔，每日梳理可得云朵软绒。',
   },
   {
     id: 'ranch-pheasant', name: '红腹锦鸡', icon: '🦚', tier: 'common', housing: 'coop',
-    asset: 'waterside-kingfisher', size: 0.62, tint: 0xe6843c, favoriteItem: 'crop-wheat', productId: 'prod-egg', bonusProductId: 'prod-feather', adoptCost: 22,
+    asset: 'ranch-pheasant', size: 1.02, favoriteItem: 'crop-wheat', productId: 'prod-egg', bonusProductId: 'prod-feather', adoptCost: 22,
     resonateElement: 2, zones: ['farm', 'forest'], shyness: 0.5,
     desc: '羽色绚丽的林缘珍禽，在牧舍安家后每日产下金纹灵蛋。',
   },
   {
     id: 'ranch-deer', name: '林间梅花鹿', icon: '🦌', tier: 'common', housing: 'barn',
-    asset: 'fauna-deer', size: 1.32, favoriteItem: 'crop-corn', productId: 'prod-milk', bonusProductId: 'prod-truffle', adoptCost: 34,
+    asset: 'ranch-deer', size: 1.32, favoriteItem: 'crop-corn', productId: 'prod-milk', bonusProductId: 'prod-truffle', adoptCost: 34,
     resonateElement: 1, zones: ['forest', 'park'], shyness: 0.65,
     desc: '爱在银杏林缘漫步的梅花鹿，每日馈赠牧场鲜乳。',
   },
   {
     id: 'ranch-capybara', name: '悠闲水豚', icon: '🦫', tier: 'common', housing: 'barn',
-    asset: 'fauna-capybara', size: 0.92, favoriteItem: 'crop-pumpkin', productId: 'prod-spring-dew', adoptCost: 36,
+    asset: 'ranch-capybara', size: 0.92, favoriteItem: 'crop-pumpkin', productId: 'prod-spring-dew', adoptCost: 36,
     resonateElement: 0, zones: ['lake', 'harbor'], shyness: 0.15,
     desc: '情绪极其稳定的水边哲人，有露天温泉时会自动来泡澡产温泉暖露！',
   },
   {
     id: 'ranch-red-panda', name: '绒尾小熊猫', icon: '🦝', tier: 'rare', housing: 'barn',
-    asset: 'pack-red-panda', size: 0.80, favoriteItem: 'crop-strawberry', productId: 'prod-bamboo-dew', bonusProductId: 'prod-wool', adoptCost: 44,
+    asset: 'ranch-red-panda', size: 0.80, favoriteItem: 'crop-strawberry', productId: 'prod-bamboo-dew', bonusProductId: 'prod-wool', adoptCost: 44,
     resonateElement: 1, zones: ['forest', 'park'], shyness: 0.55,
     desc: '竹林小院里的毛绒萌物，每日收集清甜的竹心清露。',
   },
   {
     id: 'ranch-fox', name: '紫藤赤狐', icon: '🦊', tier: 'rare', housing: 'barn',
-    asset: 'pack-fox', size: 0.88, favoriteItem: 'crop-tomato', productId: 'prod-truffle', adoptCost: 46,
+    asset: 'ranch-fox', size: 0.88, favoriteItem: 'crop-tomato', productId: 'prod-truffle', adoptCost: 46,
     resonateElement: 2, zones: ['forest', 'park'], shyness: 0.72,
     desc: '机敏优雅的赤狐，亲密度高时会帮你从树根下刨出林间黑松露！',
   },
   {
     id: 'ranch-otter', name: '溪涧水獭', icon: '🦦', tier: 'rare', housing: 'coop',
-    asset: 'fauna-capybara', size: 0.58, tint: 0x6e5444, favoriteItem: 'fish-crucian', productId: 'prod-pearl', adoptCost: 42,
+    asset: 'ranch-otter', size: 0.88, favoriteItem: 'fish-crucian', productId: 'prod-pearl', adoptCost: 42,
     resonateElement: 0, zones: ['lake', 'harbor'], weathers: ['rain', 'rainbow', 'clear'], shyness: 0.5,
     desc: '爱在水巷与镜湖浅滩翻找石子的水獭，常衔来晶莹镜湖河珠。',
   },
   {
     id: 'ranch-crane', name: '丹顶仙鹤', icon: '🦢', tier: 'rare', housing: 'pasture',
-    asset: 'sea-gull', size: 0.98, tint: 0xfaf7f0, favoriteItem: 'fish-carp', productId: 'prod-feather', adoptCost: 52,
+    asset: 'ranch-crane', size: 1.14, favoriteItem: 'fish-carp', productId: 'prod-feather', adoptCost: 52,
     resonateElement: 1, zones: ['lake'], weathers: ['rainbow', 'mist', 'clear'], shyness: 0.75,
     desc: '雨后彩虹或薄雾时降临镜湖的仙鹤，赐予七彩灵羽。',
   },
   {
     id: 'ranch-snow-fox', name: '月影雪狐', icon: '❄️', tier: 'legendary', housing: 'barn',
-    asset: 'pack-fox', size: 0.90, tint: 0xe6f2ff, favoriteItem: 'crop-nightbloom', productId: 'prod-star-fur', bonusProductId: 'prod-truffle', adoptCost: 68,
+    asset: 'ranch-snow-fox', size: 0.90, favoriteItem: 'crop-nightbloom', productId: 'prod-star-fur', bonusProductId: 'prod-truffle', adoptCost: 68,
     resonateElement: 4, zones: ['forest', 'lake'], weathers: ['snow', 'mist', 'cloudy'], nightOnly: true, shyness: 0.85,
     desc: '【传说稀兽】夜幕或薄雾落雪时偶现的银白灵狐，产出稀世星光狐绒。',
   },
   {
     id: 'ranch-white-deer', name: '霜角白鹿', icon: '👑', tier: 'legendary', housing: 'barn',
-    asset: 'fauna-deer', size: 1.44, tint: 0xf4f8fc, favoriteItem: 'crop-starlight', productId: 'prod-milk', bonusProductId: 'prod-star-fur', adoptCost: 76,
+    asset: 'ranch-white-deer', size: 1.44, favoriteItem: 'crop-starlight', productId: 'prod-milk', bonusProductId: 'prod-star-fur', adoptCost: 76,
     resonateElement: 3, zones: ['forest', 'park'], seasons: [2, 3, 0], weathers: ['mist', 'snow', 'rainbow'], shyness: 0.9,
     desc: '【传说稀兽】自带星辉微光的祥瑞白鹿，收集星露荧光花即可上前亲近结识。',
   },
   {
     id: 'ranch-nine-deer', name: '敦煌九色鹿影', icon: '🌟', tier: 'legendary', housing: 'pasture',
-    asset: 'fauna-deer', size: 1.48, tint: 0xf2c97d, favoriteItem: 'art-longjing-tea', productId: 'prod-star-fur', bonusProductId: 'prod-pearl', adoptCost: 88,
+    asset: 'ranch-nine-deer', size: 1.48, favoriteItem: 'art-longjing-tea', productId: 'prod-star-fur', bonusProductId: 'prod-pearl', adoptCost: 88,
     resonateElement: 1, zones: ['park', 'lake'], historyOnly: true, shyness: 0.82,
     desc: '【史事秘境传说】只在「历史上的今天」主题日偶现的壁画灵兽，见证岁月拾光。',
   },
+  ...companionSpecies,
 ];
 
 export const RANCH_SPECIES_MAP: Record<string, RanchSpeciesDef> = Object.fromEntries(RANCH_SPECIES.map(s => [s.id, s]));
@@ -151,6 +155,7 @@ export function generateDailyEncounters(
   const isNight = env.hour < 6 || env.hour >= 19;
 
   const eligible = RANCH_SPECIES.filter(sp => {
+    if (!sp.zones.length) return false;
     if (sp.seasons && !sp.seasons.includes(env.season)) return false;
     if (sp.weathers && !sp.weathers.includes(env.weather)) return false;
     if (sp.nightOnly && !isNight) return false;
@@ -216,6 +221,8 @@ export function interactWildEncounter(
   const sp = RANCH_SPECIES_MAP[speciesId];
   if (!sp) return {tamed: false, trustDelta: 0, firstDiscovery: false, message: '未知物种'};
 
+  if(life.home?.ranch?.claimedEncounters.includes(encounterId))
+    return {tamed:false,trustDelta:0,firstDiscovery:false,message:'已经收下这次遭遇的赠礼。'};
   const favDef = ITEMS[sp.favoriteItem];
   const favLabel = `${favDef?.icon ?? ''}${favDef?.name ?? sp.favoriteItem}`;
   const hasFavInBag = (life.bag[sp.favoriteItem] ?? 0) > 0;
@@ -249,7 +256,7 @@ export function interactWildEncounter(
   };
 }
 
-/** Computes total ranch animal capacity from base pasture + placed Coops/Barns + player-built closed voxel fence pens! */
+/** Economic progress controls slots. Physical housing remains available for stationing animals. */
 export function ranchCapacity(life: LifeData, voxelPens: DetectedPasturePen[] = []): {
   total: number;
   base: number;
@@ -257,14 +264,14 @@ export function ranchCapacity(life: LifeData, voxelPens: DetectedPasturePen[] = 
   voxelFenceBonus: number;
 } {
   const home = ensureHome(life);
-  const base = 2;
+  // Housing counts remain available to older journal extensions.
   let buildings = 0;
   for (const p of home.placed) {
     if (p.itemId === 'poi-coop') buildings += 4;
     else if (p.itemId === 'poi-barn') buildings += 6;
   }
   const voxelFenceBonus = voxelPens.reduce((sum, pen) => sum + pen.capacityBonus, 0);
-  return {total: base + buildings + voxelFenceBonus, base, buildings, voxelFenceBonus};
+  return {total: capacityProgress(life).total, base: 1, buildings, voxelFenceBonus};
 }
 
 export function adoptRanchAnimal(
@@ -278,18 +285,18 @@ export function adoptRanchAnimal(
   const home = ensureHome(life);
   const ranch = home.ranch!;
   // Common species can also be unlocked if already visited via Habitat system
-  const unlocked = ranch.discovered.includes(speciesId) ||
+  const unlocked = starterIds.includes(speciesId) || ranch.discovered.includes(speciesId) ||
     (sp.tier === 'common' && Object.keys(home.visitors).some(v => v.includes(speciesId.replace('ranch-', ''))));
   if (!unlocked) return {ok: false, reason: '需先在野外遭遇并结识该物种后才能收养'};
 
   const cap = ranchCapacity(life, voxelPens);
   if (ranch.animals.length >= cap.total) {
-    return {ok: false, reason: `牧场已满（${ranch.animals.length}/${cap.total}），可建造牧舍/鹿苑或用木栅栏积木围出放牧圈！`};
+    return {ok: false, reason: `牧场已满（${ranch.animals.length}/${cap.total}），${capacityProgress(life).hint}。`};
   }
   if (life.coins < sp.adoptCost) {
     return {ok: false, reason: `贝壳不足（收养需要 ${sp.adoptCost} 🐚）`};
   }
-  life.coins -= sp.adoptCost;
+  changeShells(life, -(sp.adoptCost), 'spend');
   const animal: AdoptedAnimal = {
     id: `pet-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     speciesId,
@@ -297,8 +304,10 @@ export function adoptRanchAnimal(
     adoptedAt: Date.now(),
     affection: 60,
     mood: 85,
+    care: newCare(Date.now()),
   };
   ranch.animals.push(animal);
+  if (!ranch.discovered.includes(speciesId)) ranch.discovered.push(speciesId);
   addHomeXp(life, 20);
   return {ok: true, animal};
 }
@@ -330,6 +339,7 @@ export function careForAnimal(
     petted = true;
   }
   if (feedFavorite && a.lastFedDay !== dayKey && takeItem(life, sp.favoriteItem, 1)) {
+    feedNow(a);
     a.lastFedDay = dayKey;
     gain += 45;
     a.mood = 100;
@@ -391,6 +401,8 @@ export function toggleAnimalFollow(life: LifeData, animalId: string): boolean {
   const home = ensureHome(life);
   const a = home.ranch?.animals.find(x => x.id === animalId);
   if (!a) return false;
-  a.following = !a.following;
+  const next = !a.following;
+  for (const other of home.ranch!.animals) other.following = false;
+  a.following = next;
   return a.following;
 }

@@ -23,10 +23,16 @@ function normalField(seed:number) {
   return map;
 }
 export function waterWaves(ctx:any){
-  return ctx.waterWaves??={normals:[normalField(5311),normalField(98761)],events:Array.from({length:8},()=>new Vector4(0,0,-100,0)),cursor:0,surfaces:new Set<any>()};
+  return ctx.waterWaves??={normals:[normalField(5311),normalField(98761)],events:Array.from({length:8},()=>new Vector4(0,0,-100,0)),cursor:0,animalCursor:0,animalEvents:Array.from({length:8},()=>new Vector4(0,0,-100,0)),surfaces:new Set<any>()};
 }
 export function disturbWater(ctx:any,x:number,z:number,strength:number){
   const waves=waterWaves(ctx);
   waves.events[waves.cursor].set(x,z,ctx.U.uTime.value,strength);
   waves.cursor=(waves.cursor+1)%waves.events.length;
+}
+
+export function disturbAnimalWater(ctx:any,x:number,z:number,strength:number){
+  const waves=waterWaves(ctx);
+  waves.animalEvents[waves.animalCursor].set(x,z,ctx.U.uTime.value,strength);
+  waves.animalCursor=(waves.animalCursor+1)%waves.animalEvents.length;
 }

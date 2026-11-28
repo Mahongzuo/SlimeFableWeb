@@ -130,6 +130,16 @@ export class SlimeSolver {
  /** Hard one-sided plane constraint for moving/tilted seats (e.g. swing plank) so jelly sits flush and never clips underneath. */
  private ridePlaneProject(p:Vec,rp:{point:Vec;normal:Vec}){const n=rp.normal,d=(p[0]-rp.point[0])*n[0]+(p[1]-rp.point[1])*n[1]+(p[2]-rp.point[2])*n[2],r=SPACING*.48;if(d<r){const push=r-d;p[0]+=n[0]*push;p[1]+=n[1]*push;p[2]+=n[2]*push}}
 
+ /** Carry only the mounted body between worker samples. Detached clones stay in world space. */
+ carryBodyTo(anchor:Vec){
+  for(let k=0;k<3;k++){
+   const delta=anchor[k]-this.foot[k];
+   this.center[k]+=delta;
+   for(const p of this.particles)if(!p.group){p.p[k]+=delta;p.old[k]+=delta;}
+  }
+  this.foot=[...anchor];
+ }
+
  step(dt:number,input:FrameInput){
   dt=Math.min(dt,1/60);
   const cl=input.cling??null;

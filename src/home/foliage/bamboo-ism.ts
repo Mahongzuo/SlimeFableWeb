@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type {ZoneContext} from '../../zones/types';
-import {inland, LAKE, lakeEdge, pathDistance, WORLD} from '../../world/map';
+import {inland, lakeEdge, pathDistance, WORLD} from '../../world/map';
 import {riverDistance} from '../waterway';
 import {createLeafCardMaterial} from './tree-ism';
 import {climateMaterial} from '../climate-material';
@@ -89,50 +89,8 @@ function buildBambooFrondGeometry(): THREE.BufferGeometry {
   return geo;
 }
 
-/** Coastal cliff-rim & understory fern cluster using Quadrant 3 (UV [0.5..1, 0..0.5]). */
-function buildFernClusterGeometry(): THREE.BufferGeometry {
-  const pos: number[] = [];
-  const norm: number[] = [];
-  const uv: number[] = [];
-  const col: number[] = [];
-  const u0 = 0.51, v0 = 0.01, u1 = 0.99, v1 = 0.49;
-
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2 + 0.3;
-    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.68, a, 0));
-    const hw = 0.48, hh = 0.72;
-    const pts = [
-      [-hw, 0, 0, u0, v0],
-      [hw, 0, 0, u1, v0],
-      [hw, hh, 0, u1, v1],
-      [-hw, hh, 0, u0, v1],
-    ].map(([lx, ly, lz, uu, vv]) => {
-      const v = new THREE.Vector3(lx, ly, lz).applyQuaternion(q);
-      return {v, uu, vv};
-    });
-    const emit = (pt: {v: THREE.Vector3; uu: number; vv: number}) => {
-      pos.push(pt.v.x, pt.v.y, pt.v.z);
-      norm.push(0, 1, 0);
-      uv.push(pt.uu, pt.vv);
-      const ao = 0.58 + 0.42 * Math.min(1, pt.v.y / 0.55);
-      col.push(ao, ao, ao);
-    };
-    emit(pts[0]); emit(pts[1]); emit(pts[2]);
-    emit(pts[0]); emit(pts[2]); emit(pts[3]);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  return geo;
-}
-
-/**
- * Builds island-wide coastal bamboo groves & cliff-rim ferns in just 3 ISM draw calls!
- * Directly delivers the iconic bamboo-on-coastal-cliff silhouettes from reference images 1 & 2.
- */
-export function buildCoastalBambooAndFernsISM(z: ZoneContext): THREE.Group {
+/** Seeded coastal bamboo groves with one batch for culms and one for the canopy. */
+export function buildCoastalBambooISM(z: ZoneContext): THREE.Group {
   const {T} = z;
   const group = new T.Group();
   group.name = 'coastal-bamboo-foliage';
@@ -230,38 +188,6 @@ export function buildCoastalBambooAndFernsISM(z: ZoneContext): THREE.Group {
   if (culmsMesh.instanceColor) culmsMesh.instanceColor.needsUpdate = true;
   if (frondsMesh.instanceColor) frondsMesh.instanceColor.needsUpdate = true;
   group.add(culmsMesh, frondsMesh);
-
-  // Coastal cliff-rim & grove understory ferns (1 ISM draw call)
-  const fernSpots: [number, number, number, number, number][] = [];
-  for (let i = 0; i < 420; i++) {
-    const x = WORLD.min[0] + 1 + rand() * (WORLD.max[0] - WORLD.min[0] - 2);
-    const zz = WORLD.min[1] + 1 + rand() * (WORLD.max[1] - WORLD.min[1] - 2);
-    const edgeDist = Math.min(x - WORLD.min[0], WORLD.max[0] - x, zz - WORLD.min[1], WORLD.max[1] - zz);
-    // Concentrate along coastal cliff edges & bamboo groves
-    if (edgeDist > 8.5 && !groveCenters.some(([gx, gz, rad]) => Math.hypot(x - gx, zz - gz) < rad + 2)) continue;
-    if (pathDistance(x, zz) < 2.6 || lakeEdge(x, zz) < 1.2 || riverDistance(x, zz) < 4.5 || Math.hypot(x - 10, zz - 17) < 12) continue;
-    const y = inland(x, zz);
-    if (y < -0.1) continue;
-    fernSpots.push([x, y, zz, rand() * Math.PI * 2, 0.75 + rand() * 0.75]);
-  }
-
-  if (fernSpots.length > 0) {
-    const fernGeo = buildFernClusterGeometry();
-    const fernMat = createLeafCardMaterial(z, 0.08);
-    const ferns = new T.InstancedMesh(fernGeo, fernMat, fernSpots.length);
-    ferns.name = 'coastal-ferns-foliage';
-    fernSpots.forEach(([x, y, zz, yaw, s], i) => {
-      e.set(0, yaw, 0);
-      q.setFromEuler(e);
-      m.compose(p.set(x, y - 0.02, zz), q, sc.set(s, s, s));
-      ferns.setMatrixAt(i, m);
-      ferns.setColorAt(i, col.setHex(0x5f944f).offsetHSL((rand() - 0.5) * 0.02, 0.04, (rand() - 0.5) * 0.08));
-    });
-    ferns.receiveShadow = true;
-    ferns.instanceMatrix.needsUpdate = true;
-    if (ferns.instanceColor) ferns.instanceColor.needsUpdate = true;
-    group.add(ferns);
-  }
 
   return group;
 }

@@ -1,7 +1,9 @@
+import {nativeBuildingMaterial} from '../home/architecture-surfaces';
 import {LAKE, pathDistance, lakeEdge} from '../world/map';
 import {signpost, trees, tufts, windy} from './kit';
 import type {Box} from '../slime/types';
 import type {ZoneBuilder} from './types';
+import {approachWear} from '../home/preserve-trails';
 import {lakeWater} from './lake-water';
 import {critterField} from './critter-field';
 import {fishingSpot} from './fishing-spot';
@@ -12,7 +14,7 @@ export const lake: ZoneBuilder = z => {
   type Part = [number, number, number, number, number, number, number?, number?];
   // One draw mesh per repeated shape; optional yaw and roll also cover fallen timber.
   const instances = (name: string, geometry: any, color: number, parts: Part[], palette?: number[]) => {
-    const mesh = new T.InstancedMesh(geometry, z.toon(color), parts.length);
+    const mesh = new T.InstancedMesh(geometry, nativeBuildingMaterial(z, name, color), parts.length);
     mesh.name = name;
     const dummy = new T.Object3D();
     parts.forEach(([x, y, zz, sx, sy, sz, yaw = 0, roll = 0], i) => {
@@ -184,6 +186,9 @@ export const lake: ZoneBuilder = z => {
   }
   for (let i = 0; i < 6; i++) { const n = (i + 1) % 6; quad(i, n, n + 30, i + 30); quad(24 + i, 54 + i, 54 + n, 24 + n); }
   const roofGeo = new T.BufferGeometry(); roofGeo.setAttribute('position', new T.Float32BufferAttribute(roofPos, 3)); roofGeo.setIndex(roofIndex); roofGeo.computeVertexNormals();
+  const roofUV: number[] = [];
+  for (let i = 0; i < roofPos.length; i += 3) roofUV.push((roofPos[i] - cx) * .85, (roofPos[i + 2] - pavilionZ) * .85);
+  roofGeo.setAttribute('uv', new T.Float32BufferAttribute(roofUV, 2));
   instances('north-pavilion-hip-roof', roofGeo, P.tileRoof, [[0, 0, 0, 1, 1, 1]]);
   const roofRibs: Part[] = [];
   for (let side = 0; side < 6; side++) for (let j = 0; j < 4; j++) {
@@ -277,12 +282,12 @@ export const lake: ZoneBuilder = z => {
   instances('lake-benches', box, 0xaa835a, benches);
   const spots: [number, number, number][] = [];
   for (let i = 0; i < 40; i++) { const x = -28 + z.rand() * 57, zz = 82 + z.rand() * 58; if (lakeEdge(x, zz) > 1.35 && pathDistance(x, zz) > 3) spots.push([x, zz, .8 + z.rand() * .6]); }
-  root.add(trees(z, spots));
+  root.add(trees(z, spots.filter(([x,zz])=>approachWear(x,zz)<.04)));
   const lakeNativeTrees = [
     [18, 121, 1.05], [-16, 102, 1.15], [20, 130, 0.95],
     [-12, 99, 1.10], [14, 98, 1.15], [20, 101, 1.00],
   ] as const;
-  root.add(tufts(z, 1200, {min: [-29, 82], max: [30, 141]},
+  root.add(tufts(z, 1200, {min: [-30, 80], max: [31, 142]},
     (x, zz) => lakeEdge(x, zz) < 1.17 || pathDistance(x, zz) < 2.8 ||
       Math.hypot(x - cx, zz - pavilionZ) < 3.4 ||
       spots.some(([tx, tz, ts]) => Math.hypot(x - tx, zz - tz) < Math.max(0.80, ts * 0.58 + 0.38)) ||

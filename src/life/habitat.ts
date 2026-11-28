@@ -53,7 +53,7 @@ export const HABITAT_SPECIES: HabitatSpecies[] = [
     },
   },
   {
-    id: 'visitor-red-panda', name: '绒尾小熊猫', asset: 'pack-red-panda', icon: '🦊', size: 0.78,
+    id: 'visitor-red-panda', name: '绒尾小熊猫', asset: 'ranch-red-panda', icon: '🦊', size: 0.78,
     favoriteCrop: 'crop-strawberry', requirementText: '摆放「翠竹丛」×2 +「湖畔凉亭」或「月洞门」', giftSeed: 'seed-ginkgo',
     match(placed) {
       const pavilions = placed.filter(p => hasTag(p, 'pavilion'));
@@ -67,7 +67,7 @@ export const HABITAT_SPECIES: HabitatSpecies[] = [
     },
   },
   {
-    id: 'visitor-deer', name: '林间梅花鹿', asset: 'fauna-deer', icon: '🦌', size: 1.35,
+    id: 'visitor-deer', name: '林间梅花鹿', asset: 'ranch-deer', icon: '🦌', size: 1.35,
     favoriteCrop: 'crop-corn', requirementText: '摆放「牧场木棚」+ 任意树木 ×2', giftSeed: 'seed-sunflower',
     match(placed) {
       const shelters = placed.filter(p => p.itemId === 'pasture-shelter');
@@ -81,7 +81,7 @@ export const HABITAT_SPECIES: HabitatSpecies[] = [
     },
   },
   {
-    id: 'visitor-hare', name: '草甸野兔', asset: 'meadow-hare', icon: '🐇', size: 0.55,
+    id: 'visitor-hare', name: '草甸野兔', asset: 'ranch-hare', icon: '🐇', size: 0.55,
     favoriteCrop: 'crop-radish', requirementText: '摆放「茅草小屋」或「培育花圃」', giftSeed: 'seed-radish',
     match(placed) {
       const spot = placed.find(p => p.itemId === 'build-thatch' || p.itemId === 'facility-flowerbed' || hasTag(p, 'pasture'));
@@ -93,7 +93,7 @@ export const HABITAT_SPECIES: HabitatSpecies[] = [
     },
   },
   {
-    id: 'visitor-fox', name: '紫藤赤狐', asset: 'pack-fox', icon: '🦊', size: 0.86,
+    id: 'visitor-fox', name: '紫藤赤狐', asset: 'ranch-fox', icon: '🦊', size: 0.86,
     favoriteCrop: 'crop-tomato', requirementText: '摆放「紫藤花树」+「临水茶馆」或「玻璃温室」', giftSeed: 'seed-starlight',
     match(placed) {
       const wisteria = placed.filter(p => hasTag(p, 'wisteria') || hasTag(p, 'flower'));
@@ -107,7 +107,7 @@ export const HABITAT_SPECIES: HabitatSpecies[] = [
     },
   },
   {
-    id: 'visitor-capybara', name: '悠闲水豚', asset: 'fauna-capybara', icon: '🦫', size: 0.92,
+    id: 'visitor-capybara', name: '悠闲水豚', asset: 'ranch-capybara', icon: '🦫', size: 0.92,
     favoriteCrop: 'crop-pumpkin', requirementText: '摆放「临水茶馆」或「水岸吊脚楼」+「元素洒水泉」', giftSeed: 'seed-pumpkin',
     match(placed) {
       const springs = placed.filter(p => p.itemId === 'facility-sprinkler' || hasTag(p, 'water'));

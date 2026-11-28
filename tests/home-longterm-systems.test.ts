@@ -162,7 +162,7 @@ test('Phase 2: Voxel Greedy Mesher eliminates interior faces (0 coplanar Z-fight
   assert.ok(VOXEL_CATALOG.length >= 24);
 });
 
-test('Phase 3: Wild rare animal encounters unlock ranch adoption, voxel fenced pens add capacity, and daily care yields products', () => {
+test('Phase 3: Wild rare animal encounters unlock ranch adoption, earned shells unlock capacity, and daily care yields products', () => {
   const life = freshLife();
   life.coins = 200;
   const spots = generateDailyEncounters(life, '2026-11-25', {season: 2, weather: 'mist', hour: 21, historyDay: true});
@@ -179,10 +179,10 @@ test('Phase 3: Wild rare animal encounters unlock ranch adoption, voxel fenced p
   assert.equal(tame.firstDiscovery, true);
   assert.equal(life.bag['prod-star-fur'], 1);
 
-  // Voxel pen adds real ranch capacity
+  // The old balance opens the second slot. A pen provides housing.
   const pens = [{id: 'pen-1', center: [20, 60] as [number, number], y: 0, area: 25, capacityBonus: 3}];
   const cap = ranchCapacity(life, pens);
-  assert.equal(cap.total, 5); // base 2 + voxel pen 3
+  assert.equal(cap.total, 2);
 
   const adopt = adoptRanchAnimal(life, 'ranch-snow-fox', '小雪团', pens);
   assert.equal(adopt.ok, true);

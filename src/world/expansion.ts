@@ -23,7 +23,7 @@ export const EXPANSION_THEMES: Record<ExpansionThemeId, ExpansionThemeDef> = {
     grassHex: 0xa4c56e,
     accentHex: 0x8bb056,
     pathHex: 0xc9ab7c,
-    desc: '开阔平坦的肥沃田园，最适合成排摆放农田与温室。',
+    desc: '木桩田栏围着野花草地，中央土路通往留给农床与果树的空地。',
     naturalProps: [
       {asset: 'nature-fern', u: 0.16, v: 0.18, width: 1.5, yaw: 0.4, tags: ['plant']},
       {asset: 'nature-fern', u: 0.84, v: 0.82, width: 1.5, yaw: 2.1, tags: ['plant']},
@@ -37,7 +37,7 @@ export const EXPANSION_THEMES: Record<ExpansionThemeId, ExpansionThemeDef> = {
     grassHex: 0x8ab978,
     accentHex: 0x6ea068,
     pathHex: 0xbcb7a8,
-    desc: '青石小径配垂柳与莲池浅湾，天然吸引青莲池蛙与碧羽翠鸟。',
+    desc: '石栏、青石小径与岸边野花环绕莲池，垂柳下可寻池蛙与翠鸟。',
     naturalProps: [
       {asset: 'nature-willow', u: 0.22, v: 0.24, width: 3.8, yaw: 0.5, tags: ['tree', 'water', 'jiangnan']},
       {asset: 'waterside-lily', u: 0.50, v: 0.48, width: 1.8, yaw: 0.8, tags: ['water', 'lily', 'flower']},
@@ -52,7 +52,7 @@ export const EXPANSION_THEMES: Record<ExpansionThemeId, ExpansionThemeDef> = {
     grassHex: 0x8bc26e,
     accentHex: 0x6ea458,
     pathHex: 0xcbb485,
-    desc: '舒缓绿坡与银杏林缘，适合搭牧场木棚和大风车，吸引梅花鹿。',
+    desc: '疏桩横栏沿着草坡起伏，银杏和混色花带留出搭牧棚的空地。',
     naturalProps: [
       {asset: 'pack-ginkgo', u: 0.20, v: 0.22, width: 3.6, yaw: 0.3, tags: ['tree', 'pasture']},
       {asset: 'nature-wisteria', u: 0.80, v: 0.24, width: 3.2, yaw: 1.3, tags: ['tree', 'flower', 'wisteria']},
@@ -67,7 +67,7 @@ export const EXPANSION_THEMES: Record<ExpansionThemeId, ExpansionThemeDef> = {
     grassHex: 0xc2cf7a,
     accentHex: 0xe6d5a3,
     pathHex: 0xeadab0,
-    desc: '暖阳白沙与潮池礁石，适合立灯塔与棕榈林，吸引岸蟹与海鸥。',
+    desc: '沙丘绳栏分开花草与白沙，棕榈和岸礁间可寻岸蟹与海鸥。',
     naturalProps: [
       {asset: 'nature-palm', u: 0.22, v: 0.24, width: 3.0, yaw: 0.4, tags: ['tree', 'coast']},
       {asset: 'nature-palm', u: 0.78, v: 0.26, width: 2.8, yaw: 1.9, tags: ['tree', 'coast']},
@@ -251,12 +251,13 @@ export function computeDynamicFrontier(
     }
   }
 
+  const reserved=new Set(preserveLayout(expansions).map(p=>tileKey(p.slot.gx,p.slot.gz)));
   const candidates = new Map<string, {slot: ExpansionSlot; dist: number}>();
   for (const [gx, gz] of seeds) {
     for (const [dx, dz, edge] of DIRS) {
       const nx = gx + dx, nz = gz + dz;
       const k = tileKey(nx, nz);
-      if (owned.has(k) || isProtectedSeaCell(nx, nz)) continue;
+      if (owned.has(k) || reserved.has(k) || isProtectedSeaCell(nx, nz)) continue;
       if (candidates.has(k)) continue;
       const slot = makeExpansionSlot(nx, nz, edge, k);
       const cx = (slot.min[0] + slot.max[0]) * 0.5;
@@ -270,6 +271,43 @@ export function computeDynamicFrontier(
     .sort((a, b) => a.dist - b.dist)
     .slice(0, maxCount)
     .map(c => c.slot);
+}
+
+export const preserveDefs=[
+  {id:'redwoods',name:'原始森林',gx:-2,row:0,color:0x687f52,animals:['bear','bull-moose','great-horned-owl']},
+  {id:'prairie',name:'风行草原',gx:-1,row:0,color:0xa8b76a,animals:['zebra','thomsons-gazelle','warthog']},
+  {id:'marsh',name:'芦影沼泽',gx:0,row:0,color:0x788967,animals:['grey-heron','great-crested-grebe','mute-swan']},
+  {id:'bamboo',name:'青竹溪谷',gx:-1,row:1,color:0x7e9c6d,animals:['chipmunk','house-sparrow','red-panda','pheasant']},
+  {id:'alpine',name:'云顶花甸',gx:0,row:1,color:0x9aaf87,animals:['golden-eagle','goat']},
+] as const;
+export function preserveLayout(tiles:ExpandedTile[]){
+  const owned=new Set(tiles.map(t=>slotForTile(t)).filter(Boolean).map(s=>tileKey(s!.gx,s!.gz)));
+  // The first two northern rows include the original named expansion lots.
+  let row=4;
+  while(preserveDefs.some(d=>owned.has(tileKey(d.gx,row+d.row))))row++;
+  return preserveDefs.map(d=>({...d,slot:makeExpansionSlot(d.gx,row+d.row)}));
+}
+export type PreserveRect={minX:number;minZ:number;maxX:number;maxZ:number; biome:string};
+export function preserveRects(tiles:ExpandedTile[]):PreserveRect[]{
+  const zones=preserveLayout(tiles);
+  const out:PreserveRect[]=zones.map(({id,slot})=>({biome:id,minX:slot.min[0],maxX:slot.max[0],minZ:slot.min[1],maxZ:slot.max[1]}));
+  const owned=new Set(tiles.map(t=>slotForTile(t)).filter(Boolean).map(s=>tileKey(s!.gx,s!.gz)));
+  for(const [gx,x] of [[-2,-85],[0,23]])for(let gz=2;gz<zones[0].slot.gz;gz++){
+    if(owned.has(tileKey(gx,gz)))continue;
+    const [minZ,maxZ]=tileZBounds(gz);out.push({minX:x-7.4,maxX:x+7.4,minZ,maxZ,biome:'trail'});
+  }
+  return out;
+}
+export function preserveHeight(r:PreserveRect,x:number,z:number){
+  const t=Math.max(0,Math.min(1,(z-WORLD.max[1])/14));
+  const base=inland(x,WORLD.max[1])*(1-t)+.65*t;
+  const edge=Math.min(x-r.minX,r.maxX-x,z-r.minZ,r.maxZ-z);
+  const w=Math.max(0,Math.min(1,edge/6));const u=(x-r.minX)/(r.maxX-r.minX),v=(z-r.minZ)/(r.maxZ-r.minZ);
+  if(r.biome==='trail')return base;
+  const hills=Math.sin(u*Math.PI)*Math.sin(v*Math.PI);
+  const h=r.biome==='alpine'?7*hills:r.biome==='bamboo'?-1.05*Math.exp(-Math.pow((u-.46)*8,2)):
+    r.biome==='marsh'?-.92*hills+.24*Math.sin(x*.32+z*.2):r.biome==='prairie'?1.1*hills:.64*Math.sin(x*.22)*Math.cos(z*.15);
+  return base+w*h;
 }
 
 /** Compatibility helper returning frontier slots around the north/west/east default focus. */
@@ -314,14 +352,63 @@ export function expansionHeight(x: number, z: number, slot: ExpansionSlot, theme
   return baseH + delta * interior;
 }
 
-/** Builds a lightweight 2m-step GroundSurface for CollisionWorld & sim.worker.ts (scales effortlessly to 50+ tiles). */
+/** Match the original island metre for metre on common axes. Beyond that band adjoining tiles share a 2 m lattice. */
+export function expansionSegments(min:number,max:number,axis:0|1):number {
+  const step=min>=WORLD.min[axis] && max<=WORLD.max[axis] ? 1 : 2;
+  return Math.max(8,Math.round((max-min)/step));
+}
+
+/** Interpolates the same pair of triangles as the visible frontier mesh. */
+export function expansionGroundAt(x: number, z: number, slot: ExpansionSlot, theme: ExpansionThemeId): number {
+  const nx = expansionSegments(slot.min[0],slot.max[0],0);
+  const nz = expansionSegments(slot.min[1],slot.max[1],1);
+  const dx = (slot.max[0] - slot.min[0]) / nx, dz = (slot.max[1] - slot.min[1]) / nz;
+  const gx = Math.max(0, Math.min(nx, (x - slot.min[0]) / dx)), gz = Math.max(0, Math.min(nz, (z - slot.min[1]) / dz));
+  const ix = Math.min(nx - 1, Math.floor(gx)), iz = Math.min(nz - 1, Math.floor(gz));
+  const fx = gx - ix, fz = gz - iz, x0 = slot.min[0] + ix * dx, z0 = slot.min[1] + iz * dz;
+  const east = expansionHeight(x0 + dx, z0, slot, theme), south = expansionHeight(x0, z0 + dz, slot, theme);
+  return fx + fz <= 1
+    ? expansionHeight(x0, z0, slot, theme) * (1 - fx - fz) + east * fx + south * fz
+    : expansionHeight(x0 + dx, z0 + dz, slot, theme) * (fx + fz - 1) + east * (1 - fz) + south * (1 - fx);
+}
+
+/** Shared road shoulders, beach and muddy lotus basin used by terrain, meadow and gardening. */
+export function expansionSurfaceWeights(x: number, z: number, slot: ExpansionSlot, theme: ExpansionThemeId) {
+  const w = slot.max[0] - slot.min[0], h = slot.max[1] - slot.min[1];
+  const u = (x - slot.min[0]) / w, v = (z - slot.min[1]) / h;
+  const basin = Math.hypot((u - .5) * 2.2, (v - .5) * 2.2);
+  const path = Math.min(Math.abs(u - .5) * w, Math.abs(v - .5) * h);
+  return {
+    road: (theme === 'farmland' || (theme === 'jiangnan' && basin >= .72)) ? 1 - smoothstep(1.1, 2.15, path) : 0,
+    sand: theme === 'coast' ? smoothstep(.55, .82, v) : 0,
+    pond: theme === 'jiangnan' ? 1 - smoothstep(.45, .70, basin) : 0,
+  };
+}
+
+/** Two short runs separated by a generous opening. Coordinates are inside each parcel. */
+export function expansionFenceRuns(slot: ExpansionSlot,theme:ExpansionThemeId):[number,number][][] {
+  const w=slot.max[0]-slot.min[0],h=slot.max[1]-slot.min[1];
+  const mix=((Math.imul(slot.gx,31)^Math.imul(slot.gz,73))>>>0)%3;
+  const alongX=theme==='coast'||mix!==1;
+  const side=theme==='coast'?.67+(mix-1)*.035:mix===2?.86:.14;
+  return [[.09,.34],[.66,.91]].map(([start,end])=>{
+    const count=Math.max(2,Math.round((end-start)*(alongX?w:h)/2.7));
+    return Array.from({length:count+1},(_,i)=>{
+      const t=start+(end-start)*i/count;
+      const bend=(theme==='coast'?.039:theme==='meadow'?.021:.009)*Math.sin(Math.PI*i/count)*(mix===2?-1:1);
+      return [slot.min[0]+w*(alongX?t:side+bend),slot.min[1]+h*(alongX?side+bend:t)] as [number,number];
+    });
+  });
+}
+
+/** CollisionWorld and the worker use the same grid vertices as the visible parcel. */
 export function buildExpansionSurface(tile: ExpandedTile): GroundSurface | null {
   const slot = slotForTile(tile);
   if (!slot) return null;
   const spanX = slot.max[0] - slot.min[0];
   const spanZ = slot.max[1] - slot.min[1];
-  const segX = Math.max(8, Math.round(spanX / 2));
-  const segZ = Math.max(8, Math.round(spanZ / 2));
+  const segX = expansionSegments(slot.min[0],slot.max[0],0);
+  const segZ = expansionSegments(slot.min[1],slot.max[1],1);
   const w = segX + 1;
   const h = segZ + 1;
   const values: number[] = [];

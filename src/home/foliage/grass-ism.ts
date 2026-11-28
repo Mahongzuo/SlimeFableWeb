@@ -1,7 +1,17 @@
 import * as THREE from 'three';
 import type {ZoneContext} from '../../zones/types';
 import {climateMaterial} from '../climate-material';
-import {sampleInlandGrassColor} from '../../world/terrain-mesh';
+import {sampleInlandGrassColor, sampleTerrainRoadWeight} from '../../world/terrain-mesh';
+import {MeadowSurface, triangleGround, FIELD_GLSL, meadowViewDistance, CANDIDATES_PER_METRE, CELL_METRES, type MeadowArea} from './meadow-field';
+import {EXPANSION_THEMES, expansionGroundAt, expansionSurfaceWeights, slotForTile} from '../../world/expansion';
+import {rng} from '../../templates/random';
+import {LAKE, lakeEdge, pathDistance} from '../../world/map';
+import type {ExpandedTile} from '../../life/state';
+import {surfaceClimate} from '../climate-material';
+import {MEADOW_WIND_GLSL} from './meadow-motion';
+import {bloomSuitability, habitats, preserveCover, type FieldFlower} from './preserve-habitat';
+import {approachWear} from '../preserve-trails';
+import {preserveHeight, type PreserveRect} from '../../world/expansion';
 
 /** Maximum simultaneous oriented grass/flower exclusion rectangles synced to the GPU. */
 export const MAX_GRASS_EXCLUSIONS = 48;
@@ -73,340 +83,7 @@ export function isPointGrassExcluded(x: number, z: number, boxes: readonly Grass
   return false;
 }
 
-const GLSL_EXCL_HELPER = `
-uniform vec4 uGrassExclRect[${MAX_GRASS_EXCLUSIONS}];
-uniform vec2 uGrassExclRot[${MAX_GRASS_EXCLUSIONS}];
-uniform int uGrassExclCount;
-
-float grassExclusionKeep(vec2 wp) {
-  float keep = 1.0;
-  for (int i = 0; i < ${MAX_GRASS_EXCLUSIONS}; i++) {
-    if (i >= uGrassExclCount) break;
-    vec4 r = uGrassExclRect[i];
-    vec2 rot = uGrassExclRot[i];
-    vec2 d = wp - r.xy;
-    float lx = d.x * rot.x - d.y * rot.y;
-    float lz = d.x * rot.y + d.y * rot.x;
-    float ox = abs(lx) - r.z;
-    float oz = abs(lz) - r.w;
-    float outside = max(ox, oz);
-    if (outside <= 0.0) return 0.0;
-    keep = min(keep, smoothstep(0.0, 0.22, outside));
-  }
-  return keep;
-}
-`;
-
-/**
- * Builds a lush painterly stylized grass clump geometry (BotW / Genshin / Meadow inspired):
- * - 9 fuller, gently bellied, gracefully arching blades per tuft (low filler + mid + tall sweeping hero blades)
- * - 4 vertical segments per blade for smooth quadratic wind bending
- * - Encodes lateral side in UV.x (0 = left, 1 = right, 0.5 = tip) & height fraction in UV.y (0 = root, 1 = tip)
- */
-function buildStylizedClumpGeometry(): THREE.BufferGeometry {
-  const pos: number[] = [];
-  const norm: number[] = [];
-  const uv: number[] = [];
-
-  const blades = 9;
-  const bladeHeights = [0.22, 0.31, 0.40, 0.25, 0.35, 0.44, 0.23, 0.33, 0.38];
-  const bladeWidths = [0.056, 0.050, 0.045, 0.054, 0.048, 0.043, 0.055, 0.049, 0.046];
-
-  for (let b = 0; b < blades; b++) {
-    const golden = b * 2.3999632 + 0.35;
-    const rad = b < 3 ? 0.035 + b * 0.032 : 0.085 + ((b * 19) % 5) * 0.036;
-    const ox = Math.cos(golden) * rad;
-    const oz = Math.sin(golden) * rad;
-    const height = bladeHeights[b];
-    const halfW = bladeWidths[b];
-    const arch = 0.12 + (b % 3) * 0.055;
-
-    const leanAng = golden + ((b % 2) ? 0.25 : -0.25);
-    const dx = Math.cos(leanAng);
-    const dz = Math.sin(leanAng);
-    const px = -dz;
-    const pz = dx;
-
-    const tiers = [
-      {t: 0.00, w: 0.92, lean: 0.00},
-      {t: 0.28, w: 1.00, lean: 0.12},
-      {t: 0.58, w: 0.74, lean: 0.38},
-      {t: 0.82, w: 0.38, lean: 0.72},
-    ];
-
-    const pts: [number, number, number][][] = [];
-    for (const tr of tiers) {
-      const y = height * tr.t;
-      const l = arch * tr.lean;
-      const w = halfW * tr.w;
-      const cx = ox + dx * l;
-      const cz = oz + dz * l;
-      pts.push([
-        [cx - px * w, y, cz - pz * w],
-        [cx + px * w, y, cz + pz * w],
-      ]);
-    }
-    const tipPt: [number, number, number] = [ox + dx * arch, height, oz + dz * arch];
-
-    const pushV = (p: [number, number, number], t: number, uSide: number) => {
-      pos.push(p[0], p[1], p[2]);
-      const nx = dx * (0.16 * t);
-      const nz = dz * (0.16 * t);
-      const ny = 1.0;
-      const inv = 1 / Math.hypot(nx, ny, nz);
-      norm.push(nx * inv, ny * inv, nz * inv);
-      uv.push(uSide, t);
-    };
-
-    const emitQuad = (i0: number, i1: number, t0: number, t1: number) => {
-      const a = pts[i0][0], b0 = pts[i0][1], c = pts[i1][0], d = pts[i1][1];
-      pushV(a, t0, 0.0); pushV(b0, t0, 1.0); pushV(d, t1, 1.0);
-      pushV(a, t0, 0.0); pushV(d, t1, 1.0); pushV(c, t1, 0.0);
-    };
-
-    emitQuad(0, 1, 0.00, 0.28);
-    emitQuad(1, 2, 0.28, 0.58);
-    emitQuad(2, 3, 0.58, 0.82);
-
-    pushV(pts[3][0], 0.82, 0.0);
-    pushV(pts[3][1], 0.82, 1.0);
-    pushV(tipPt, 1.0, 0.5);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  return geo;
-}
-
-const DENSITY_NEAR = 14;
-const DENSITY_FAR = 62;
-const FAR_DENSITY = 0.3;
-
-/** Fraction of a chunk's clumps kept at a given camera distance (before the preset density). */
-export function grassDensityAt(dist: number) {
-  const t = Math.min(1, Math.max(0, (dist - DENSITY_NEAR) / (DENSITY_FAR - DENSITY_NEAR)));
-  return 1 + (FAR_DENSITY - 1) * t * t * (3 - 2 * t);
-}
-
-/** Deterministic 2D hash in [0, 1) for Voronoi meadow clump centers. */
-function hash2(ix: number, iz: number, salt: number): number {
-  const n = Math.sin(ix * 127.1 + iz * 311.7 + salt * 74.7) * 43758.5453123;
-  return n - Math.floor(n);
-}
-
-/** Nearest Voronoi clump center within a 1.75m meadow cell (meadow-inspired organic clumping). */
-function nearestClumpHeart(x: number, z: number): [number, number] {
-  const cell = 1.75;
-  const cx = Math.floor(x / cell);
-  const cz = Math.floor(z / cell);
-  let bestD = Infinity;
-  let bx = x;
-  let bz = z;
-  for (let dz = -1; dz <= 1; dz++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const gx = cx + dx;
-      const gz = cz + dz;
-      const hx = (gx + 0.18 + 0.64 * hash2(gx, gz, 1)) * cell;
-      const hz = (gz + 0.18 + 0.64 * hash2(gx, gz, 2)) * cell;
-      const d = (hx - x) * (hx - x) + (hz - z) * (hz - z);
-      if (d < bestD) {
-        bestD = d;
-        bx = hx;
-        bz = hz;
-      }
-    }
-  }
-  return [bx, bz];
-}
-
-/**
- * Stylized Meadow Grass Shader (BotW / Ghibli / Meadow techniques):
- * 1. Unflipped terrain-transferred upward normals (zero dark backfaces)
- * 2. Real-time GPU oriented-box exclusion mask (farm beds, buildings, planters stay 100% weed-free!)
- * 3. Downward-look pitch-back & view-space widening (blades stay lush even from steep overhead angles)
- * 4. Folded-blade left/right micro-shading (~7%) + 10% warm straw-gold / 10% cool-emerald blade variety
- * 5. Coherent rolling wind waves + interactive slime trampling + backlit tip translucency
- */
-function createGrassMaterial(z: ZoneContext): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.88,
-    metalness: 0.0,
-    side: THREE.DoubleSide,
-    envMapIntensity: 0.85,
-  });
-
-  const U = z.ctx.U;
-  mat.onBeforeCompile = (shader: any) => {
-    shader.uniforms.uTime = U.uTime;
-    shader.uniforms.uWind = U.uWind ?? {value: 0.5};
-    shader.uniforms.uSunDir = U.uSunDir ?? {value: new THREE.Vector3(0.4, 0.7, 0.5)};
-    shader.uniforms.uSunColor = U.uSunColor ?? {value: new THREE.Color(0xfff1d5)};
-    shader.uniforms.uSlimePos = U.uSlimePos ?? {value: new THREE.Vector4(0, -99, 0, 0.6)};
-    shader.uniforms.uGrassAlbedoScale = U.uGrassAlbedoScale ?? {value: 1.0};
-    shader.uniforms.uGrassSssStrength = U.uGrassSssStrength ?? {value: 1.0};
-    shader.uniforms.uGrassDensity = U.uGrassDensity ?? {value: 1.0};
-    shader.uniforms.uGrassExclRect = grassExclusionUniforms.uGrassExclRect;
-    shader.uniforms.uGrassExclRot = grassExclusionUniforms.uGrassExclRot;
-    shader.uniforms.uGrassExclCount = grassExclusionUniforms.uGrassExclCount;
-
-    shader.vertexShader =
-      `uniform float uTime, uWind, uGrassDensity;
-       attribute float aRank;
-       uniform vec4 uSlimePos;
-       ${GLSL_EXCL_HELPER}
-       varying float vTip;
-       varying float vSide;
-       varying float vWindCrest;
-       varying float vVariety;
-       varying vec3 vGrassWorld;
-       varying vec3 vUpNormalView;\n` +
-      shader.vertexShader.replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-        vTip = uv.y;
-        vSide = (uv.x - 0.5) * 2.0;
-        #ifdef USE_INSTANCING
-          vec3 instPos = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-        #else
-          vec3 instPos = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-        #endif
-        vVariety = fract(sin(dot(floor(instPos.xz * 3.7), vec2(127.1, 311.7))) * 43758.5453);
-
-        // Real-time GPU exclusion for farm beds, raised planters, and solid structures
-        float exclKeep = grassExclusionKeep(instPos.xz);
-
-        // Smooth distance scale fade into terrain (no popping)
-        float camDist = length(instPos.xz - cameraPosition.xz);
-        float distFade = (1.0 - smoothstep(54.0, 102.0, camDist)) * exclKeep;
-        #ifdef USE_INSTANCING
-          float dens = uGrassDensity * mix(1.0, ${FAR_DENSITY.toFixed(2)}, smoothstep(${DENSITY_NEAR.toFixed(1)}, ${DENSITY_FAR.toFixed(1)}, camDist));
-          float keep = 1.0 - smoothstep(dens - 0.06, dens, aRank);
-          transformed.xz *= mix(1.0, 1.32, smoothstep(${DENSITY_NEAR.toFixed(1)}, ${DENSITY_FAR.toFixed(1)}, camDist));
-          distFade *= keep;
-        #endif
-        if (distFade <= 0.002) {
-          transformed = vec3(0.0, -40.0, 0.0);
-        } else {
-          transformed *= distFade;
-        }
-
-        // Coherent rolling Ghibli/BotW/Meadow wind wave field across the island
-        float bend = vTip * vTip;
-        float waveCoord = dot(instPos.xz, vec2(0.13, 0.095)) - uTime * (1.35 + uWind * 1.15);
-        float macroWave = sin(waveCoord) * 0.5 + 0.5;
-        float microWave = sin(waveCoord * 2.35 + instPos.x * 0.28 - instPos.z * 0.21) * 0.5 + 0.5;
-        float combinedWave = macroWave * 0.72 + microWave * 0.28;
-        vWindCrest = smoothstep(0.42, 0.92, combinedWave);
-
-        float sway = (combinedWave - 0.32) * (0.14 + 0.28 * uWind) * bend * step(0.005, distFade);
-        float flutter = sin(uTime * 3.4 + dot(instPos.xz, vec2(0.7, 0.5))) * 0.025 * bend * step(0.005, distFade);
-        transformed.x += sway * 0.88 + flutter;
-        transformed.z += sway * 0.52 + flutter * 0.6;
-        transformed.y -= abs(sway) * 0.26;
-
-        // Interactive bending away from the slime
-        vec2 toBlade = instPos.xz - uSlimePos.xz;
-        float dSlime = length(toBlade);
-        float pushRad = uSlimePos.w + 0.62;
-        if (distFade > 0.005 && dSlime < pushRad && abs(instPos.y - uSlimePos.y) < 1.35) {
-          float push = (1.0 - dSlime / pushRad);
-          vec2 pushDir = toBlade / max(dSlime, 0.01);
-          transformed.xz += pushDir * push * push * 0.48 * vTip;
-          transformed.y *= 1.0 - push * 0.45 * vTip;
-        }
-
-        #ifdef USE_INSTANCING
-          vec4 wPos = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
-        #else
-          vec4 wPos = modelMatrix * vec4(transformed, 1.0);
-        #endif
-
-        // Meadow-inspired downward-look pitch-back + view-space widening so blades never thin out from above
-        if (distFade > 0.005) {
-          vec3 toCam = cameraPosition - instPos;
-          float camLen = max(length(toCam), 0.01);
-          float lookDown = smoothstep(0.28, 0.86, toCam.y / camLen);
-          vec2 awayCamXZ = -toCam.xz / max(length(toCam.xz), 0.01);
-          wPos.xz += awayCamXZ * (lookDown * 0.055 * vTip * distFade);
-          vec3 camRight = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
-          float widen = (1.0 - vTip * 0.62) * (0.018 + lookDown * 0.014) * (1.0 - smoothstep(14.0, 50.0, camDist)) * distFade;
-          wPos.xyz += camRight * (vSide * widen);
-        }
-        vGrassWorld = wPos.xyz;
-
-        // Clean terrain-transferred upward normal in view space (NEVER inverted on backface!)
-        vec3 worldUpN = normalize(vec3(sway * 0.45, 1.0, sway * 0.30));
-        vUpNormalView = normalize((viewMatrix * vec4(worldUpN, 0.0)).xyz);`,
-      ).replace(
-        '#include <project_vertex>',
-        `vec4 mvPosition = viewMatrix * vec4(vGrassWorld, 1.0);
-         gl_Position = projectionMatrix * mvPosition;`,
-      );
-
-    shader.fragmentShader =
-      `uniform vec3 uSunDir, uSunColor;
-       uniform float uGrassAlbedoScale, uGrassSssStrength;
-       varying float vTip;
-       varying float vSide;
-       varying float vWindCrest;
-       varying float vVariety;
-       varying vec3 vGrassWorld;
-       varying vec3 vUpNormalView;\n` +
-      shader.fragmentShader
-        .replace(
-          '#include <normal_fragment_begin>',
-          `// Stylized terrain-transferred normal: ALWAYS points softly skyward on BOTH sides (zero black backfaces!)
-          vec3 normal = normalize(vUpNormalView);
-          vec3 nonPerturbedNormal = normal;`,
-        )
-        .replace(
-          '#include <color_fragment>',
-          `#include <color_fragment>
-          // Match terrain turf micro-variation & canopy AO right at the root (vTip = 0) so grass sits grounded
-          float turfA = sin(vGrassWorld.x * 1.45 + sin(vGrassWorld.z * 1.25)) * cos(vGrassWorld.z * 1.38 - vGrassWorld.x * 0.72);
-          float turfB = sin(vGrassWorld.x * 5.8 + vGrassWorld.z * 4.9) * cos(vGrassWorld.x * 4.3 - vGrassWorld.z * 6.1);
-          vec3 rootCol = diffuseColor.rgb * (0.94 + 0.08 * turfA + 0.04 * turfB);
-          // Warm sunlit sage-chartreuse tip gradient + broad meadow color patches
-          float meadowPatch = 0.5 + 0.5 * sin(vGrassWorld.x * 0.095 + sin(vGrassWorld.z * 0.08) * 1.8) * cos(vGrassWorld.z * 0.105);
-          vec3 tipCol = mix(rootCol * vec3(1.08, 1.12, 0.84), rootCol * vec3(1.18, 1.14, 0.76), meadowPatch);
-          // Meadow-style species tint variety: 10% warm straw-gold tips, 10% deeper cool-emerald tips
-          float straw = smoothstep(0.88, 0.96, vVariety);
-          float emerald = smoothstep(0.12, 0.04, vVariety);
-          tipCol = mix(tipCol, tipCol * vec3(1.18, 1.04, 0.72), straw * 0.72);
-          tipCol = mix(tipCol, tipCol * vec3(0.84, 1.05, 0.96), emerald * 0.65);
-          // Folded-blade subtle left/right crease shading (~7%) for crisp painterly volume
-          float foldShade = 1.0 + vSide * 0.072 * (0.35 + 0.65 * vTip);
-          float rootAO = mix(0.83, 1.0, smoothstep(0.0, 0.42, vTip));
-          float grad = smoothstep(0.08, 0.94, vTip);
-          diffuseColor.rgb = mix(rootCol, tipCol, grad) * rootAO * foldShade * mix(1.0, uGrassAlbedoScale, 0.42 * grad);`,
-        )
-        .replace(
-          '#include <lights_fragment_end>',
-          `#include <lights_fragment_end>
-          // Rolling Ghibli/BotW sunlit wind-wave sheen + soft backlit tip translucency
-          vec3 gV = normalize(cameraPosition - vGrassWorld);
-          vec3 gL = normalize(uSunDir);
-          float sunVis = smoothstep(-0.04, 0.10, gL.y);
-          float back = pow(max(dot(gV, -gL), 0.0), 2.4);
-          float sheen = vWindCrest * smoothstep(0.25, 0.95, vTip) * (0.35 + 0.65 * max(gL.y, 0.0));
-          vec3 sssTint = mix(vec3(0.58, 0.80, 0.32), vec3(1.0, 0.78, 0.36), smoothstep(0.28, 0.02, gL.y));
-          vec3 waveTint = vec3(0.52, 0.68, 0.30);
-          reflectedLight.directDiffuse += (sssTint * (back * 0.55 + 0.10 * max(gL.y, 0.0)) * vTip * vTip + waveTint * sheen * 0.42) * uSunColor * uGrassSssStrength * sunVis;`,
-        );
-  };
-  mat.customProgramCacheKey = () => 'stylized-meadow-grass-ism-v5';
-  climateMaterial(mat, 'terrain');
-  return mat;
-}
-
-// ---------------------------------------------------------------------------
-// 4 True 3D Meadow Wildflower Species (Daisy, Poppy, Lupin, Buttercup)
-// ---------------------------------------------------------------------------
-
-type FlowerSpecies = 'daisy' | 'poppy' | 'lupin' | 'buttercup';
+type FlowerSpecies = FieldFlower;
 
 interface FlowerGeoBuilder {
   pos: number[];
@@ -618,6 +295,33 @@ function buildButtercupGeometry(): THREE.BufferGeometry {
   return finalizeFlowerGeo(b);
 }
 
+function preserveFlower(kind:'oat'|'iris'|'gentian'){
+  const b:FlowerGeoBuilder={pos:[],norm:[],uv:[],col:[]};
+  const h=kind==='oat'?.66:kind==='iris'?.49:.24, lean=.047;
+  addStemAndLeaves(b,h,lean);
+  if(kind==='oat'){
+    for(let i=0;i<10;i++){
+      const a=i*2.4,y=h*(.52+.044*i),r=.11-i*.006,dx=Math.cos(a),dz=Math.sin(a);
+      const x=lean*(y/h)**2;
+      pushTri(b,[x-.004,y,0],[x+.004,y,0],[x+r*dx,y+.049,r*dz],[.59,.65,.25],h);
+      pushTri(b,[x+r*dx-.016,y+.05,r*dz],[x+r*dx+.016,y+.05,r*dz],
+        [x+1.4*r*dx,y-.025,r*dz*1.4],[.91,.72,.30],h);
+    }
+  }else{
+    const iris=kind==='iris', petals=iris?6:5;
+    for(let i=0;i<petals;i++){
+      const a=i*2*Math.PI/petals,dx=Math.cos(a),dz=Math.sin(a),fall=iris&&i%2===0;
+      const w=iris?.038:.027,r=fall?.106:iris?.054:.052;
+      const mid=h+(fall?.005:.036),tip=h+(fall?-.048:iris?.099:.066);
+      const left:[number,number,number]=[lean+dx*r*.65-dz*w,mid,dz*r*.65+dx*w];
+      const right:[number,number,number]=[lean+dx*r*.65+dz*w,mid,dz*r*.65-dx*w];
+      pushTri(b,[lean,h-.022,0],left,right,iris?[.74,.59,.94]:[.29,.48,.95],tip);
+      pushTri(b,left,right,[lean+r*dx,tip,r*dz],iris?[.43,.29,.78]:[.16,.27,.83],h+.1);
+      if(fall)pushTri(b,[lean,h+.001,0],[left[0]*.4+lean*.6,mid+.003,left[2]*.4],[lean+dx*r*.79,mid+.003,dz*r*.79],[1,.78,.24],h);
+    }
+  }
+  return finalizeFlowerGeo(b);
+}
 let sharedFlowerGeos: Record<FlowerSpecies, THREE.BufferGeometry> | null = null;
 function getFlowerGeometries(): Record<FlowerSpecies, THREE.BufferGeometry> {
   if (!sharedFlowerGeos) {
@@ -626,13 +330,14 @@ function getFlowerGeometries(): Record<FlowerSpecies, THREE.BufferGeometry> {
       poppy: buildPoppyGeometry(),
       lupin: buildLupinGeometry(),
       buttercup: buildButtercupGeometry(),
+      oat:preserveFlower('oat'),iris:preserveFlower('iris'),gentian:preserveFlower('gentian'),
     };
   }
   return sharedFlowerGeos;
 }
 
 /** Shared wildflower material with wind sway, slime trampling, distance fade, and real-time GPU exclusion mask. */
-function createWildflowerMaterial(z: ZoneContext): THREE.MeshStandardMaterial {
+function createWildflowerMaterial(z: ZoneContext, surface: MeadowSurface): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     vertexColors: true,
@@ -643,19 +348,17 @@ function createWildflowerMaterial(z: ZoneContext): THREE.MeshStandardMaterial {
   });
   const U = z.ctx.U;
   mat.onBeforeCompile = (shader: any) => {
-    shader.uniforms.uTime = U.uTime;
-    shader.uniforms.uWind = U.uWind ?? {value: 0.5};
-    shader.uniforms.uSlimePos = U.uSlimePos ?? {value: new THREE.Vector4(0, -99, 0, 0.6)};
+    shader.uniforms.uMeadowPhase = U.uMeadowPhase ?? {value: 0};
+    shader.uniforms.uMeadowWind = U.uMeadowWind ?? {value: .29};
+    shader.uniforms.uSlimePos = U.uSlimePos ?? {value: new THREE.Vector4(0,0,0,0)};
     shader.uniforms.uSunDir = U.uSunDir ?? {value: new THREE.Vector3(0.4, 0.7, 0.5)};
     shader.uniforms.uSunColor = U.uSunColor ?? {value: new THREE.Color(0xfff1d5)};
-    shader.uniforms.uGrassExclRect = grassExclusionUniforms.uGrassExclRect;
-    shader.uniforms.uGrassExclRot = grassExclusionUniforms.uGrassExclRot;
-    shader.uniforms.uGrassExclCount = grassExclusionUniforms.uGrassExclCount;
-
+    shader.uniforms.uMeadowField = {value:surface.texture};
+    shader.uniforms.uFieldRect = {value:new THREE.Vector4(...surface.area.min,...surface.area.max)};
     shader.vertexShader =
-      `uniform float uTime, uWind;
+      `${MEADOW_WIND_GLSL}
        uniform vec4 uSlimePos;
-       ${GLSL_EXCL_HELPER}
+       ${FIELD_GLSL}
        varying float vFlowerTip;
        varying vec3 vFlowerWorld;\n` +
       shader.vertexShader.replace(
@@ -667,7 +370,7 @@ function createWildflowerMaterial(z: ZoneContext): THREE.MeshStandardMaterial {
         #else
           vec3 fInst = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         #endif
-        float exclKeep = grassExclusionKeep(fInst.xz);
+        float exclKeep = smoothstep(.22,.75,meadowSample(fInst.xz).w);
         float camDist = length(fInst.xz - cameraPosition.xz);
         float fade = (1.0 - smoothstep(46.0, 82.0, camDist)) * exclKeep;
         if (fade <= 0.002) {
@@ -675,18 +378,21 @@ function createWildflowerMaterial(z: ZoneContext): THREE.MeshStandardMaterial {
         } else {
           transformed *= fade;
           float bend = vFlowerTip * vFlowerTip;
-          float wPh = dot(fInst.xz, vec2(0.14, 0.10)) - uTime * (1.45 + uWind * 1.15);
-          float sw = (sin(wPh) * 0.7 + sin(wPh * 2.1 + fInst.x * 0.4) * 0.3) * (0.09 + 0.18 * uWind) * bend;
-          transformed.x += sw * 0.85;
-          transformed.z += sw * 0.55;
+          // Limit wind travel relative to this stem's height, including its instance scale.
+          float sw = meadowWave(fInst.xz) * (.17 * uMeadowWind) * max(0.,transformed.y) * bend;
+          vec2 offset = vec2(.84,.54) * sw;
           vec2 toF = fInst.xz - uSlimePos.xz;
           float dS = length(toF);
           float pR = uSlimePos.w + 0.55;
-          if (dS < pR && abs(fInst.y - uSlimePos.y) < 1.35) {
+          if (uSlimePos.w > 0.0 && dS < pR && abs(fInst.y - uSlimePos.y) < 1.35) {
             float push = 1.0 - dS / pR;
-            transformed.xz += (toF / max(dS, 0.01)) * push * push * 0.40 * vFlowerTip;
+            offset *= 1. - smoothstep(.15,.80,push);
+            offset += (toF / max(dS, 0.01)) * push * push * 0.40 * vFlowerTip;
             transformed.y *= 1.0 - push * 0.42 * vFlowerTip;
           }
+          #ifdef USE_INSTANCING
+          transformed.xz += vec2(dot(offset,normalize(instanceMatrix[0].xz)),dot(offset,normalize(instanceMatrix[2].xz)));
+          #endif
         }
         #ifdef USE_INSTANCING
           vFlowerWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
@@ -710,198 +416,450 @@ function createWildflowerMaterial(z: ZoneContext): THREE.MeshStandardMaterial {
         reflectedLight.directDiffuse += diffuseColor.rgb * (0.14 + 0.48 * back) * smoothstep(0.45, 0.95, vFlowerTip) * uSunColor * sunVis;`,
       );
   };
-  mat.customProgramCacheKey = () => 'meadow-wildflower-3d-v1';
+  mat.customProgramCacheKey = () => 'meadow-wildflower-3d-v2';
   climateMaterial(mat, 'terrain');
   return mat;
 }
 
-/**
- * Builds spatial 24m x 24m frustum-culled stylized meadow grass chunks + 4-species 3D wildflower drifts.
- * Uses Voronoi dual-tier clumping, seamless root terrain-matching, and GPU dynamic exclusion masks.
- */
-export function createChunkedGrassISM(
-  z: ZoneContext,
-  count: number,
-  area: {min: [number, number]; max: [number, number]},
-  avoid: (x: number, z: number) => boolean,
-  colors = [0x6fb84d, 0xffe066, 0xffb3c6, 0xffffff],
-) {
-  const {T} = z;
-  const U = z.ctx.U;
-  const g = new T.Group();
-  g.name = 'grass-tufts';
 
-  const clumpGeo = buildStylizedClumpGeometry();
-  const grassMat = createGrassMaterial(z);
+// Meadow's near field carries three fine curved leaves per root. The six distance bands share
+// a ranked candidate texture; every 8 m cell is rotated/reflected independently.
+const DENSITY_NEAR = 5.4;
+const DENSITY_FAR = 96;
+const BAND_END = [7,14,24,40,64,104];
+const BAND_DENSITY = [176,65,32,15,8,4];
+const BAND_SEGMENTS = [5,3,2,2,1,1];
+export function grassDensityAt(distance:number) {
+  return Math.min(1,Math.pow(DENSITY_NEAR/Math.max(DENSITY_NEAR,Math.min(DENSITY_FAR,distance)),1.3));
+}
 
-  const targetClumps = Math.round(count * 2.45);
-  const CHUNK = 24;
-  const buckets = new Map<string, [number, number, number, number, number, number][]>();
-
-  let placed = 0;
-  for (let tries = 0; placed < targetClumps && tries < targetClumps * 4; tries++) {
-    let x = area.min[0] + z.rand() * (area.max[0] - area.min[0]);
-    let zz = area.min[1] + z.rand() * (area.max[1] - area.min[1]);
-
-    // Meadow dual-tier Voronoi clumping: 28% tall hero clumps pull gently toward clump hearts; 72% lush ground carpet
-    const isTallTier = z.rand() < 0.28;
-    if (isTallTier) {
-      const [hx, hz] = nearestClumpHeart(x, zz);
-      const pull = 0.26 + z.rand() * 0.34;
-      x += (hx - x) * pull;
-      zz += (hz - zz) * pull;
-      if (x < area.min[0] || x > area.max[0] || zz < area.min[1] || zz > area.max[1]) continue;
+let pattern:THREE.DataTexture;
+function grassPattern(){
+  if(pattern)return pattern;
+  const random=rng('meadow-4711').next, n=CANDIDATES_PER_METRE*CELL_METRES**2;
+  const data=new Float32Array(n*4);
+  const hearts=Array.from({length:46},()=>[random()*8,random()*8]);
+  for(let i=0;i<n;i++){
+    let x=random()*8,z=random()*8;
+    const tall=random()<.27;
+    if(tall){
+      let best=Infinity,dx=0,dz=0;
+      for(const heart of hearts){
+        const ax=heart[0]-x,az=heart[1]-z;
+        const tx=ax-Math.round(ax/8)*8,tz=az-Math.round(az/8)*8,d=tx*tx+tz*tz;
+        if(d<best){best=d;dx=tx;dz=tz;}
+      }
+      const pull=.34+.2*random();
+      x=(x+dx*pull+8)%8;z=(z+dz*pull+8)%8;
     }
-
-    if (avoid(x, zz)) continue;
-    const y = z.ground(x, zz);
-    const yaw = z.rand() * Math.PI * 2;
-    const cluster = 0.5 + 0.5 * Math.sin(x * 0.22 + Math.sin(zz * 0.17) * 1.4) * Math.cos(zz * 0.19 - x * 0.08);
-    const sx = isTallTier
-      ? (0.96 + z.rand() * 0.50 + cluster * 0.24)
-      : (0.82 + z.rand() * 0.46 + cluster * 0.20);
-    const sy = isTallTier
-      ? (0.98 + cluster * 0.46) * (0.92 + z.rand() * 0.34)
-      : (0.58 + cluster * 0.38) * (0.80 + z.rand() * 0.34);
-
-    const key = `${Math.floor(x / CHUNK)}_${Math.floor(zz / CHUNK)}`;
-    let list = buckets.get(key);
-    if (!list) {
-      list = [];
-      buckets.set(key, list);
-    }
-    list.push([x, y, zz, yaw, sx, sy]);
-    placed++;
+    data.set([x,z,random(),(tall?1:0)+random()*.96],i*4);
   }
+  pattern=new THREE.DataTexture(data,128,n/128,THREE.RGBAFormat,THREE.FloatType);
+  pattern.needsUpdate=true;
+  return pattern;
+}
 
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const e = new THREE.Euler();
-  const c = new THREE.Color();
-  const tint = new THREE.Color();
-  const scaleV = new THREE.Vector3();
-  const posV = new THREE.Vector3();
-
-  let chunkIdx = 0;
-  for (const list of buckets.values()) {
-    const mesh = new T.InstancedMesh(clumpGeo, grassMat, list.length);
-    mesh.name = chunkIdx === 0 ? 'grass-blades' : `grass-blades-${chunkIdx}`;
-    mesh.receiveShadow = true;
-    mesh.castShadow = false;
-    let minX = Infinity, minY = Infinity, minZ = Infinity;
-    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-    for (let i = 0; i < list.length; i++) {
-      const [x, y, zz, yaw, sx, sy] = list[i];
-      e.set((z.rand() - 0.5) * 0.08, yaw, (z.rand() - 0.5) * 0.08);
-      q.setFromEuler(e);
-      posV.set(x, y - 0.012, zz);
-      scaleV.set(sx, sy, sx);
-      m.compose(posV, q, scaleV);
-      mesh.setMatrixAt(i, m);
-      sampleInlandGrassColor(x, zz, c, tint);
-      c.offsetHSL((z.rand() - 0.5) * 0.014, (z.rand() - 0.5) * 0.035, (z.rand() - 0.5) * 0.028);
-      mesh.setColorAt(i, c);
-      if (x < minX) minX = x; if (x > maxX) maxX = x;
-      if (y < minY) minY = y; if (y > maxY) maxY = y;
-      if (zz < minZ) minZ = zz; if (zz > maxZ) maxZ = zz;
+function bladeShape(segments:number){
+  const pos:number[]=[],normal:number[]=[],uv:number[]=[],blade:number[]=[],indices:number[]=[];
+  for(let b=0;b<3;b++){
+    const start=blade.length;
+    for(let i=0;i<segments;i++)for(const side of [-1,1]){
+      const t=i/segments;
+      pos.push(side,t,0); normal.push(0,1,0); uv.push((side+1)/2,t); blade.push(b);
     }
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    const cx = (minX + maxX) * 0.5, cy = (minY + maxY) * 0.5 + 0.35, cz = (minZ + maxZ) * 0.5;
-    mesh.boundingSphere = new THREE.Sphere(
-      new THREE.Vector3(cx, cy, cz),
-      Math.hypot(maxX - cx, maxY - cy + 1.0, maxZ - cz) + 1.5,
-    );
-    mesh.frustumCulled = true;
-    const rank = new Float32Array(list.length);
-    for (let i = 0; i < list.length; i++) rank[i] = (i + 0.5) / list.length;
-    mesh.geometry = clumpGeo.clone();
-    mesh.geometry.setAttribute('aRank', new THREE.InstancedBufferAttribute(rank, 1));
-    const full = list.length;
-    mesh.userData.cullDistance = 104;
-    const center = mesh.boundingSphere.center, radius = mesh.boundingSphere.radius;
-    const density = U.uGrassDensity;
-    mesh.onBeforeRender = (_r: any, _s: any, camera: any) => {
-      const p = camera.position;
-      const near = Math.max(0, Math.hypot(p.x - center.x, p.z - center.z) - radius);
-      if (near > 104) { mesh.count = 0; return; }
-      mesh.count = Math.min(full, Math.ceil(full * (density?.value ?? 1) * grassDensityAt(near)) + 1);
+    pos.push(0,1,0);normal.push(0,1,0);uv.push(.5,1);blade.push(b);
+    for(let i=0;i<segments-1;i++){
+      const k=start+i*2; indices.push(k,k+1,k+2,k+1,k+3,k+2);
+    }
+    const end=start+(segments-1)*2;indices.push(end,end+1,end+2);
+  }
+  const geo=new THREE.InstancedBufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setAttribute('normal',new THREE.Float32BufferAttribute(normal,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  geo.setAttribute('aRank',new THREE.Float32BufferAttribute(blade,1));
+  geo.setIndex(indices);geo.instanceCount=0;
+  return geo;
+}
+
+function grassBand(z:ZoneContext, surface:MeadowSurface, band:number, tint:THREE.Color, blade:[number,number],approachTint?:THREE.Color) {
+  const geo=bladeShape(BAND_SEGMENTS[band]);
+  const rows=Math.max(1,Math.ceil(surface.cells.length/32));
+  const data=new Float32Array(32*rows*4);
+  const cells=new THREE.DataTexture(data,32,rows,THREE.RGBAFormat,THREE.FloatType);
+  cells.needsUpdate=true;
+  const U=z.ctx.U;
+  const uniforms={
+    ...THREE.UniformsUtils.clone(THREE.UniformsLib.lights),
+    uMeadowPhase:U.uMeadowPhase??{value:0}, uMeadowWind:U.uMeadowWind??{value:.29},
+    uSlimePos:U.uSlimePos??{value:new THREE.Vector4(0,-999,0,0)},
+    uTrail:U.uMeadowTrail??{value:Array.from({length:4},()=>new THREE.Vector4(0,-999,0,0))},
+    uSunDir:U.uSunDir??{value:new THREE.Vector3(.4,.8,.2)},uSunColor:U.uSunColor??{value:new THREE.Color(0xfff1cd)},
+    uBudget:{value:1},uQuality:U.uGrassDensity??{value:1},uTint:{value:tint},uEntranceTint:{value:approachTint??tint},
+    uBlade:{value:new THREE.Vector2(...blade)},
+    uMeadowField:{value:surface.texture}, uFieldRect:{value:new THREE.Vector4(...surface.area.min,...surface.area.max)},
+    uPattern:{value:grassPattern()},uCells:{value:cells},uAlbedo:U.uGrassAlbedoScale??{value:1},
+    uSeason:surfaceClimate.season,uSnow:surfaceClimate.snow,uWet:surfaceClimate.wet,
+  };
+  const mat=new THREE.ShaderMaterial({uniforms,side:THREE.DoubleSide,lights:true,
+    vertexShader:`
+      ${FIELD_GLSL}
+      ${MEADOW_WIND_GLSL}
+      #include <shadowmap_pars_vertex>
+      attribute float aRank;
+      uniform sampler2D uPattern,uCells;
+      uniform vec4 uSlimePos,uTrail[4]; uniform vec3 uTint,uEntranceTint,uSunDir,uSunColor;
+      uniform float uQuality,uAlbedo,uSeason,uSnow,uWet;uniform int uBudget;
+      uniform vec2 uBlade;
+      varying vec3 vColor;
+      void main(){
+        int ci=gl_InstanceID/uBudget, id=gl_InstanceID-ci*uBudget;
+        vec4 cell=texelFetch(uCells,ivec2(ci%32,ci/32),0);
+        vec4 p=texelFetch(uPattern,ivec2(id%128,id/128),0);
+        vec2 o=p.xy;
+        if(fract(cell.z*7.)>.5)o.x=8.-o.x;
+        if(fract(cell.z*13.)>.5)o=vec2(8.-o.y,o.x);
+        float seed=fract(p.z+aRank*.381+cell.z);
+        vec2 wild=vec2(cos(seed*31.),sin(seed*31.));
+        vec2 root=cell.xy+o+wild*(.025+.055*seed);
+        vec4 field=meadowSample(root);
+        float camD=length(root-cameraPosition.xz);
+        float nearD=min(camD,length(root-uSlimePos.xz));
+        float keep=pow(5.4/max(5.4,nearD),1.30)*mix(.50,1.,uQuality);
+        float rank=float(id)/11264.;
+        float grow=clamp((keep*1.15-rank)/max(.15*keep,.0001),0.,1.)*field.y*field.z*smoothstep(.23,.72,field.w);
+        if(grow<.04){gl_Position=vec4(2.,2.,2.,1.);vColor=vec3(0.);return;}
+        float tall=step(1.,p.w), t=position.y;
+        float h=mix(mix(.19,.37,fract(p.w)),mix(.42,.73,fract(p.w)),tall)*grow;
+        float pressure=0., totalWeight=0.;
+        vec2 awaySum=vec2(0.);
+        for(int j=0;j<5;j++){
+          vec4 actor=uSlimePos;if(j>0)actor=uTrail[j-1];
+          vec2 away=root-actor.xz;float distanceToBody=length(away),radius=actor.w+.13;
+          if(actor.w>0. && distanceToBody<radius && abs(field.x-actor.y)<.72){
+            float press=1.-smoothstep(.05,radius,distanceToBody);
+            pressure=max(pressure,press);
+            awaySum+=away/max(.06,distanceToBody)*press;
+            totalWeight+=press;
+          }
+        }
+        float wind=uMeadowWind*(1.-smoothstep(.08,.80,pressure));
+        float gust=(.5+.5*meadowWave(root))*wind;
+        vec2 lean=wild*(.18+.24*tall)+vec2(.84,.54)*(.24*gust);
+        lean+=.85*pressure*awaySum/max(.001,totalWeight);
+        h*=uBlade.x*(1.-.24*pressure);
+        lean/=max(1.,length(lean));
+        vec2 eye=cameraPosition.xz-root;eye/=max(.001,length(eye));
+        vec2 right=vec2(-eye.y,eye.x);
+        float yaw=(seed-.5)*.9;
+        right=mat2(cos(yaw),sin(yaw),-sin(yaw),cos(yaw))*right;
+        float width=mix(.011,.020,seed)*min(4.6,pow(1./max(.008,keep),.58));
+        vec3 wp=vec3(root.x,field.x-.018,root.y);
+        wp.xz+=lean*h*t*t+right*position.x*width*uBlade.y*pow(1.-t,.72);
+        wp.y+=h*t*(1.-.33*dot(lean,lean)*t);
+        gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.);
+        #if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0
+          vDirectionalShadowCoord[0]=directionalShadowMatrix[0]*vec4(wp+vec3(0.,.055,0.),1.);
+        #endif
+        float colorBand=.5+.5*sin(root.x*.17+.8*sin(root.y*.12))*cos(root.y*.15);
+        vec3 col=mix(uEntranceTint,uTint,smoothstep(142.,157.,root.y))*mix(vec3(.53,.62,.71),vec3(1.06,.93,.70),colorBand);
+        col=mix(col,col*vec3(1.45,1.13,.73),step(.85,seed)*.61+tall*.16);
+        col*=mix(.42,.85,smoothstep(.05,.36,t))*mix(1.,1.35,smoothstep(.53,.74,t));
+        col*=1.+position.x*.055;
+        float day=smoothstep(-.06,.40,uSunDir.y);
+        vec3 nightGrass=vec3(.052,.088,.135)*(0.82+0.35*t);
+        col*=mix(nightGrass,vec3(.75,.89,.83)+uSunColor*.18,day);
+        col+=col*vec3(.51,.44,.14)*t*t*gust*day;
+        if(uSeason>1.5)col*=uSeason>2.5?vec3(.84,.95,1.01):vec3(1.12,1.04,.78);
+        col=mix(col,vec3(.70,.80,.85),uSnow*(.2+.55*t));
+        vColor=col*(1.-uWet*.15)*mix(1.,uAlbedo,.38);
+      }`,
+    fragmentShader:`
+    #include <packing>
+    #if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0
+      uniform sampler2D directionalShadowMap[NUM_DIR_LIGHT_SHADOWS];
+      varying vec4 vDirectionalShadowCoord[NUM_DIR_LIGHT_SHADOWS];
+    #endif
+    varying vec3 vColor;void main(){
+      vec3 shade=vec3(1.);
+      #if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0
+        vec3 sc=vDirectionalShadowCoord[0].xyz/vDirectionalShadowCoord[0].w;
+        if(all(greaterThanEqual(sc,vec3(0.)))&&all(lessThanEqual(sc,vec3(1.)))){
+          float light=step(sc.z-.0006,unpackRGBAToDepth(texture2D(directionalShadowMap[0],sc.xy)));
+          shade=mix(vec3(.45,.56,.67),vec3(1.),light);
+        }
+      #endif
+      gl_FragColor=vec4(vColor*shade,1.);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+  });
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.name=band===0?'grass-blades':'grass-blades-lod-'+band;
+  mesh.receiveShadow=true;mesh.frustumCulled=false;mesh.userData.cullDistance = 104;
+  mesh.userData.walkThrough=true;mesh.layers.set(3);
+  let lastOrder='';
+  return {mesh, update(visible:THREE.Vector3[],quality:number){
+    const budget=Math.round(64*BAND_DENSITY[band]*(.5+.5*quality));
+    uniforms.uBudget.value=budget;
+    geo.instanceCount=budget*visible.length;
+    mesh.visible=geo.instanceCount>0;
+    const order=visible.map(c=>c.x+','+c.z).join(';');
+    if(order===lastOrder)return;
+    lastOrder=order;
+    visible.forEach((c,i)=>{
+      const h=Math.sin(c.x*17.21+c.z*83.84)*41849.73;
+      data.set([c.x-4,c.z-4,h-Math.floor(h),0],4*i);
+    });
+    cells.needsUpdate=true;
+  }, dispose(){geo.dispose();mat.dispose();cells.dispose();}};
+}
+
+
+type FlowerPose=[number,number,number,number,number];
+const flowers:FlowerSpecies[]=['daisy','poppy','lupin','buttercup'];
+const farHeads=new Map<FlowerSpecies,THREE.BufferGeometry>();
+function distantFlower(kind:FlowerSpecies) {
+  const cached=farHeads.get(kind);
+  if(cached)return cached;
+  const b:FlowerGeoBuilder={pos:[],norm:[],uv:[],col:[]};
+  const h=({oat:.60,iris:.49,gentian:.26,lupin:.40,daisy:.32,buttercup:.29,poppy:.37})[kind];
+  const tint=({daisy:[.94,.92,.78],poppy:[.94,.22,.12],lupin:[.62,.41,.88],buttercup:[.96,.72,.12],iris:[.63,.46,.9],gentian:[.21,.35,.88],oat:[.85,.71,.32]} as const)[kind];
+  const color:[number,number,number]=[...tint];
+  pushTri(b,[-.009,0,0],[.009,0,0],[.025,h,0],[.25,.47,.17],h);
+  for(let i=0;i<5;i++){
+    const a=i*Math.PI*.4,c=(i+1)*Math.PI*.4,tip=kind==='lupin'?.13:.035;
+    pushTri(b,[.025,h+tip,0],[.025+.07*Math.cos(a),h,.07*Math.sin(a)],[.025+.07*Math.cos(c),h,.07*Math.sin(c)],color,h);
+  }
+  const geo=finalizeFlowerGeo(b);
+  farHeads.set(kind,geo);return geo;
+}
+
+function scatterFlowers(z:ZoneContext,surface:MeadowSurface,count:number,theme:string,group:THREE.Group,rect?:PreserveRect){
+  const area=surface.area, ground=surface.sample.bind(surface);
+  const seed=rng('flowers-'+area.min.join('/')+theme).next;
+  const palette=habitats[theme]?.bloom??flowers;
+  const sets:FlowerPose[][]=palette.map(()=>[]);
+  const coverage=(x:number,zz:number)=>x>=area.min[0]&&x<area.max[0]&&zz>=area.min[1]&&zz<area.max[1]&&ground(x,zz,1)>.39;
+  const density=theme==='park'?1.35:theme==='forest'||theme==='lake'?.60:1;
+  const clusters=Math.max(8,Math.round(count*.006*density));
+  const drift=(cx:number,cz:number,major:number)=>{
+    const heading=seed()*Math.PI, length=1.7+seed()*2.8, width=.64+seed()*1.15;
+    const minor=(major+1+Math.floor(seed()*(palette.length-1)))%palette.length;
+    const num=Math.round((28+seed()*45)*density);
+    for(let j=0;j<num;j++){
+      const a=seed()*Math.PI*2, radial=Math.pow(seed(),.70);
+      const ax=Math.cos(a)*radial*length,az=Math.sin(a)*radial*width;
+      const x=cx+ax*Math.cos(heading)-az*Math.sin(heading),zz=cz+ax*Math.sin(heading)+az*Math.cos(heading);
+      if(!coverage(x,zz))continue;
+      const size=(1.46+seed()*.66)*(habitats[theme]?.flowerScale??(theme==='lake'?.72:1));
+      sets[seed()<.77?major:minor].push([x,ground(x,zz)-.012,zz,seed()*Math.PI*2,size]);
+    }
+  };
+  for(let n=0;n<clusters;n++) {
+    let picked:[number,number]|undefined;
+    for(let tries=0;tries<30;tries++){
+      const x=area.min[0]+seed()*(area.max[0]-area.min[0]), zz=area.min[1]+seed()*(area.max[1]-area.min[1]);
+      if(!coverage(x,zz))continue;
+      if(rect&&seed()>bloomSuitability(rect,x,zz))continue;
+      picked=[x,zz];
+      if(theme!=='park'||n%3===0||pathDistance(x,zz)<7.8)break;
+    }
+    if(picked)drift(...picked,n%palette.length);
+  }
+  if(rect?.biome==='marsh'||rect?.biome==='bamboo'){
+    // Walk a few cross-sections out of the basin, planting short drifts along its actual bank.
+    const middle=(rect.minX+rect.maxX)*.5;
+    for(let zz=rect.minZ+5;zz<rect.maxZ-3;zz+=3.7+seed()*1.8)for(const side of [-1,1]){
+      let leftWater=false;
+      for(let d=1;d<(rect.maxX-rect.minX)*.5-1;d+=.65){
+        const x=middle+side*d,y=ground(x,zz);
+        if(y<.21)leftWater=true;
+        if(!leftWater||y<.34||!coverage(x,zz))continue;
+        drift(x,zz,rect.biome==='marsh'?(seed()<.75?0:1):1);break;
+      }
+    }
+  }
+  const nearMat=createWildflowerMaterial(z,surface),farMat=nearMat;
+  const bundles=sets.map((list,i)=>{
+    const make=(far:boolean)=>{
+      const mesh=new THREE.InstancedMesh(far?distantFlower(palette[i]):getFlowerGeometries()[palette[i]],far?farMat:nearMat,list.length);
+      mesh.name=(i||rect?'grass-flowers-'+palette[i]:'grass-flowers')+(far?'-far':'');
+      mesh.frustumCulled=false;mesh.userData.walkThrough=true;mesh.userData.meadowManaged=true;
+      mesh.count=0;mesh.layers.set(3);group.add(mesh);
+      return mesh;
     };
-    g.add(mesh);
-    chunkIdx++;
-  }
+    return {list,near:make(false),far:make(true)};
+  });
+  let lastX=Infinity,lastZ=Infinity,lastQ=-1;
+  const matrix=new THREE.Matrix4();
+  return {total:sets.reduce((n,l)=>n+l.length,0),
+    update(p:THREE.Vector3,q:number){
+      if(Math.hypot(p.x-lastX,p.z-lastZ)<1.5&&q===lastQ)return;
+      lastX=p.x;lastZ=p.z;lastQ=q;
+      const limit=meadowViewDistance(q);
+      for(const {list,near,far} of bundles){
+        near.count=0;far.count=0;
+        for(let i=0;i<list.length;i++){
+          const [x,y,zz,a,s]=list[i],d=Math.hypot(p.x-x,p.z-zz);
+          if(d>limit|| (d>18 && i%5>Math.round(4*q)))continue;
+          const target=d<12+12*q?near:far;
+          matrix.makeRotationY(a);matrix.multiplyScalar(s);matrix.elements[15]=1;matrix.setPosition(x,y,zz);
+          target.setMatrixAt(target.count++,matrix);
+        }
+        for(const mesh of [near,far]){mesh.visible=mesh.count>0;mesh.instanceMatrix.needsUpdate=true;}
+      }
+    },
+    dispose(){nearMat.dispose();for(const {near,far} of bundles){near.dispose();far.dispose();}}
+  };
+}
 
-  // 4-Species Natural Wildflower Drifts (daisy, poppy, lupin, buttercup)
-  if (colors.length > 1) {
-    const speciesList: FlowerSpecies[] = ['daisy', 'poppy', 'lupin', 'buttercup'];
-    const speciesSpots: Record<FlowerSpecies, [number, number, number, number, number][]> = {
-      daisy: [],
-      poppy: [],
-      lupin: [],
-      buttercup: [],
+interface FieldHandle {
+  surface:MeadowSurface;group:THREE.Group;count:number;
+  update(camera:THREE.Camera,frustum:THREE.Frustum,actor:THREE.Vector4,q:number):number;
+  dispose():void;
+}
+
+function makeField(z:ZoneContext, count:number, area:MeadowArea,
+    ground:(x:number,z:number)=>number, cover:(x:number,z:number)=>number, theme:string,tint:THREE.Color, withFlowers:boolean, rect?:PreserveRect):FieldHandle{
+  const surface=new MeadowSurface(area,ground,cover);
+  const group=new THREE.Group();group.name='grass-tufts';group.userData.walkThrough=true;
+  const entrance=theme==='trail'?new THREE.Color():undefined;
+  if(entrance)sampleInlandGrassColor((area.min[0]+area.max[0])/2<0?-68:0,111,entrance,new THREE.Color());
+  const bands=BAND_END.map((_,i)=>grassBand(z,surface,i,tint,habitats[theme]?.blade??[1,1],entrance));
+  for(const band of bands)group.add(band.mesh);
+  const bloom=withFlowers?scatterFlowers(z,surface,count,theme,group,rect):null;
+  const visible=BAND_END.map(()=>[] as THREE.Vector3[]);
+  const sphere=new THREE.Sphere(new THREE.Vector3(),7.2);
+  group.userData.theme=theme;group.userData.candidatesPerSquareMetre=CANDIDATES_PER_METRE;
+  group.userData.flowerCount=bloom?.total??0;group.userData.cells=surface.cells.length;
+  return {group,surface,count:bloom?.total??0,
+    update(camera,frustum,actor,q){
+      const cam=camera.position,limit=meadowViewDistance(q);
+      if(rect){
+        const outside=(x:number,z:number)=>x<rect.minX-limit-8||x>rect.maxX+limit+8||z<rect.minZ-limit-8||z>rect.maxZ+limit+8;
+        group.visible=!(outside(cam.x,cam.z)&&outside(actor.x,actor.z));
+        if(!group.visible){group.userData.activeTufts=0;return 0;}
+      }
+      let instances=0;
+      for(const list of visible)list.length=0;
+      for(const c of surface.cells){
+        sphere.center.copy(c);
+        if(!frustum.intersectsSphere(sphere))continue;
+        const dist=Math.min(Math.hypot(c.x-cam.x,c.z-cam.z),Math.hypot(c.x-actor.x,c.z-actor.z));
+        if(dist>limit+3)continue;
+        const band=BAND_END.findIndex(v=>dist<v);
+        if(band>=0)visible[band].push(c);
+      }
+      bands.forEach((b,i)=>{b.update(visible[i],q);instances+=b.mesh.geometry.instanceCount;});
+      bloom?.update(cam,q);
+      group.userData.activeTufts=instances;
+      return instances;
+    },
+    dispose(){surface.texture.dispose();for(const b of bands)b.dispose();bloom?.dispose();group.removeFromParent();}
+  };
+}
+
+/** Shared service for the five native fields and the currently owned frontier. */
+export class HomeMeadows {
+  private native:FieldHandle[]=[];
+  private frontier=new Map<string,FieldHandle>();
+  private expansions:ExpandedTile[]=[];
+  private boxes:readonly GrassExcludeBox[]=[];
+  private frustum=new THREE.Frustum();
+  private vp=new THREE.Matrix4();
+  readonly stats={fields:0,expansions:0,cells:0,flowerCount:0,activeTufts:0,contactRadius:0,range:0};
+  constructor(private ctx:any){}
+  private surfaceAt(x: number, z: number): MeadowSurface | undefined {
+    const contains = (field: FieldHandle) => {
+      const {min,max} = field.surface.area;
+      return x >= min[0] && x < max[0] && z >= min[1] && z < max[1];
     };
-    const driftCount = Math.max(12, Math.min(72, Math.floor(count * 0.013)));
-    for (let d = 0; d < driftCount; d++) {
-      let cx = 0, cz = 0, found = false;
-      for (let t = 0; t < 10; t++) {
-        const tx = area.min[0] + z.rand() * (area.max[0] - area.min[0]);
-        const tz = area.min[1] + z.rand() * (area.max[1] - area.min[1]);
-        if (!avoid(tx, tz)) { cx = tx; cz = tz; found = true; break; }
-      }
-      if (!found) continue;
-      const sp = speciesList[Math.floor(z.rand() * speciesList.length)];
-      const clusterSize = 4 + Math.floor(z.rand() * 6);
-      const driftRad = sp === 'lupin' ? 1.35 : 1.75;
-      for (let k = 0; k < clusterSize; k++) {
-        const ang = z.rand() * Math.PI * 2;
-        const dist = Math.sqrt(z.rand()) * driftRad;
-        const fx = cx + Math.cos(ang) * dist;
-        const fz = cz + Math.sin(ang) * dist;
-        if (fx < area.min[0] || fx > area.max[0] || fz < area.min[1] || fz > area.max[1]) continue;
-        if (avoid(fx, fz)) continue;
-        const fy = z.ground(fx, fz);
-        const fyaw = z.rand() * Math.PI * 2;
-        const fscale = 0.85 + z.rand() * 0.45;
-        speciesSpots[sp].push([fx, fy, fz, fyaw, fscale]);
-      }
-    }
-
-    const geos = getFlowerGeometries();
-    const flowerMat = createWildflowerMaterial(z);
-    for (const sp of speciesList) {
-      const arr = speciesSpots[sp];
-      if (!arr.length) continue;
-      const flowers = new T.InstancedMesh(geos[sp], flowerMat, arr.length);
-      flowers.name = sp === 'daisy' ? 'grass-flowers' : `grass-flowers-${sp}`;
-      flowers.receiveShadow = true;
-      flowers.castShadow = false;
-      let minX = Infinity, minY = Infinity, minZ = Infinity;
-      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-      for (let i = 0; i < arr.length; i++) {
-        const [fx, fy, fz, fyaw, fs] = arr[i];
-        e.set((z.rand() - 0.5) * 0.14, fyaw, (z.rand() - 0.5) * 0.14);
-        q.setFromEuler(e);
-        m.compose(posV.set(fx, fy - 0.01, fz), q, scaleV.set(fs, fs, fs));
-        flowers.setMatrixAt(i, m);
-        // Gentle per-flower natural warmth/brightness variation while preserving species vertex colors
-        c.setRGB(0.94 + z.rand() * 0.12, 0.94 + z.rand() * 0.12, 0.92 + z.rand() * 0.14);
-        flowers.setColorAt(i, c);
-        if (fx < minX) minX = fx; if (fx > maxX) maxX = fx;
-        if (fy < minY) minY = fy; if (fy > maxY) maxY = fy;
-        if (fz < minZ) minZ = fz; if (fz > maxZ) maxZ = fz;
-      }
-      flowers.instanceMatrix.needsUpdate = true;
-      if (flowers.instanceColor) flowers.instanceColor.needsUpdate = true;
-      const cx = (minX + maxX) * 0.5, cy = (minY + maxY) * 0.5 + 0.3, cz = (minZ + maxZ) * 0.5;
-      flowers.boundingSphere = new THREE.Sphere(
-        new THREE.Vector3(cx, cy, cz),
-        Math.hypot(maxX - cx, maxY - cy + 1.0, maxZ - cz) + 1.5,
-      );
-      flowers.frustumCulled = true;
-      flowers.userData.cullDistance = 84;
-      g.add(flowers);
-    }
+    for (const field of this.frontier.values()) if (contains(field)) return field.surface;
+    return this.native.find(contains)?.surface;
   }
+  groundAt(x: number, z: number): number | null {
+    return this.surfaceAt(x,z)?.sample(x,z) ?? null;
+  }
+  rainHeight(x:number, z:number, solid:number):number {
+    const surface=this.surfaceAt(x,z);
+    if(!surface)return solid;
+    const ground=surface.sample(x,z);
+    if(Math.abs(ground-solid)>.07)return solid;
+    // Dense blades intercept a fraction of the drops above the soil; bare and paved patches stay at grade.
+    const cover=surface.sample(x,z,1)*surface.sample(x,z,3);
+    const patch=.5+.5*Math.sin(x*8.7+z*2.3)*Math.cos(z*7.1);
+    return Math.max(solid,ground)+cover*patch*.34;
+  }
+  register(field:FieldHandle){this.native.push(field);}
+  addPreserve(r:PreserveRect,parent:THREE.Group,ground=(x:number,z:number)=>preserveHeight(r,x,z),cover=(x:number,z:number)=>preserveCover(r,x,z),margin=0){
+    const h=habitats[r.biome],zone={ctx:this.ctx,T:this.ctx.THREE} as ZoneContext;
+    const field=makeField(zone,h.drifts,{min:[r.minX-margin,r.minZ],max:[r.maxX+margin,r.maxZ]},
+      ground,cover,r.biome,new THREE.Color(h.tint),true,r);
+    field.group.name='preserve-meadow-'+r.biome;
+    parent.add(field.group);this.register(field);field.surface.setExclusions(this.boxes);
+    return ()=>{this.native.splice(this.native.indexOf(field),1);field.dispose();};
+  }
+  syncExclusions(boxes:readonly GrassExcludeBox[]){
+    this.boxes=boxes;
+    const coastalEdges:GrassExcludeBox[]=[];
+    for(const tile of this.expansions){
+      const slot=slotForTile(tile);
+      if(slot)coastalEdges.push({x:(slot.min[0]+slot.max[0])/2,z:(slot.min[1]+slot.max[1])/2,
+        hx:(slot.max[0]-slot.min[0])/2-.35,hz:(slot.max[1]-slot.min[1])/2-.35});
+    }
+    for(const f of this.native)f.surface.setExclusions(coastalEdges.length?[...boxes,...coastalEdges]:boxes);
+    for(const f of this.frontier.values())f.surface.setExclusions(boxes);
+  }
+  syncExpansions(expansions:ExpandedTile[]){
+    this.expansions=expansions;
+    const keys=new Set(expansions.map(t=>t.id+':'+t.theme));
+    for(const [key,field] of this.frontier)if(!keys.has(key)){field.dispose();this.frontier.delete(key);}
+    for(const tile of expansions){
+      const key=tile.id+':'+tile.theme,slot=slotForTile(tile);if(this.frontier.has(key)||!slot)continue;
+      const def=EXPANSION_THEMES[tile.theme],ctx=this.ctx;
+      const cx=(slot.min[0]+slot.max[0])/2,cz=(slot.min[1]+slot.max[1])/2;
+      const w=slot.max[0]-slot.min[0],h=slot.max[1]-slot.min[1];
+      const obstacles=def.naturalProps.map(p=>[slot.min[0]+p.u*w,slot.min[1]+p.v*h,Math.min(1,p.width*.21)]);
+      const cover=(x:number,z:number)=>{
+        const s=expansionSurfaceWeights(x,z,slot,tile.theme);
+        if(tile.theme==='jiangnan'&&Math.hypot(x-cx,z-cz)<Math.min(w,h)*.20+.32)return 0;
+        if(obstacles.some(([tx,tz,r])=>Math.hypot(tx-x,tz-z)<r))return 0;
+        return (1-s.road)*(1-s.sand)*(1-s.pond);
+      };
+      const zone={ctx,T:ctx.THREE} as ZoneContext;
+      const f=makeField(zone,1800,slot,(x,z)=>expansionGroundAt(x,z,slot,tile.theme),cover,tile.theme,new THREE.Color(def.grassHex).multiplyScalar(.80),true);
+      f.group.name='grass-expansion-'+tile.id;ctx.scene.add(f.group);
+      this.frontier.set(key,f);
+    }
+    this.syncExclusions(this.boxes);
+  }
+  update(camera:THREE.Camera, actor:THREE.Vector4,q:number){
+    camera.updateMatrixWorld();
+    this.frustum.setFromProjectionMatrix(this.vp.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+    const s=this.stats;
+    s.fields=0;s.expansions=this.frontier.size;s.cells=0;s.activeTufts=0;s.flowerCount=0;
+    s.contactRadius=actor.w;s.range=meadowViewDistance(q);
+    const visit=(f:FieldHandle)=>{
+      s.fields++;s.cells+=f.surface.cells.length;s.flowerCount+=f.count;
+      s.activeTufts+=f.update(camera,this.frustum,actor,q);
+    };
+    this.native.forEach(visit);this.frontier.forEach(visit);
+  }
+}
 
-  return g;
+export function createChunkedGrassISM(z:ZoneContext,count:number,area:MeadowArea,
+  avoid:(x:number,zz:number)=>boolean,colors=[0x6fb84d,0xffe066,0xffb3c6,0xffffff]){
+  const theme=z.rect?.id??'park';
+  const tint=new THREE.Color(),temp=new THREE.Color();
+  sampleInlandGrassColor((area.min[0]+area.max[0])/2,(area.min[1]+area.max[1])/2,tint,temp);
+  const cover=(x:number,zz:number)=>{
+    if(avoid(x,zz))return 0;
+    const road=Math.max(sampleTerrainRoadWeight(x,zz),approachWear(x,zz));
+    const shoreline=theme==='lake'?Math.min(1,Math.max(0,(lakeEdge(x,zz)-1.12)*5)):1;
+    return (1-road)*shoreline*(theme==='lake'?.75:1);
+  };
+  const field=makeField(z,count,area,triangleGround(z.ground),cover,theme,tint,colors.length>1);
+  z.ctx.grassField?.register(field);
+  return field.group;
 }

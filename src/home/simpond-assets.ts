@@ -231,8 +231,8 @@ function attachProceduralMotionShader(
           vec3 spN = normalize(normal);
           float spRim = pow(1.0 - max(dot(spN, spV), 0.0), 2.2);
           float spUp = clamp(spN.y * 0.5 + 0.5, 0.0, 1.0);
-          vec3 moonFill = diffuseColor.rgb * vec3(0.20, 0.28, 0.40) * (0.55 + 0.45 * spUp);
-          vec3 moonRim = mix(vec3(0.24, 0.38, 0.58), diffuseColor.rgb * vec3(0.65, 0.85, 1.08), 0.45) * spRim * 0.32;
+          vec3 moonFill = diffuseColor.rgb * vec3(0.11, 0.16, 0.25) * (0.55 + 0.45 * spUp);
+          vec3 moonRim = mix(vec3(0.16, 0.26, 0.42), diffuseColor.rgb * vec3(0.45, 0.62, 0.85), 0.45) * spRim * 0.22;
           reflectedLight.indirectDiffuse += (moonFill + moonRim) * spNight;
         }`,
       );

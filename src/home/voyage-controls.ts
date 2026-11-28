@@ -2,11 +2,11 @@ export const DOCK = {x: -11.1, z: 8};
 export const voyageHelp = [
   [
     '离港准备',
-    '在临水书埠西南的柳岸钓台上，点「启航」或按 H。从深水按 F 也能召船。每趟配 12 发，码头每 6 贝壳加购 6 发，最多加购 24 发。',
+    '在临水书埠西南的柳岸钓台上，点「启航」或按 H。也可从海岸直接游出，离岸 50 米后能发现远岛，回到岸边 30 米内结束探索。从深水按 F 召船。每趟配 12 发，码头每 6 贝壳加购 6 发，最多加购 24 发。',
   ],
   [
     '驾驶与遇敌',
-    '按住 W 前进、S 倒航，松开收帆。A / D 转舵；触屏用前进、倒航和左右舵。每向外探索 300–2,000 米，野兔会指出陌生船帆。原路返航安全。',
+    '登船后用 WASD 或屏幕方向键在甲板上走动。船尾有一只金色舵轮，走近按 F 或点「掌舵」。掌舵后 W 逐步扬帆，S 制动后倒航，A / D 转舵。松开 W 会滑行减速，再按 F 或点「松舵」可留在甲板，船会自行减速停下。每向外探索 300–2,000 米，野兔会指出陌生船帆。原路返航安全。',
   ],
   [
     '左右舷开炮',
@@ -14,7 +14,7 @@ export const voyageHelp = [
   ],
   [
     '停船、海钓与登岛',
-    '和平时按 F 抛竿，咬钩时按 F 或点提竿，随后按住或松开收线。按 C 入水，空格上浮，C / Shift 下潜。也可空格离船，游上浅滩；靠近原船按 F 或点「登梯」。鱼获立即入包。',
+    '和平时按 R 或点「垂钓」，点击水面或按 F 抛竿。浮漂下沉时按 F，按住收线，松开卸力，A / D 逆着鱼的冲刺方向压竿。收竿后留在甲板。远岛可沿沙滩登陆，返回时循原路游回家园或登船。游泳、潜水时移动鼠标可环顾。按住 Alt 显示鼠标，松开恢复环顾。F1 打开航海手册，F2 打开快捷菜单并显示鼠标；再按同一按键返回。离家园约 5 公里的海盆最深 2,000 米。按 C 入水，空格上浮，C / Shift 下潜。也可空格离船，游上浅滩；登岸后收起回船提示。回到海水中，朝船身中部两侧的绳梯游去即可爬上甲板，也可在梯旁按 F 或点「登梯」。鱼获立即入包。',
   ],
   [
     '带货箱回家',
@@ -28,23 +28,11 @@ export class VoyageControls {
   private row = document.createElement('div');
   private guide = document.createElement('div');
   helpOpen = false;
-  private releasingLock = false;
-  private unlock = () => {
-    if (this.releasingLock && !document.pointerLockElement) {
-      this.releasingLock = false;
-    }
-  };
-  private onLockChange = (event: Event) => {
-    if (this.releasingLock && !document.pointerLockElement) {
-      event.stopImmediatePropagation();
-      this.unlock();
-    }
-  };
   constructor(
     private action: (id: string) => void,
     private hold: (id: string, down: boolean) => void,
+    private setFreePointer: (active: boolean) => void,
   ) {
-    document.addEventListener('pointerlockchange', this.onLockChange, true);
     this.el.className = 'voyage-controls';
     this.el.hidden = true;
     this.el.setAttribute('aria-label', '史莱姆号航海');
@@ -69,7 +57,8 @@ export class VoyageControls {
       KeyD: '右舵',
       port: '左舷 Q',
       starboard: '右舷 E',
-      fish: '垂钓 F',
+      helm: '掌舵 F',
+      fish: '垂钓 R',
       dive: '潜水 C',
       leave: '离船',
       land: '靠港结算 H',
@@ -107,6 +96,7 @@ export class VoyageControls {
   toggleHelp() {
     if (this.el.hidden) return;
     this.helpOpen = !this.helpOpen;
+    this.setFreePointer(this.helpOpen);
     this.guide.hidden = !this.helpOpen;
     this.row.hidden = this.helpOpen;
     if (this.helpOpen) {
@@ -115,14 +105,18 @@ export class VoyageControls {
       this.guide.querySelector('button')!.focus({preventScroll: true});
     }
   }
-  show(info: string, ids: string[], port = '', starboard = '') {
-    if (document.pointerLockElement && !this.releasingLock) {
-      this.releasingLock = true;
-      document.exitPointerLock();
-    }
+  show(info: string, ids: string[], port = '', starboard = '', mode: 'deck' | 'sailing' = 'sailing') {
     this.el.hidden = false;
     if (this.info.textContent !== info) this.info.textContent = info;
     for (const [id, b] of this.buttons) b.hidden = id !== 'help' && !ids.includes(id);
+    const walking = mode === 'deck';
+    for (const [id, name] of [
+      ['KeyA', walking ? '左移' : '左舵'], ['KeyD', walking ? '右移' : '右舵'],
+      ['KeyS', walking ? '后退' : '倒航'], ['helm', walking ? '掌舵 F' : '松舵 F'],
+    ]) {
+      const btn = this.buttons.get(id)!;
+      if (btn.textContent !== name) btn.textContent = name;
+    }
     for (const [id, txt] of [
       ['port', port],
       ['starboard', starboard],
@@ -134,13 +128,14 @@ export class VoyageControls {
       }
   }
   hide() {
+    if (this.helpOpen) this.setFreePointer(false);
     this.el.hidden = true;
     this.helpOpen = false;
     this.guide.hidden = true;
     this.row.hidden = false;
   }
   dispose() {
-    document.removeEventListener('pointerlockchange', this.onLockChange, true);
+    this.setFreePointer(false);
     this.el.remove();
   }
 }

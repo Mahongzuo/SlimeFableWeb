@@ -335,6 +335,7 @@ export const park: ZoneBuilder = z => {
   // Shared colour-per-instance batches keep all added furniture to five draw calls.
   type Detail = {part: Part; color: number};
   const timber: Detail[] = [], round: Detail[] = [], soft: Detail[] = [], fruit: Detail[] = [], hoops: Detail[] = [];
+  const fountainStone: Detail[] = [], fountainMetal: Detail[] = [];
   const P = z.ctx.P, wood = 0x99734f, bamboo = 0xc3a36d, tile = 0x596d70, red = 0xb64d3f;
   const add = (list: Detail[], color: number, ...part: Part) => list.push({part, color});
   const stone = (x: number, y: number, zz: number, sx: number, sy: number, sz: number) => add(timber, P.concrete, x, y, zz, sx, sy, sz);
@@ -375,11 +376,25 @@ export const park: ZoneBuilder = z => {
       const a = k * Math.PI / 5;
       add(timber, wood, bx + Math.sin(a) * .33, by + .52, zz + Math.cos(a) * .33, .09, .65, .09);
     }
-    stone(dx, dy + .45, zz, .45, .9, .45);
-    stone(dx, dy + .94, zz, .75, .18, .65);
-    add(round, 0x536b69, dx, dy + 1.04, zz, .26, .04, .21);
-    add(round, P.concrete, dx, dy + 1.15, zz + .2, .035, .35, .035);
-    add(round, P.concrete, dx, dy + 1.3, zz + .1, .035, .22, .035, Math.PI / 2);
+    // These five pieces use explicit boxes in place of a single baked height column.
+    const fountainPart = (name: string, centerY: number, offsetZ: number, width: number, height: number, depth: number) => {
+      zoneBoxes.push({name: `park-drinking-fountain-${x}-${zz}-${name}`,
+        min:[dx-width/2, dy+centerY-height/2, zz+offsetZ-depth/2],
+        max:[dx+width/2, dy+centerY+height/2, zz+offsetZ+depth/2], camera:true, climbable:false});
+    };
+    const stonePart = (name: string, h: number, width: number, height: number, depth: number) => {
+      add(fountainStone, P.concrete, dx, dy+h, zz, width, height, depth);
+      fountainPart(name, h, 0, width, height, depth);
+    };
+    const roundPart = (name: string, color: number, h: number, zOffset: number, rx: number, length: number, rz: number, horizontal=false) => {
+      add(fountainMetal, color, dx, dy+h, zz+zOffset, rx, length, rz, horizontal ? Math.PI/2 : 0);
+      fountainPart(name, h, zOffset, 2*rx, horizontal ? 2*rz : length, horizontal ? length : 2*rz);
+    };
+    stonePart('pedestal', .45, .45, .9, .45);
+    stonePart('rim', .94, .75, .18, .65);
+    roundPart('basin', 0x536b69, 1.04, 0, .26, .04, .21);
+    roundPart('tap', P.concrete, 1.15, .2, .035, .35, .035);
+    roundPart('spout', P.concrete, 1.3, .1, .035, .22, .035, true);
   }
   for (const [x, zz] of [[7, 35], [17, 41], [11, 49], [-1, 56], [7, 65], [-3, 77]]) stone(x, z.ground(x, zz) + .1, zz, .55, .2, .55);
   // Picnic clusters: woven bamboo baskets, handles, cups and checked cloths.
@@ -458,7 +473,10 @@ export const park: ZoneBuilder = z => {
   const details = (name: string, geometry: any, items: Detail[]) => {
     const m = batch(name, geometry, 0xffffff, items.map(d => d.part)), color = new T.Color();
     items.forEach((d, i) => m.setColorAt(i, color.setHex(d.color).multiplyScalar(.95 + z.rand() * .1)));
+    return m;
   };
+  details('park-fountain-stone', box, fountainStone).userData.skipHeightBake = true;
+  details('park-fountain-metal', new T.CylinderGeometry(1, 1, 1, 10), fountainMetal).userData.skipHeightBake = true;
   details('park-solid-wood-stone', box, timber);
   details('park-solid-bamboo-metal', new T.CylinderGeometry(1, 1, 1, 10), round);
   details('park-cloth-kites-fx', box, soft);
@@ -471,7 +489,7 @@ export const park: ZoneBuilder = z => {
   }
   const parkNativeTrees = getNativeTreeSpots('park');
   root.add(trees(z, spots, [0x5db84d, 0x78cb54, 0x4aa85c]));
-  root.add(tufts(z, 5000, {min: [-29, 31], max: [30, 79]}, (x, zz) => (x>=6.7 && x<=13.3 && zz<40) || pathDistance(x, zz) < 2.45
+  root.add(tufts(z, 5000, {min: [-30, 30], max: [31, 80]}, (x, zz) => (x>=6.7 && x<=13.3 && zz<40) || pathDistance(x, zz) < 2.45
     || playAreas.some(([cx, cz, w, d]) => Math.abs(x - cx) < w / 2 + .32 && Math.abs(zz - cz) < d / 2 + .32)
     || (Math.abs(x - 20) < 1.35 && zz > 53 && zz < 63)
     || Math.hypot(x + 18.5, zz - 65.0) < 2.65

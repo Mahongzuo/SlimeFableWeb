@@ -34,7 +34,7 @@ const scenery:Record<string,Spot[]>={
   harbor:[...canal,['build-teahall',19,-9,6.1,-.9],['build-huizhou',24,-2,5,-1.2],
     ['pack-pavilion',13,-23,4],['pack-ginkgo',11,-21,3.8],['build-red-pagoda',-21,-21,5.1,.3],
     ['nature-bamboo',-19,-18,3.4],['nature-willow',-11,12,4.6],['waterside-reeds',-9,14,1.5],
-    ['build-huizhou',-21,16,5.7,.27],['nature-wisteria',-23,12,3.3],['nature-bamboo',25,8,3.6]],
+    ['nature-wisteria',-27.9,12,3.3],['nature-bamboo',25,8,3.6]],
   park:[['pack-windmill',20,64,5.5,Math.PI],['pack-pavilion',-18.5,65.0,4.5,.45],['nature-wisteria',-22.5,63.5,3],['build-moon-gate',2,77,3.9],
     ['nature-bamboo',5,77,2.9],['pack-ginkgo',-8,74,3.7],['build-teahall',24.8,52.6,4.9,-1.4]],
   lake:[['waterside-stilt-house',-19,102,5.9,.8],['build-teahall',-22,98,5.5,-.4],

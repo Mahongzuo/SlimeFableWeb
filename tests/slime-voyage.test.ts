@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {freshLife} from '../src/life/state';
 import {
+  approachSailingSpeed,
   buyRounds,
   depart,
   endEncounter,
@@ -143,4 +144,20 @@ test('wind-sea buoyancy and normal track the same phase and ease towards the sho
   assert.ok(Math.abs((voyageChop(x+eps,z,t).height-voyageChop(x-eps,z,t).height)/(2*eps)-c.slopeX)<1e-5);
   const w=sampleOceanWaveAt(x,z,t,.5,null,true),base=sampleOceanWaveAt(x,z,t,.5);
   assert.ok(Math.abs(w.height-base.height-.98*c.height)<1e-7);assert.ok(Math.abs(Math.hypot(...w.normal)-1)<1e-6);
+});
+
+test('远洋起步、收帆和反向制动在不同帧率下逐渐变速', () => {
+  for (const hz of [30, 60, 120]) {
+    const simulate = (speed: number, goal: number, seconds: number) => {
+      for (let i = 0; i < hz * seconds; i++) speed = approachSailingSpeed(speed, goal, 1 / hz);
+      return speed;
+    };
+    assert.ok(Math.abs(simulate(0, 24, 1) - 3.2) < .01);
+    assert.equal(simulate(0, 24, 8), 24);
+    const coast = simulate(24, 0, 1);
+    assert.ok(coast > 16 && coast < 18);
+    assert.equal(simulate(24, 0, 6), 0);
+    assert.ok(simulate(10, -4, 1) > 0);
+    assert.equal(simulate(10, -4, 5), -4);
+  }
 });

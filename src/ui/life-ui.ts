@@ -1,3 +1,6 @@
+import {capacityProgress} from '../life/shell-wallet';
+import {starterIds} from '../life/companion-catalog';
+import {changeShells} from '../life/shell-wallet';
 import {ensureHome, type LifeData} from '../life/state';
 import {ITEMS, RECIPES, type ItemKind} from '../life/catalog';
 import {ensureDailyHomeTasks, nextLevelXp} from '../life/unlocks';
@@ -7,11 +10,12 @@ import {donateToMuseum, museumSummary, type MuseumHallId} from '../life/museum';
 import {RANCH_SPECIES, adoptRanchAnimal, animalHearts, ranchCapacity} from '../life/ranch';
 import {ARTISAN_RECIPES, MACHINE_NAMES, sellItem} from '../life/artisan';
 import {FOOD_BUFFS, eatFood, getActiveBuffs} from '../life/cooking';
-import {ROD_TIERS, upgradeFishingRod} from '../life/fishing';
+import {speciesById,waterNames} from '../life/fish-species';
+import {FISH_TABLE,trophySize,ROD_TIERS, upgradeFishingRod} from '../life/fishing';
 import {getDailyHistoryBlessing} from '../life/daily-history-link';
 import type {DetectedPasturePen} from '../home/voxel-mesher';
 
-export type JournalTab = 'home' | 'museum' | 'ranch' | 'artisan' | 'dex';
+export type JournalTab = 'home' | 'museum' | 'ranch' | 'artisan' | 'dex' | 'fish';
 
 export interface LifeUIContext {
   souvenirCount: number;
@@ -47,9 +51,10 @@ export class LifeUI {
     this.coins = this.root.querySelector('.coins b')!;
     this.fish = this.root.querySelector('.fishing')!;
     this.root.addEventListener('click', e => {
-      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-dextab],[data-donate],[data-adopt],[data-sell],[data-eat],[data-upgraderod],[data-buybait]');
+      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-companions],[data-dextab],[data-donate],[data-adopt],[data-sell],[data-eat],[data-upgraderod],[data-buybait]');
       if (!t || !this.currentLife) return;
       const life = this.currentLife;
+      if(t.hasAttribute('data-companions')){window.dispatchEvent(new Event('home-companions'));return;}
       if (t.dataset.dextab) {
         this.dexTab = t.dataset.dextab as JournalTab;
         this.renderDex();
@@ -114,7 +119,7 @@ export class LifeUI {
       if (t.dataset.buybait) {
         const bait = ITEMS[t.dataset.buybait];
         if (bait && life.coins >= bait.price * 3) {
-          life.coins -= bait.price * 3;
+          changeShells(life, -(bait.price * 3), 'spend');
           life.bag[bait.id] = (life.bag[bait.id] ?? 0) + 3;
           this.ctxInfo.toast(`🪱 购入 ${bait.icon}${bait.name} ×3`, 2000);
           this.ctxInfo.onMutate();
@@ -159,6 +164,7 @@ export class LifeUI {
         <button class="d-tab ${this.dexTab === 'museum' ? 'on' : ''}" data-dextab="museum">🏛️ 时光博物苑</button>
         <button class="d-tab ${this.dexTab === 'ranch' ? 'on' : ''}" data-dextab="ranch">🦌 稀兽 &amp; 牧场</button>
         <button class="d-tab ${this.dexTab === 'artisan' ? 'on' : ''}" data-dextab="artisan">🍳 工坊集市</button>
+        <button class="d-tab ${this.dexTab === 'fish' ? 'on' : ''}" data-dextab="fish">🎣 凝露鱼谱</button>
         <button class="d-tab ${this.dexTab === 'dex' ? 'on' : ''}" data-dextab="dex">📖 全图鉴</button>
       </div>
       <span>Lv.${home.level} · 🐚 ${life.coins} · <span class="key">B</span> 合上</span>
@@ -238,14 +244,14 @@ export class LifeUI {
             const sp = RANCH_SPECIES.find(s => s.id === a.speciesId);
             const prod = sp ? ITEMS[sp.productId] : null;
             return `<div class="market-card">
-              <div class="m-row"><b>${sp?.icon ?? '🐾'} ${a.name}</b><span>❤️ ${animalHearts(a)}/5</span></div>
+              <div class="m-row"><b>${sp?.icon ?? '🐾'} ${a.name.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]!))}</b><span>❤️ ${animalHearts(a)}/5</span></div>
               <small>心情 ${a.mood}% · 每日产出 ${prod?.icon ?? ''}${prod?.name ?? ''}${a.following ? ' · 👣跟随中' : ''}</small>
             </div>`;
           }).join('')}</div>`
-        : `<p style="font-size:13px;color:var(--ink-2)">还没有收养动物。先去家园野外寻找发光光环的稀兽，按 C 潜行靠近或投喂喜爱食物结识它们，即可在此收养！</p>`;
+        : `<p style="font-size:13px;color:var(--ink-2)">可在小院免费领取第一只幼宠。野外遇到微光时，靠近并赠送喜爱的食物即可结识。</p>`;
 
       const speciesHtml = `<div class="habitat-grid">${RANCH_SPECIES.map(sp => {
-        const unlocked = ranch.discovered.includes(sp.id) || (sp.tier === 'common' && Object.keys(home.visitors).some(v => v.includes(sp.id.replace('ranch-', ''))));
+        const unlocked = starterIds.includes(sp.id) || ranch.discovered.includes(sp.id) || (sp.tier === 'common' && Object.keys(home.visitors).some(v => v.includes(sp.id.replace('ranch-', ''))));
         const prod = ITEMS[sp.productId];
         const fav = ITEMS[sp.favoriteItem];
         return `<div class="hab-card ${unlocked ? 'met' : ''}">
@@ -255,7 +261,7 @@ export class LifeUI {
             <small>产出：${prod?.icon ?? ''}${prod?.name ?? ''} · 喜食：${fav?.name ?? ''}</small>
             ${unlocked
               ? `<button class="btn small primary" data-adopt="${sp.id}" ${life.coins < sp.adoptCost || ranch.animals.length >= cap.total ? 'disabled' : ''}>收养入住 · 🐚${sp.adoptCost}</button>`
-              : `<small style="color:var(--stamp)">野外遭遇解锁（${sp.zones.join('/')}）</small>`}
+              : `<small style="color:var(--stamp)">野外遭遇解锁（${sp.zones.join('/') || '北部自然区'}）</small>`}
           </div>
         </div>`;
       }).join('')}</div>`;
@@ -263,7 +269,7 @@ export class LifeUI {
       el.innerHTML = header + `<section>
         <div class="ranch-bar">
           <span>🏡 牧场容量：<b>${ranch.animals.length} / ${cap.total}</b></span>
-          <span>基础 ${cap.base} + 牧舍/鹿苑 ${cap.buildings} + 🧱自建围栏牧场 +${cap.voxelFenceBonus}（识别 ${this.ctxInfo.voxelPens.length} 圈）</span>
+          <span>${capacityProgress(life).hint}</span><button data-companions>伙伴照料与召唤</button>
         </div>
         <h3>我的牧场伙伴 <small>靠近动物按 F 收获产物、轻抚喂食或让它跟随你散步</small></h3>
         ${ownedHtml}
@@ -320,16 +326,32 @@ export class LifeUI {
       ['crop', '收成与稀缺花卉', '梯田与自建农田培育（支持元素刀光反应）'],
       ['artisan', '手工工坊制品', '水磨坊 / 茶坊 / 酿造桶 / 窑炉 / 蜂箱 / 腌渍缸 / 织布机'],
       ['animal_product', '牧场与鱼塘产出', '收养动物每日馈赠与生态鱼塘鱼籽'],
-      ['fish', '生态鱼类与四季鱼王', '水巷 / 镜湖 / 溪涧 / 海岬四大水域（共 28 种）'],
+      ['fish', '凝露鱼谱', '六类水域 · 共 64 项'],
       ['relic', '历史打捞遗物', '水底宝箱与灯塔漂流瓶所得，可捐入时光博物苑'],
       ['critter', '野外小动物与稀兽', '摊开潜行（C）或野外遭遇结识'],
     ];
-    const found = (k: ItemKind) => Object.values(ITEMS).filter(i => i.kind === k && life.dex[i.id]).length;
-    const all = (k: ItemKind) => Object.values(ITEMS).filter(i => i.kind === k).length;
-    el.innerHTML = header + sections.map(([k, title, hint]) => `<section><h3>${title} <small>${found(k)} / ${all(k)} · ${hint}</small></h3><div class="grid">${Object.values(ITEMS).filter(i => i.kind === k).map(i => {
+    const entries=(k:ItemKind)=>Object.values(ITEMS).filter(i=>i.kind===k &&
+      (k!=='fish'||FISH_TABLE.some(row=>row.fish===i.id)));
+    const found=(k:ItemKind)=>entries(k).filter(i=>life.dex[i.id]).length;
+    const all=(k:ItemKind)=>entries(k).length;
+    el.innerHTML = header + sections.filter(([k])=>this.dexTab!=='fish'||k==='fish').map(([k,title,hint])=>`<section><h3>${title} <small>${found(k)} / ${all(k)} · ${hint}</small></h3><div class="grid">${entries(k).map(i=>{
       const e = life.dex[i.id], n = life.bag[i.id] ?? 0;
-      return e ? `<div class="cell" title="${i.desc}"><b>${i.icon}</b><span>${i.name}</span><small>${k === 'fish' && e.best ? `最大 ${e.best} cm` : `×${e.n}`}${n ? ` · 背包 ${n}` : ''}</small></div>` : `<div class="cell unknown"><b>？</b><span>？？？</span><small>&nbsp;</small></div>`;
+      const row=k==='fish'?FISH_TABLE.find(r=>r.fish===i.id):undefined;
+      if(row){
+        const species=speciesById.get(i.id);
+        const clue=row.spots.map(w=>waterNames[w]).join(' / ')+(row.hours?' · '+row.hours.join('–')+'时':'')+(row.seasons?' · '+row.seasons.map(s=>['春','夏','秋','冬'][s]).join(''):'')+(row.rain?' · 雨天':'')+(row.snow?' · 雪天':'')+(row.history?' · 当日史章开放':'')
+          +(species?.phases?' · '+species.phases.map(p=>({dawn:'清晨',midday:'白昼',golden:'黄昏',starlight:'星夜'})[p]??p).join('/'):'')
+          +(species?.rainBonus?' · 雨天更常见':'');
+        const image=species?.portrait?`<img alt="" width="48" height="36" style="object-fit:contain;${e?'':'filter:brightness(0)'}" src="${species.portrait}">`:`<b style="${e?'':'filter:brightness(0)'}">${i.icon}</b>`;
+        return `<div class="cell" title="${clue}">${image}<span>${e?i.name:'？？？'}</span><small>${clue}</small>${e?`<small>${e.n} 次 · 最大 ${e.best??'—'} cm ${(e.best??0)>=trophySize(i.id)?'♛ 皇冠':''}${e.starlight?' ✧星光':''}</small><small>初获 ${new Date(e.first).toLocaleDateString('zh-CN')}</small>`:''}</div>`;
+      }
+      return e ? `<div class="cell" title="${i.desc}"><b>${i.icon}</b><span>${i.name}</span><small>×${e.n}${n ? ` · 背包 ${n}` : ''}</small></div>` : `<div class="cell unknown"><b>？</b><span>？？？</span><small>&nbsp;</small></div>`;
     }).join('')}</div></section>`).join('');
+    if(this.dexTab==='dex'){
+      const wildlife=Object.values(ITEMS).filter(i=>i.kind==='fish'&&!FISH_TABLE.some(row=>row.fish===i.id));
+      el.insertAdjacentHTML('beforeend',`<section><h3>水边生态观察</h3><div class="grid">${wildlife.map(i=>
+        `<div class="cell"><b>${life.dex[i.id]?i.icon:'？'}</b><span>${life.dex[i.id]?i.name:'？？？'}</span><small>在家园水边发现</small></div>`).join('')}</div></section>`);
+    }
   }
 
   refresh(life: LifeData) {

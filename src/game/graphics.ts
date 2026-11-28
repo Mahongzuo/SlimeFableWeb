@@ -11,7 +11,7 @@ export type QualitySetting = Preset | 'auto';
 export const PRESET_NAMES: Record<QualitySetting, string> = {auto: '自动', low: '低', medium: '中', high: '高', ultra: '极致'};
 interface Spec {/** smallest world radius (m) still drawn in reflections */ reflectMin: number; scale: number; /** dynamic-resolution floor */ minScale: number; msaa: number; shadow: number; shadowEvery: number; /** mirror size relative to the drawing buffer */ refl: number; reflEvery: number; ssr: boolean; draw: number; grass: number; slime: 'high' | 'balanced'; fogMin: number; oceanFFT: number; oceanCascades: number; clouds: 'off' | 'analytic' | 'volumetric'; gtao: boolean; volumetricShafts: boolean}
 export const PRESETS: Record<Preset, Spec> = {
-  low: {reflectMin: 2.5, scale: .7, minScale: .7, msaa: 0, shadow: 1024, shadowEvery: 3, refl: .2, reflEvery: 3, ssr: false, draw: 90, grass: .25, slime: 'balanced', fogMin: .0022, oceanFFT: 0, oceanCascades: 0, clouds: 'off', gtao: false, volumetricShafts: false},
+  low: {reflectMin: 2.5, scale: .7, minScale: .7, msaa: 0, shadow: 1024, shadowEvery: 3, refl: .2, reflEvery: 3, ssr: false, draw: 90, grass: .25, slime: 'balanced', fogMin: .0022, oceanFFT: 0, oceanCascades: 0, clouds: 'analytic', gtao: false, volumetricShafts: false},
   medium: {reflectMin: 1.2, scale: 1, minScale: .7, msaa: 2, shadow: 2048, shadowEvery: 2, refl: .3, reflEvery: 2, ssr: false, draw: 140, grass: .55, slime: 'balanced', fogMin: .0014, oceanFFT: 128, oceanCascades: 1, clouds: 'analytic', gtao: false, volumetricShafts: false},
   high: {reflectMin: .45, scale: 1.25, minScale: .7, msaa: 4, shadow: 2048, shadowEvery: 1, refl: .42, reflEvery: 1, ssr: true, draw: 240, grass: .85, slime: 'high', fogMin: 0, oceanFFT: 128, oceanCascades: 2, clouds: 'volumetric', gtao: true, volumetricShafts: true},
   ultra: {reflectMin: 0, scale: 2, minScale: .8, msaa: 4, shadow: 4096, shadowEvery: 1, refl: .5, reflEvery: 1, ssr: true, draw: 1e4, grass: 1, slime: 'high', fogMin: 0, oceanFFT: 256, oceanCascades: 2, clouds: 'volumetric', gtao: true, volumetricShafts: true},
@@ -60,7 +60,7 @@ export class Graphics {
     const cam = this.ctx.camera; cam.layers.enable(LAYER_LIGHT_ONLY);
     for (const root of this.zones) root.traverse((m: any) => { if (m.isMesh || m.isSprite || m.isInstancedMesh) { let path = ''; for (let n = m; n && n !== root; n = n.parent) path += n.name + '/'; if (LIGHT_ONLY.test(path)) { m.layers.set(LAYER_LIGHT_ONLY); m.castShadow = false; } } });
     // grass instance counts are scaled per preset
-    for (const root of this.zones) root.traverse((m: any) => { if (m.isInstancedMesh && /grass|flower/i.test(m.name)) m.userData.fullCount ??= m.count; });
+    for (const root of this.zones) root.traverse((m: any) => { if (!m.userData.meadowManaged && m.isInstancedMesh && /grass|flower/i.test(m.name)) m.userData.fullCount ??= m.count; });
   }
   set(setting: QualitySetting) {
     this.setting = setting; this.frames = []; this.calm = 0;

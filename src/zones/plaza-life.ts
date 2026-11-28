@@ -56,16 +56,16 @@ export function plazaLife(z: ZoneContext, root: any, stove: [number, number], bo
   // ---- request board
   const by = z.ground(board[0], board[1]), bYaw = -Math.PI * .8;
   const b = new T.Group(); b.name = 'request-board'; b.position.set(board[0], by, board[1]); b.rotation.y = bYaw; b.userData.skipHeightBake = true; root.add(b);
-  addObb(board[0], by, board[1], bYaw, 'request-board-post-l', -.85, 0, .14, .14, 0, 2.2, true);
-  addObb(board[0], by, board[1], bYaw, 'request-board-post-r', .85, 0, .14, .14, 0, 2.2, true);
-  addObb(board[0], by, board[1], bYaw, 'request-board-panel', 0, 0, 1.9, .14, .85, 2.05, true);
+  addObb(board[0], by, board[1], bYaw, 'request-board-post-l', -.997, 0, .12, .12, 0, 2.2, true);
+  addObb(board[0], by, board[1], bYaw, 'request-board-post-r', .997, 0, .12, .12, 0, 2.2, true);
+  addObb(board[0], by, board[1], bYaw, 'request-board-panel', 0, 0, 1.9, .17, .85, 2.05, true);
   addObb(board[0], by, board[1], bYaw, 'request-board-roof', 0, 0, 2.2, .50, 2.15, 2.26, true);
-  for (const x of [-.85, .85]) { const p = new T.Mesh(new T.BoxGeometry(.12, 2.2, .12), wood); p.position.set(x, 1.1, 0); p.castShadow = true; b.add(p); }
-  const panel = new T.Mesh(new T.BoxGeometry(1.9, 1.2, .08), z.toon(0x9c7a52)); panel.position.y = 1.45; panel.castShadow = true; b.add(panel);
+  for (const x of [-.997, .997]) { const p = new T.Mesh(new T.BoxGeometry(.12, 2.2, .12), wood); p.name='notice-support'; p.position.set(x, 1.1, 0); p.castShadow = true; b.add(p); }
+  const panel = new T.Mesh(new T.BoxGeometry(1.9, 1.2, .17), z.toon(0x9c7a52)); panel.name='notice-panel'; panel.position.y = 1.45; panel.castShadow = true; b.add(panel);
   const roof = new T.Mesh(new T.BoxGeometry(2.2, .1, .5), z.toon(0x5d6266)); roof.position.y = 2.2; b.add(roof);
   const boardTex = tagTexture(T, (g, w, h) => { g.fillStyle = '#9c7a52'; g.fillRect(0, 0, w, h); g.fillStyle = '#f6e7c8'; g.fillRect(0, 0, w, 64); g.fillStyle = '#9d3b27'; g.textAlign = 'center'; g.font = `900 46px ${SERIF}`; g.fillText('委 托 板', w / 2, 48);
     [[40, 90, -.05], [190, 96, .04], [340, 88, -.02]].forEach(([x, y, r]) => { g.save(); g.translate(x + 60, y + 70); g.rotate(r); g.fillStyle = '#fbf6ea'; g.fillRect(-62, -70, 124, 140); g.fillStyle = '#c8553d'; g.beginPath(); g.arc(0, -62, 7, 0, 7); g.fill(); g.fillStyle = '#5b5249'; for (let k = 0; k < 5; k++) g.fillRect(-46, -38 + k * 20, 70 + (k * 23) % 22, 6); g.restore(); }); }, 512, 256);
-  const face = new T.Mesh(new T.PlaneGeometry(1.8, .9), z.toon(0xffffff, {map: boardTex})); face.position.set(0, 1.45, .045); b.add(face);
+  const face = new T.Mesh(new T.PlaneGeometry(1.8, .9), z.toon(0xffffff, {map: boardTex})); face.position.set(0, 1.45, .094); b.add(face);
   z.interact({id: 'request-board', position: [board[0], z.ground(board[0], board[1]), board[1]], radius: 2.4,
     prompt: () => { const list = today(life, dayKey()), open = list.filter(q => !q.done); if (!open.length) return {title: '今天的委托都完成了', sub: '明天再来看看'};
       const ready = open.find(q => (life.bag[q.item] ?? 0) >= q.count), q = ready ?? open[0];

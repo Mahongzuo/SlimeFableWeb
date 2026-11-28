@@ -1,4 +1,4 @@
-import {combos} from './elements';
+import {combos,DEFAULT_ELEMENT} from './elements';
 import {resolveElementReaction, type ReactionResult, type SkillDef} from './skills';
 import {Pose,Vec,clamp,idlePose,smooth} from './types';
 export interface CombatTarget {id:number;name?:string;position:Vec;health:number;maxHealth:number;hitFlash:number;hits:number;respawnAt:number;lastElement:number;aura:number|null;auraUntil:number}
@@ -23,7 +23,7 @@ export function stopAtMeleeTarget(move:Vec, origin:Vec, target:Vec) {
  if(over>0){move[0]-=nx*over;move[2]-=nz*over;}
 }
 export class Combat {
- index=-1;age=0;active=false;queued=false;idle=0;element=0;direction:Vec=[0,0,-1];hitTargets=new Set<number>();areaDispatched=false;totalHits=0;lastName='';
+ index=-1;age=0;active=false;queued=false;idle=0;element=DEFAULT_ELEMENT;direction:Vec=[0,0,-1];hitTargets=new Set<number>();areaDispatched=false;totalHits=0;lastName='';
  targets:CombatTarget[];
  nextHitMultiplier?:(target:CombatTarget)=>number;
  nextSwingDirection?:()=>Vec|undefined;

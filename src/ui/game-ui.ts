@@ -12,10 +12,13 @@ import type {SlimeCharacter} from '../slime/character';
 import {mountSlimeHud} from './slime-hud';
 import {getGuideSections} from './guide-catalog';
 export interface UIHandlers {
-  start(): void; resume(): void; pause(): void; openBook(): void; openGuide?(): void; closePanel(): void; showDay(id: DayId): void; showToday(): void;
+  start(): void; resume(): void; pause(): void; openBook(): void; openGuide?(): void; openDex?(): void; closePanel(): void; showDay(id: DayId): void; showToday(): void;
   respawn(): void; quality(q: QualitySetting): void; toTitle(): void; go(id: string): void;
   weather(mode: WeatherMode): void; getWeather(): WeatherMode;
   toggleBuild?: () => void; openSky():void; setTime(minute:number|null):void; getTime():number|null;
+  onQuickMenuChange?: (open: boolean) => void;
+  openOrchard?: () => void;
+  interact?: () => void;
 }
 export interface TitleInfo {ready: boolean; todayId: DayId; year: number; weekday: string; shown: DayMeta; isToday: boolean; quality: QualitySetting; preset?: string}
 export interface HudInfo {day: string; sub: string; objective: string; shards: number; total: number; element: number; aiming: boolean; aimReady?: boolean; aimRecoil?: boolean; umbrella?: boolean; building?: boolean}
@@ -66,23 +69,57 @@ export class GameUI {
       `<option value="${key}" ${key===mode?'selected':''}>${name}</option>`).join('');
     return `<label class="home-weather">天气 <select data-weather>${choices}</select></label>`;
   }
-  private guideSectionId = 'movement';
+  private guideSectionId = 'quickstart';
   private info: BookInfo | null = null; private hudEl: HTMLElement; private promptEl: HTMLElement; private keysEl: HTMLElement; private keysTimer = 0;
+  private keysDismissed = false;
+  private helpBtnEl: HTMLElement; private quickMenuBtnEl: HTMLElement; private quickMenuEl: HTMLElement; private immersiveBtnEl: HTMLElement;
+  private _quickMenuOpen = false;
+  private _immersive = false;
+  private nudgeTimer = 0;
+  get quickMenuOpen() { return this._quickMenuOpen; }
+  get immersive() { return this._immersive; }
   constructor(private h: UIHandlers) {
     const root = this.root = document.createElement('div'); root.id = 'game-ui';
     root.innerHTML = `<div class="layer-title"></div><div class="hud hidden">
       <div class="hud-day"><div class="day-pill card"><div class="mini-stamp" id="stamp-day">4</div><div><strong id="hud-day"></strong><small id="hud-sub"></small></div></div>
         <div class="objective card"><span class="diamond">◆</span><span id="hud-objective"></span></div>
         <div class="shards card">✦ 时光碎片 <b id="hud-shards">0</b><span id="hud-total"></span></div></div>
-      <div class="hud-buttons"><button class="icon-btn" data-act="build"><span class="key">V</span>建造</button><button class="icon-btn" data-act="sky"><span class="key">8</span>天气时间</button><button class="icon-btn" data-act="book"><span class="key">J</span>史书</button><button class="icon-btn" data-act="pause"><span class="key">Esc</span>暂停</button></div>
+      <div class="hud-buttons">
+        <button class="icon-btn" data-act="guide" title="操作速查与玩法教程 (F1)"><span class="key">F1</span>帮助</button>
+        <div class="quick-menu-wrap">
+          <button class="icon-btn" data-act="quick-menu" aria-haspopup="menu" aria-expanded="false" title="快捷菜单 (F2)"><span class="key">F2</span>菜单<span class="qm-caret" aria-hidden="true">▾</span></button>
+          <div class="quick-menu card grain hidden" role="menu" aria-label="快捷功能菜单">
+            <button class="qm-item" role="menuitem" data-act="build"><span class="key">V</span><span class="qm-text"><b>建造家园</b><small>建筑 · 农田 · 扩建</small></span></button>
+            <button class="qm-item" role="menuitem" data-act="orchard"><span class="key">🌱</span><span class="qm-text"><b>种树</b><small>栽一株树苗 · 自动造林</small></span></button>
+            <button class="qm-item" role="menuitem" data-act="sky"><span class="key">8</span><span class="qm-text"><b>天气时间</b><small>切换天气与时刻</small></span></button>
+            <button class="qm-item" role="menuitem" data-act="book"><span class="key">J</span><span class="qm-text"><b>打开史书</b><small>历史上的今天</small></span></button>
+            <button class="qm-item" role="menuitem" data-act="dex"><span class="key">B</span><span class="qm-text"><b>家园手账</b><small>任务 · 图鉴 · 牧场</small></span></button>
+            <div class="qm-sep" role="separator"></div>
+            <button class="qm-item" role="menuitem" data-act="pause"><span class="key">Esc</span><span class="qm-text"><b>暂停菜单</b><small>画质 · 复位 · 标题</small></span></button>
+          </div>
+        </div>
+        <button class="icon-btn" data-act="immersive" aria-pressed="false" title="隐藏界面进入沉浸玩法 (F3)"><span class="key">F3</span>隐藏UI</button>
+      </div>
       <div class="keys card"><span class="k"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></span><span>移动 · <span class="key">Shift</span> 冲刺</span>
         <span class="k"><span class="key">空格</span></span><span>两段跳 · 空中再按化伞</span><span class="k"><span class="key">E</span><span class="key">R</span><span class="key">Q</span></span><span>属性战技 / 连携 / 元素爆发</span>
         <span class="k"><span class="key">F</span></span><span>互动 / 种植 · <span class="key">左键</span> 四段连击 · <span class="key">右键</span> 向前冲刺</span>
-        <span class="k"><span class="key">G</span></span><span>瞄准 + <span class="key">左键</span> 发射分身 · <span class="key">X</span> 收回</span><span class="k"><span class="key">8</span> / <span class="key">C</span> / <span class="key">V</span></span><span>天气时间 / 摊开 / 建造扩建</span></div>
+        <span class="k"><span class="key">G</span></span><span>瞄准 + <span class="key">左键</span> 发射分身 · <span class="key">X</span> 收回</span>
+        <span class="k"><span class="key">F1</span> / <span class="key">F2</span> / <span class="key">F3</span></span><span>帮助教程 / 快捷菜单 / 隐藏UI</span></div>
       <div class="crosshair hidden"><i></i><i></i><i></i><i></i></div></div>
-      <div class="prompt card hidden"></div><div class="toast card"></div><div class="layer-panel"></div>`;
+      <button class="icon-btn immersive-peek" data-act="immersive" title="恢复显示界面 (F3)"><span class="key">F3</span>显示UI</button>
+      <button type="button" data-act="interact" class="prompt card hidden"></button><div class="toast card"></div><div class="layer-panel"></div>`;
     document.body.appendChild(root);
     this.hudEl = this.$('.hud'); this.promptEl = this.$('.prompt'); this.keysEl = this.$('.keys');
+    this.helpBtnEl = this.$('.hud-buttons [data-act="guide"]');
+    this.quickMenuBtnEl = this.$('.hud-buttons [data-act="quick-menu"]');
+    this.quickMenuEl = this.$('.quick-menu');
+    this.immersiveBtnEl = this.$('.hud-buttons [data-act="immersive"]');
+    window.addEventListener('pointerdown', e => {
+      if (!this._quickMenuOpen) return;
+      const t = e.target as HTMLElement | null;
+      if (t && t.closest('.quick-menu-wrap')) return;
+      this.setQuickMenu(false);
+    }, true);
     root.addEventListener('click', e => {
       const t = (e.target as HTMLElement).closest('[data-act],[data-guide-sec],[data-guide-nav],[data-day],[data-tab],[data-month]') as HTMLElement | null; if (!t) return;
       if (t.dataset.guideSec) { this.guide(t.dataset.guideSec); return; }
@@ -101,8 +138,14 @@ export class GameUI {
         this.renderBook(); return; }
       if (t.dataset.day) { this.bookState.selected = t.dataset.day; this.renderBook(); return; }
       const act = t.dataset.act;
+      if (act === 'quick-menu') { this.toggleQuickMenu(); return; }
+      if (act === 'immersive') { this.toggleImmersive(); return; }
+      if (this._quickMenuOpen) this.setQuickMenu(false);
       if (act === 'start') this.h.start(); else if (act === 'resume') this.h.resume(); else if (act === 'book') this.h.openBook();
-      else if (act === 'guide') this.h.openGuide?.();
+      else if (act === 'guide') { this.dismissKeysHint(); this.h.openGuide?.(); }
+      else if (act === 'dex') this.h.openDex?.();
+      else if (act === 'orchard') this.h.openOrchard?.();
+      else if (act === 'interact') this.h.interact?.();
       else if (act === 'build') this.h.toggleBuild?.(); else if (act === 'sky') this.h.openSky();
       else if(act==='sync-clock'){this.h.setTime(null);this.skyPanel();}
       else if (act === 'pause') this.h.pause(); else if (act === 'close') this.h.closePanel(); else if (act === 'respawn') this.h.respawn(); else if (act === 'title') this.h.toTitle();
@@ -127,7 +170,70 @@ export class GameUI {
       <div class="title-foot"><label>画质 <select data-quality>${(['auto', 'low', 'medium', 'high', 'ultra'] as QualitySetting[]).map(q => `<option value="${q}" ${info.quality === q ? 'selected' : ''}>${PRESET_NAMES[q]}</option>`).join('')}</select></label>${this.weatherSelect()}<span data-sky-status>${this.skyStatus}</span></div>
     </div></section>`;
   }
-  showHud(on: boolean) { this.hudEl.classList.toggle('hidden', !on); if (on) { this.keysEl.classList.remove('dim'); clearTimeout(this.keysTimer); this.keysTimer = window.setTimeout(() => this.keysEl.classList.add('dim'), 12000); } else this.prompt(null); }
+  setQuickMenu(open: boolean) {
+    if (open && this._immersive) this.setImmersive(false, false);
+    if (this._quickMenuOpen === open) return;
+    this._quickMenuOpen = open;
+    this.quickMenuEl.classList.toggle('hidden', !open);
+    this.quickMenuEl.classList.toggle('open', open);
+    this.quickMenuBtnEl.classList.toggle('open', open);
+    this.quickMenuBtnEl.setAttribute('aria-expanded', String(open));
+    document.body.classList.toggle('quick-menu-open', open);
+    this.h.onQuickMenuChange?.(open);
+  }
+  toggleQuickMenu(force?: boolean) {
+    this.setQuickMenu(force ?? !this._quickMenuOpen);
+  }
+  setImmersive(on: boolean, notify = true) {
+    if (on && this._quickMenuOpen) this.setQuickMenu(false);
+    if (this._immersive === on) return;
+    this._immersive = on;
+    document.body.classList.toggle('ui-immersive', on);
+    this.immersiveBtnEl.setAttribute('aria-pressed', String(on));
+    if (on) {
+      clearTimeout(this.keysTimer);
+      if (notify) this.toast('已隐藏界面进入沉浸模式 · 按 F3 恢复显示', 2200);
+    } else if (notify) {
+      this.toast('已恢复界面显示', 1500);
+    }
+  }
+  toggleImmersive(force?: boolean) {
+    this.setImmersive(force ?? !this._immersive, true);
+  }
+  dismissKeysHint() {
+    this.keysDismissed = true;
+    clearTimeout(this.keysTimer);
+    this.keysEl.classList.add('fade-out');
+  }
+  resetKeysHint() {
+    this.keysDismissed = false;
+    clearTimeout(this.keysTimer);
+    this.keysEl.classList.remove('fade-out');
+  }
+  showHud(on: boolean) {
+    this.hudEl.classList.toggle('hidden', !on);
+    if (on) {
+      if (this.keysDismissed) {
+        this.keysEl.classList.add('fade-out');
+      } else {
+        this.keysEl.classList.remove('fade-out');
+        clearTimeout(this.keysTimer);
+        this.keysTimer = window.setTimeout(() => {
+          this.keysDismissed = true;
+          this.keysEl.classList.add('fade-out');
+          this.helpBtnEl.classList.remove('nudge');
+          void this.helpBtnEl.offsetWidth;
+          this.helpBtnEl.classList.add('nudge');
+          clearTimeout(this.nudgeTimer);
+          this.nudgeTimer = window.setTimeout(() => this.helpBtnEl.classList.remove('nudge'), 1000);
+        }, 5000);
+      }
+    } else {
+      clearTimeout(this.keysTimer);
+      this.setQuickMenu(false);
+      this.prompt(null);
+    }
+  }
   hud(s: HudInfo) {
     this.$('#hud-day').textContent = s.day; this.$('#hud-sub').textContent = s.sub; this.$('#hud-objective').textContent = s.objective;
     this.$('#hud-shards').textContent = String(s.shards); this.$('#hud-total').textContent = ' / ' + s.total;
@@ -147,7 +253,7 @@ export class GameUI {
   prompt(p: {x: number; y: number; title: string; sub: string} | null) {
     if (!p) { this.promptEl.classList.add('hidden'); this.promptEl.dataset.key = ''; return; }
     const key = p.title + p.sub;
-    if (this.promptEl.dataset.key !== key) { this.promptEl.innerHTML = `<span class="key">F</span><div><strong>${esc(p.title)}</strong><small>${esc(p.sub)}</small></div>`; this.promptEl.dataset.key = key; this.promptEl.classList.remove('hidden'); }
+    if (this.promptEl.dataset.key !== key) { this.promptEl.innerHTML = `<span class="key">F</span><span><strong>${esc(p.title)}</strong><small>${esc(p.sub)}</small></span>`; this.promptEl.dataset.key = key; this.promptEl.classList.remove('hidden'); }
     this.promptEl.style.left = p.x + 'px'; this.promptEl.style.top = (p.y - 14) + 'px';
   }
   toast(text: string, ms = 2600) { const el = this.$('.toast'); el.textContent = text; el.classList.add('show'); clearTimeout(this.toastTimer); this.toastTimer = window.setTimeout(() => el.classList.remove('show'), ms); }
@@ -214,8 +320,8 @@ export class GameUI {
       <aside class="g-side">
         <div class="g-side-head">
           <span class="kicker">SLIME FABLE GUIDE</span>
-          <h3>📖 玩法教程</h3>
-          <small>共 ${sections.length} 大玩法模块</small>
+          <h3>📖 帮助与玩法教程</h3>
+          <small>共 ${sections.length} 个章节 · 按 F1 关闭</small>
         </div>
         <nav class="g-nav">${navHtml}</nav>
       </aside>
@@ -276,7 +382,7 @@ export class GameUI {
         }).join('')}
         <div class="souvenirs">${all.map(c => { const got = info.souvenirs.includes(c.id); return `<div class="souvenir ${got ? 'got' : ''}"><div class="seal">${got ? '✦' : '?'}</div><b>${got ? esc(c.souvenir) : '尚未获得'}</b><small>${dayLabel(c.day)} · ${c.year}</small></div>`; }).join('')}</div></div>`;
     } else {
-      const rows: [string, string][] = [['<span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>', '移动；按住 <span class="key">Shift</span> 冲刺'], ['<span class="key">右键</span>', '家园探索向前冲刺突进一小段（自动防穿模、防掉地）'], ['<span class="key">空格</span>', '二段跳后，空中再按可舒展成伞形，再按收拢'], ['<span class="key">8</span>', '家园天气与时间'], ['朝墙走', '贴住墙面：推向墙往上爬，拉开往下滑，左右横移；爬到顶自动翻上去'], ['<span class="key">空格</span> / <span class="key">T</span>', '贴墙时：蹬墙跳 / 松手落下'], ['<span class="key">F</span>', '互动：翻开史书、进入时光门、种田、观察/投喂来访小动物'], ['<span class="key">V</span>', '开启 / 退出家园自由建造模式（Q/E 旋转，R 缩放，左键摆放，右键拆除）'], ['<span class="key">J</span>', '打开 / 合上史书'], ['<span class="key">B</span>', '图鉴、背包、栖地来客与家园成长手账'], ['公园门口', '凝露小厨：切火属性（3）用收成做料理；委托板：每天三个委托，交货换贝壳'], ['<span class="key">F</span>（地块 / 码头）', '种田：水属性浇水翻倍、火属性烧草催暖、风属性授粉变异、雷属性充能洒水泉；钓鱼：甩竿收线'], ['<span class="key">1</span>–<span class="key">6</span>', '切换水、风、火、雷、暗、物（同步切换滑翔伞造型与培育效果）'], ['<span class="key">G</span> + <span class="key">左键</span>', '过肩瞄准并炮弹发射分身（40m 射程，最多 5 团）'], ['<span class="key">X</span>', '按住收回分身（高空回程自动撑小伞）'], ['<span class="key">C</span>', '按住摊开身体，钻低矮缝隙'], ['<span class="key">左键</span>', '四段连击'], ['<span class="key">滚轮</span>', '镜头远近'], ['<span class="key">T</span>', '卡住时回到出生点'], ['<span class="key">Esc</span>', '暂停']];
+      const rows: [string, string][] = [['<span class="key">F1</span>', '随时打开 / 关闭帮助与主要玩法教程（含完整按键速查）'], ['<span class="key">F2</span>', '展开 / 收起右上角快捷菜单（建造 / 天气时间 / 史书 / 手账 / 暂停）'], ['<span class="key">F3</span>', '隐藏 / 恢复全部界面，进入纯净沉浸玩法'], ['<span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>', '移动；按住 <span class="key">Shift</span> 冲刺'], ['<span class="key">右键</span>', '家园探索向前冲刺突进一小段（自动防穿模、防掉地）'], ['<span class="key">空格</span>', '二段跳后，空中再按可舒展成伞形，再按收拢'], ['<span class="key">8</span>', '家园天气与时间'], ['朝墙走', '贴住墙面：推向墙往上爬，拉开往下滑，左右横移；爬到顶自动翻上去'], ['<span class="key">空格</span> / <span class="key">T</span>', '贴墙时：蹬墙跳 / 松手落下'], ['<span class="key">F</span>', '互动：翻开史书、进入时光门、种田、观察/投喂来访小动物'], ['<span class="key">V</span>', '开启 / 退出家园自由建造模式（Q/E 旋转，R 缩放，左键摆放，右键拆除）'], ['<span class="key">J</span>', '打开 / 合上史书'], ['<span class="key">B</span>', '图鉴、背包、栖地来客与家园成长手账'], ['公园门口', '凝露小厨：切火属性（3）用收成做料理；委托板：每天三个委托，交货换贝壳'], ['<span class="key">F</span>（地块 / 码头）', '种田：水属性浇水翻倍、火属性烧草催暖、风属性授粉变异、雷属性充能洒水泉；钓鱼：甩竿收线'], ['<span class="key">1</span>–<span class="key">6</span>', '切换水、风、火、雷、暗、物（同步切换滑翔伞造型与培育效果）'], ['<span class="key">G</span> + <span class="key">左键</span>', '过肩瞄准并炮弹发射分身（40m 射程，最多 5 团）'], ['<span class="key">X</span>', '按住收回分身（高空回程自动撑小伞）'], ['<span class="key">C</span>', '按住摊开身体，钻低矮缝隙'], ['<span class="key">左键</span>', '四段连击'], ['<span class="key">滚轮</span>', '镜头远近'], ['<span class="key">T</span>', '卡住时回到出生点'], ['<span class="key">Esc</span>', '暂停']];
       left = `<div class="page" style="grid-column:1/3"><h2>操作</h2><p class="sub">鼠标转动镜头（点击画面自动锁定视角，或按住中键拖动）。家园里点右键可向前冲刺突进，10 月 21 日战斗中点右键闪避。</p><div class="controls-list">${rows.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div></div>`;
     }
     this.panel(`<div class="overlay"><div class="book grain">${tabs}${left}${right}</div></div>`);

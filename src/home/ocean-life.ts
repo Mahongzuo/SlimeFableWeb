@@ -1,3 +1,4 @@
+import type {MarineModels} from './marine-models';
 import * as THREE from 'three';
 import {SEA_LEVEL} from './layout';
 import type {ExpandedTile} from '../life/state';
@@ -84,6 +85,7 @@ interface MarineActor {
   rightWing?: THREE.Object3D;
   bell?: THREE.Object3D;
   simpond?: SimPondActorHandle;
+  sourceFish?: ReturnType<MarineModels['fish']>;
   fleeBoost?: number;
   centerX: number;
   centerZ: number;
@@ -295,13 +297,11 @@ function buildCreatureMesh(species: MarineSpeciesDef): {
 
 /**
  * Manages both:
- * 1) Preset coastal reef flora (swaying kelp, colorful corals) & ambient marine life around the island seabed.
+ * 1) Resident marine schools around the coastal shelf.
  * 2) Procedural depth-based marine creature spawning around the slime whenever diving underwater!
  */
 export class OceanLifeSystem {
   readonly root: THREE.Group;
-  private kelpMesh: THREE.InstancedMesh | null = null;
-  private coralMesh: THREE.InstancedMesh | null = null;
   private presetActors: MarineActor[] = [];
   private proceduralActors: MarineActor[] = [];
   private discovered = new Set<MarineSpeciesId>();
@@ -310,6 +310,7 @@ export class OceanLifeSystem {
 
   constructor(
     private scene: THREE.Scene,
+    private models: MarineModels,
     private onDiscover?: (species: MarineSpeciesDef) => void,
   ) {
     this.root = new THREE.Group();
@@ -326,12 +327,10 @@ export class OceanLifeSystem {
     return this.presetActors.length + this.proceduralActors.length;
   }
 
-  /** Rebuilds preset seabed kelp, coral reefs and resident marine schools around current territory. */
+  /** Rebuilds resident marine schools around the current territory. */
   buildPresetEcosystem(expansions: ExpandedTile[] = []) {
-    // Clear existing preset meshes
-    if (this.kelpMesh) { this.kelpMesh.removeFromParent(); this.kelpMesh.geometry.dispose(); (this.kelpMesh.material as THREE.Material).dispose(); this.kelpMesh = null; }
-    if (this.coralMesh) { this.coralMesh.removeFromParent(); this.coralMesh.geometry.dispose(); (this.coralMesh.material as THREE.Material).dispose(); this.coralMesh = null; }
-    for (const a of this.presetActors) a.group.removeFromParent();
+    // Release the previous residents before rebuilding their territory.
+    for (const a of this.presetActors) { a.sourceFish?.dispose(); a.simpond?.dispose(); a.group.removeFromParent(); }
     this.presetActors = [];
 
     const rects = collectTerritoryRects(expansions);
@@ -343,76 +342,7 @@ export class OceanLifeSystem {
     const pad = 62;
     const rand = makeRng(77123);
 
-    // 1. Kelp & seagrass ribbons on shallow-to-mid seabed
-    const kelpSpots: [number, number, number, number, number][] = [];
-    const coralSpots: [number, number, number, number, number][] = [];
-    for (let tries = 0; tries < 2600 && (kelpSpots.length < 220 || coralSpots.length < 140); tries++) {
-      const x = minX - pad + rand() * (maxX - minX + pad * 2);
-      const z = minZ - pad + rand() * (maxZ - minZ + pad * 2);
-      const dBox = territoryBoxSDF(x, z, rects);
-      if (dBox < 6) continue;
-      const bedY = coastalSeabedHeightAt(x, z, expansions);
-      const depth = SEA_LEVEL - bedY;
-      if (depth < 0.9 || depth > 9.5) continue;
-      if (kelpSpots.length < 220 && depth > 1.35 && depth < 8.5) {
-        const maxScale = Math.max(0.32, (depth - 0.65) / 1.55);
-        kelpSpots.push([x, bedY, z, Math.min(0.8 + rand() * 1.5, maxScale), rand() * Math.PI * 2]);
-      } else if (coralSpots.length < 140 && depth > 1.25 && depth < 6.2) {
-        const maxCoral = Math.max(0.35, (depth - 0.55) / 0.85);
-        coralSpots.push([x, bedY, z, Math.min(0.45 + rand() * 0.80, maxCoral), rand() * Math.PI * 2]);
-      }
-    }
-
-    const dummy = new THREE.Object3D();
-    const col = new THREE.Color();
-
-    if (kelpSpots.length) {
-      const kelpGeo = new THREE.ConeGeometry(0.18, 1.55, 5, 4);
-      kelpGeo.translate(0, 0.72, 0);
-      kelpGeo.scale(1.0, 1.0, 0.25);
-      const kelpMat = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.72, metalness: 0.02});
-      const km = new THREE.InstancedMesh(kelpGeo, kelpMat, kelpSpots.length);
-      km.name = 'ocean-seabed-kelp';
-      km.layers.set(1);
-      kelpSpots.forEach(([x, y, z, s, yaw], i) => {
-        dummy.position.set(x, y - 0.05, z);
-        dummy.rotation.set((rand() - 0.5) * 0.2, yaw, (rand() - 0.5) * 0.2);
-        dummy.scale.set(s * 0.9, s, s * 0.9);
-        dummy.updateMatrix();
-        km.setMatrixAt(i, dummy.matrix);
-        col.setHex(i % 3 === 0 ? 0x2e856e : i % 3 === 1 ? 0x3f9c6b : 0x528f52).offsetHSL(0, 0, (rand() - 0.5) * 0.08);
-        km.setColorAt(i, col);
-      });
-      km.instanceMatrix.needsUpdate = true;
-      if (km.instanceColor) km.instanceColor.needsUpdate = true;
-      this.kelpMesh = km;
-      this.root.add(km);
-    }
-
-    if (coralSpots.length) {
-      const coralGeo = new THREE.DodecahedronGeometry(0.55, 0);
-      coralGeo.scale(1.15, 0.72, 1.05);
-      const coralMat = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.68, metalness: 0.02});
-      const cm = new THREE.InstancedMesh(coralGeo, coralMat, coralSpots.length);
-      cm.name = 'ocean-seabed-corals';
-      cm.layers.set(1);
-      const coralPalette = [0xf0786c, 0xf2b458, 0xb882d6, 0x56c2b0, 0xf28fa8];
-      coralSpots.forEach(([x, y, z, s, yaw], i) => {
-        dummy.position.set(x, y + s * 0.14, z);
-        dummy.rotation.set((rand() - 0.5) * 0.3, yaw, (rand() - 0.5) * 0.3);
-        dummy.scale.set(s, s * (0.7 + rand() * 0.65), s);
-        dummy.updateMatrix();
-        cm.setMatrixAt(i, dummy.matrix);
-        col.setHex(coralPalette[i % coralPalette.length]).offsetHSL((rand() - 0.5) * 0.03, 0, (rand() - 0.5) * 0.06);
-        cm.setColorAt(i, col);
-      });
-      cm.instanceMatrix.needsUpdate = true;
-      if (cm.instanceColor) cm.instanceColor.needsUpdate = true;
-      this.coralMesh = cm;
-      this.root.add(cm);
-    }
-
-    // 2. Preset resident marine creatures around the coastal reef & outer drop-off
+    // Preset resident marine creatures around the coastal reef & outer drop-off
     const presetPlan: MarineSpeciesId[] = [
       'clownfish', 'clownfish', 'clownfish', 'clownfish', 'clownfish',
       'blue-tang', 'blue-tang', 'blue-tang', 'blue-tang', 'blue-tang',
@@ -450,14 +380,16 @@ export class OceanLifeSystem {
     procedural: boolean,
     rand: () => number,
   ) {
-    const built = buildCreatureMesh(species);
+    const useSource = species.id === 'blue-tang' && rand() < .55;
+    const built = useSource ? {group: new THREE.Group()} : buildCreatureMesh(species);
     const scale = species.scale[0] + rand() * (species.scale[1] - species.scale[0]);
     built.group.scale.setScalar(scale);
     built.group.position.set(x, y, z);
     // Stream in CC0 SimPond Fish Kit GLBs with GPU spine-wave swim shader for reef fish species
     let simpond: SimPondActorHandle | undefined;
     const glbVariants = MARINE_FISH_GLB[species.id];
-    if (glbVariants?.length) {
+    const sourceFish = useSource ? this.models.fish(built.group, .85, rand()) : undefined;
+    if (!useSource && glbVariants?.length) {
       const modelId = glbVariants[marineFishVariantIdx++ % glbVariants.length];
       const fallbackChildren = [...built.group.children];
       simpond = spawnSimPondActor(modelId, {
@@ -474,7 +406,7 @@ export class OceanLifeSystem {
     const actor: MarineActor = {
       species,
       ...built,
-      simpond,
+      simpond, sourceFish,
       fleeBoost: 0,
       centerX: x,
       centerZ: z,
@@ -502,7 +434,7 @@ export class OceanLifeSystem {
         const dist = Math.hypot(a.group.position.x - slimePos[0], a.group.position.z - slimePos[2]);
         const dDepth = Math.abs((SEA_LEVEL - a.baseY) - slimeDepth);
         if (dist > 25 || dDepth > 5.5) {
-          a.simpond?.dispose();
+          a.sourceFish?.dispose(); a.simpond?.dispose();
           a.group.removeFromParent();
           this.proceduralActors.splice(i, 1);
         }
@@ -531,7 +463,7 @@ export class OceanLifeSystem {
       }
     } else if (this.proceduralActors.length > 0) {
       // Clean up temporary dive-ring spawns once back on surface
-      for (const a of this.proceduralActors) { a.simpond?.dispose(); a.group.removeFromParent(); }
+      for (const a of this.proceduralActors) { a.sourceFish?.dispose(); a.simpond?.dispose(); a.group.removeFromParent(); }
       this.proceduralActors = [];
     }
 
@@ -542,6 +474,7 @@ export class OceanLifeSystem {
         if (isDiving && prox < 3.2) a.fleeBoost = Math.min(1.6, (a.fleeBoost ?? 0) + dt * 3.5);
         else a.fleeBoost = Math.max(0, (a.fleeBoost ?? 0) - dt * 1.4);
         const speedMult = 1 + (a.fleeBoost ?? 0);
+        a.sourceFish?.update(dt * speedMult);
         a.phase += dt * (a.species.speed / Math.max(1.5, a.radius)) * a.dir * (speedMult - 1);
 
         const omega = (a.species.speed / Math.max(1.5, a.radius)) * a.dir;
@@ -588,9 +521,7 @@ export class OceanLifeSystem {
   }
 
   dispose() {
-    if (this.kelpMesh) { this.kelpMesh.geometry.dispose(); (this.kelpMesh.material as THREE.Material).dispose(); }
-    if (this.coralMesh) { this.coralMesh.geometry.dispose(); (this.coralMesh.material as THREE.Material).dispose(); }
-    for (const a of [...this.presetActors, ...this.proceduralActors]) { a.simpond?.dispose(); a.group.removeFromParent(); }
+    for (const a of [...this.presetActors, ...this.proceduralActors]) { a.sourceFish?.dispose(); a.simpond?.dispose(); a.group.removeFromParent(); }
     this.root.removeFromParent();
   }
 }

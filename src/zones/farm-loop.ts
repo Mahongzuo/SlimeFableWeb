@@ -1,3 +1,4 @@
+import {changeShells} from '../life/shell-wallet';
 import {ITEMS} from '../life/catalog';
 import {addItem} from '../life/state';
 import {FarmRegistry} from './farm-registry';
@@ -58,7 +59,7 @@ export function farmLoop(z: ZoneContext, root: any, plots: PlotSpot[], stall: {x
     act: () => {
       const list = sell(); if (!list.length) return;
       let total = 0; for (const [id, n] of list) { total += ITEMS[id].price * n; delete life.bag[id]; }
-      life.coins += total; z.save(); player?.toast(`卖了 ${total} 🐚`); player?.mood('Happy');
+      changeShells(life, total, 'earn'); z.save(); player?.toast(`卖了 ${total} 🐚`); player?.mood('Happy');
     },
   });
 
@@ -72,7 +73,7 @@ export function farmLoop(z: ZoneContext, root: any, plots: PlotSpot[], stall: {x
         return;
       }
       if (life.coins < 5) { player?.toast('贝壳不够，先去卖点收获或钓点鱼'); return; }
-      life.coins -= 5;
+      changeShells(life, -(5), 'spend');
       const pool = ['seed-radish', 'seed-tomato', 'seed-chili', 'seed-mint', 'seed-strawberry', 'seed-watermelon', 'seed-rose'];
       const id = pool[Math.floor(rand() * pool.length)];
       addItem(life, id); z.save(); player?.toast(`得到 ${ITEMS[id].name} 🌱`);

@@ -1,3 +1,4 @@
+import {changeShells} from './shell-wallet';
 import {ITEMS} from './catalog';
 import {hasBuff} from './cooking';
 import {addItem, ensureHome, record, takeItem, type LifeData, type MachineSlotState, type PlacedProp} from './state';
@@ -211,7 +212,7 @@ export function collectMachine(
   if (!slot || !isMachineReady(life, slot, now)) return {ok: false};
   delete home.machines![machinePropId];
   const bonusCoins = slot.goldStar ? Math.max(6, Math.round((ITEMS[slot.outputId]?.price ?? 20) * 0.45)) : 0;
-  if (bonusCoins > 0) life.coins += bonusCoins;
+  if (bonusCoins > 0) changeShells(life, bonusCoins, 'earn');
   addItem(life, slot.outputId, slot.outputCount);
   const first = record(life, slot.outputId, slot.outputCount);
   return {ok: true, outputId: slot.outputId, count: slot.outputCount, goldStar: !!slot.goldStar, bonusCoins, first};
@@ -227,6 +228,6 @@ export function sellItem(life: LifeData, itemId: string, qty = 1): {ok: boolean;
   const n = Math.min(have, Math.max(1, qty));
   if (n <= 0 || !takeItem(life, itemId, n)) return {ok: false, earned: 0};
   const earned = def.price * n;
-  life.coins += earned;
+  changeShells(life, earned, 'earn');
   return {ok: true, earned};
 }

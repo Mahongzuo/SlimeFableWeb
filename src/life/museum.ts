@@ -1,3 +1,4 @@
+import {changeShells} from './shell-wallet';
 import {ITEMS} from './catalog';
 import {ensureHome, takeItem, type LifeData} from './state';
 import {addHomeXp} from './unlocks';
@@ -55,7 +56,7 @@ export const MUSEUM_HALLS: MuseumHallDef[] = [
     icon: '🐟',
     subtitle: '珍藏水巷、镜湖、溪涧与海岬的珍稀渔获',
     rewardTitle: '沧溟渔神祝福',
-    rewardDesc: '垂钓捕鱼绿框永久加宽 +15%，水底宝箱刷新率提升。',
+    rewardDesc: '搏鱼收线效率永久提高，发现水底宝箱的机会增加。',
     rewardCoins: 75,
     slots: [
       {id: 'fish-smoked', label: '果木熏鱼 ×1', itemId: 'art-smoked-fish', count: 1},
@@ -207,7 +208,7 @@ export function donateToMuseum(
     rewardCoins += hall.rewardCoins;
     addHomeXp(life, 60);
   }
-  life.coins += rewardCoins;
+  changeShells(life, rewardCoins, 'earn');
   return {ok: true, hallRestored, rewardCoins};
 }
 

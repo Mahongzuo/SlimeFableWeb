@@ -1,19 +1,21 @@
+import type {MarineModels} from './marine-models';
+import {ReefGarden} from './reef-garden';
 import * as THREE from 'three';
 import {SEA_LEVEL} from './layout';
-import {beijingSky} from './climate';
 import {OceanLifeSystem, marineZoneForDepth} from './ocean-life';
 import {
   coastExtensionAt,
+  combinedHeightWithRects,
   coastalSeabedHeightAt,
   collectTerritoryRects,
   territoryBoxSDF,
 } from '../world/island-coast';
-import {FishingSession, fishingBonuses, landCatch} from '../life/fishing';
-import {ITEMS} from '../life/catalog';
-import {takeItem, type ExpandedTile, type LifeData} from '../life/state';
+import {HarborAngling} from './angling';
+import {type ExpandedTile, type LifeData} from '../life/state';
 import type {LifeUI} from '../ui/life-ui';
 import type {SlimeCharacter} from '../slime/character';
 import {
+  approachSailingSpeed,
   sailingLog,
   depart,
   buyRounds,
@@ -24,23 +26,15 @@ import {
   finishVoyage,
   type Voyage,
 } from '../life/voyage';
-import {VoyageShip} from './voyage-ship';
+import {VoyageShip, hullContact, walkableDeck, deckHeight, HELM_Z} from './voyage-ship';
 import {VoyageIslands} from './voyage-islands';
 import {VoyageSea} from './voyage-sea';
 import {DOCK, VoyageControls} from './voyage-controls';
 
-export type OceanMode = 'idle' | 'boat' | 'fishing' | 'diving';
+export type OceanMode = 'idle' | 'deck' | 'boat' | 'fishing' | 'diving';
 
 const DEEP_SEA_THRESHOLD = 1.55; // Metres of water depth where boat summon unlocks
 const DIVE_MIN_WATER_DEPTH = 0.85; // Metres of ocean depth where boat-free diving unlocks
-
-const BEHAVIOR_LABELS = {
-  smooth: '平稳游动',
-  sinker: '沉底猛坠',
-  floater: '跃水浮游',
-  dart: '高频突刺',
-  legend: '鱼王狂暴！',
-} as const;
 
 export interface OceanAdventureDeps {
   refreshOceanWorld: () => void;
@@ -59,6 +53,7 @@ export interface OceanAdventureDeps {
 /** Owns boarding, broadside encounters and the transition between deck and free swimming. */
 export class OceanAdventure {
   mode: OceanMode = 'idle';
+  private reef: ReefGarden;
   readonly marineLife: OceanLifeSystem;
 
   private boatGroup: THREE.Group;
@@ -78,18 +73,15 @@ export class OceanAdventure {
   private boatPos = new THREE.Vector3();
   private boatYaw = 0;
   private boatSpeed = 0;
+  private deckFoot = new THREE.Vector3();
+  private deckHeading = 0;
+  private deckWalkSpeed = 0;
+  get companionDeck(){return this.onBoard ? this.boatGroup : null;}
+  private get onBoard() { return this.mode === 'deck' || this.mode === 'boat' || this.mode === 'fishing'; }
+  private nearHelm() { return Math.hypot(this.deckFoot.x, this.deckFoot.z - HELM_Z) <= 1.05; }
   private boatActive = false;
 
-  // Boat fishing state (uses the full FishingSession engine + 3D bamboo rod + concentric bobber ripples!)
-  private session: FishingSession | null = null;
-  private bob: THREE.Group;
-  private rodGroup: THREE.Group;
-  private ripples: THREE.Mesh[] = [];
-  private line: THREE.Line;
-  private reelHeld = false;
-  private fishT0 = 0;
-  private fishCloseIn = 0;
-
+  readonly angling: HarborAngling;
   private inDeepWater = false;
   private canDiveFree = false;
   private currentDepth = 0;
@@ -100,112 +92,46 @@ export class OceanAdventure {
   private keys = new Set<string>();
   private keyDownFn: (e: KeyboardEvent) => void;
   private keyUpFn: (e: KeyboardEvent) => void;
-  private ptrDownFn: (e: PointerEvent) => void;
-  private ptrUpFn: () => void;
 
   constructor(private deps: OceanAdventureDeps) {
     const {ctx} = deps;
-    this.marineLife = new OceanLifeSystem(ctx.scene, (sp) => {
+    const models: MarineModels = ctx.islandCoast.marineModels;
+    this.reef = new ReefGarden(models);
+    ctx.scene.add(this.reef.root);
+    this.marineLife = new OceanLifeSystem(ctx.scene, models, (sp) => {
       deps.toast(`🌊 发现${sp.name}（${marineZoneForDepth(this.currentDepth).label}）`, 2600);
       deps.slime.setMood('Happy', 1.1, 65);
     });
 
     this.boatGroup = this.ship.group;
     ctx.scene.add(this.ship.group, this.rival.group);
-    this.islands = new VoyageIslands(ctx.scene);
-    this.sea = new VoyageSea(ctx.scene, (x, z, size) => ctx.ocean?.voyageWake?.impact(x, z, size));
+    this.islands = new VoyageIslands(ctx.scene, true, models);
+    this.sea = new VoyageSea(ctx.scene, models, (x, z) => this.openWaterDepth(x, z) >= 1.15, (x, z, size) => ctx.ocean?.voyageWake?.impact(x, z, size));
     this.controls = new VoyageControls(
       (id) => this.action(id),
       (id, down) => this.touch(id, down),
+      (active) => deps.slime.setMenuPointer('voyage', active),
     );
     window.addEventListener('pagehide', this.onPageHide);
 
-    // Fishing bobber & line for boat angling
-    this.bob = new THREE.Group();
-    this.bob.name = 'boat-fishing-float';
-    this.bob.visible = false;
-    const bobTop = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), ctx.mats.toon(0xe0453a));
-    bobTop.position.y = 0.05;
-    const bobLow = new THREE.Mesh(
-      new THREE.SphereGeometry(0.095, 10, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
-      ctx.mats.toon(0xffffff),
-    );
-    this.bob.add(bobTop, bobLow);
-    this.bob.layers.set(1);
-    ctx.scene.add(this.bob);
-
-    // 3D bamboo fishing rod + concentric expanding water ripples around bobber (Pine & Parcel look!)
-    this.rodGroup = new THREE.Group();
-    this.rodGroup.name = 'boat-fishing-rod';
-    this.rodGroup.visible = false;
-    const rodShaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.014, 0.032, 2.35, 7),
-      ctx.mats.toon(0x9a7048),
-    );
-    rodShaft.position.set(0, 1.15, 0);
-    const rodGrip = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.038, 0.042, 0.34, 7),
-      ctx.mats.toon(0x4c3728),
-    );
-    rodGrip.position.set(0, 0.16, 0);
-    this.rodGroup.add(rodShaft, rodGrip);
-    this.rodGroup.traverse((m: any) => {
-      if (m.isMesh) {
-        m.castShadow = true;
-        m.layers.set(1);
-      }
-    });
-    ctx.scene.add(this.rodGroup);
-
-    for (let i = 0; i < 2; i++) {
-      const rMesh = new THREE.Mesh(
-        new THREE.RingGeometry(0.88, 1.0, 32).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0.75,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        }),
-      );
-      rMesh.visible = false;
-      rMesh.layers.set(1);
-      rMesh.renderOrder = 6;
-      ctx.scene.add(rMesh);
-      this.ripples.push(rMesh);
-    }
-
-    this.line = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-      new THREE.LineBasicMaterial({color: 0x2f2a24}),
-    );
-    this.line.name = 'boat-fishing-line';
-    this.line.visible = false;
-    this.line.frustumCulled = false;
-    this.line.layers.set(1);
-    ctx.scene.add(this.line);
+    this.angling = ctx.angling = new HarborAngling(deps);
 
     this.keyDownFn = (e: KeyboardEvent) => this.onKeyDown(e);
     this.keyUpFn = (e: KeyboardEvent) => this.onKeyUp(e);
-    this.ptrDownFn = (e: PointerEvent) => {
-      if (this.mode === 'fishing' && this.session?.phase === 'reel' && e.button === 0) this.reelHeld = true;
-    };
-    this.ptrUpFn = () => {
-      this.reelHeld = false;
-    };
     window.addEventListener('keydown', this.keyDownFn, true);
     window.addEventListener('keyup', this.keyUpFn);
-    window.addEventListener('pointerdown', this.ptrDownFn);
-    window.addEventListener('pointerup', this.ptrUpFn);
   }
 
   syncExpansions(expansions: ExpandedTile[]) {
+    this.reef.invalidate();
+    this.islands.clear();
+    this.deps.ctx.ocean?.setOffshoreIslands([]);
     this.marineLife.buildPresetEcosystem(expansions);
   }
 
   private onKeyDown(e: KeyboardEvent) {
     if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select')) return;
-    if (!this.deps.isPlaying()) return;
+    if (!this.deps.isPlaying() || this.angling.active) return;
     if (!this.controls.el.hidden && (e.code === 'F1' || (e.code === 'Escape' && this.controls.helpOpen))) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -226,21 +152,22 @@ export class OceanAdventure {
       if (!e.repeat) this.action('buy');
       return;
     }
-    if (this.mode === 'boat' && e.code === 'KeyH') {
+    if (this.onBoard && e.code === 'KeyH') {
       if (!e.repeat) this.action('land');
       return;
     }
     this.keys.add(e.code);
-    if (this.mode === 'boat' && ['KeyQ', 'KeyE', 'Space', 'KeyC', 'KeyF', 'KeyT', 'KeyV'].includes(e.code)) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (e.repeat) return;
-      const acts = {KeyQ: 'port', KeyE: 'starboard', Space: 'leave', KeyC: 'dive', KeyF: 'fish'} as Record<
-        string,
-        string
-      >;
-      if (acts[e.code]) this.action(acts[e.code]);
-      return;
+    if (this.mode === 'deck' || this.mode === 'boat') {
+      const actions: Record<string, string> = {
+        KeyF: 'helm', KeyR: 'fish', Space: 'leave', KeyC: 'dive',
+        KeyQ: 'port', KeyE: 'starboard',
+      };
+      if (actions[e.code] || e.code === 'KeyT' || e.code === 'KeyV') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!e.repeat && actions[e.code]) this.action(actions[e.code]);
+        return;
+      }
     }
     if (this.mode === 'idle' && e.code === 'KeyH' && this.atDock()) {
       e.preventDefault();
@@ -253,21 +180,6 @@ export class OceanAdventure {
       if (!e.repeat) this.board();
       return;
     }
-    if (this.mode === 'fishing' && ['KeyF', 'Escape'].includes(e.code)) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-    }
-    if (this.mode === 'fishing') {
-      if (e.code === 'KeyF' && !e.repeat) {
-        if (this.session?.phase === 'bite') this.session.hook();
-        this.reelHeld = true;
-      }
-      if (e.code === 'Escape' && !e.repeat) {
-        this.stopBoatFishing('收竿了');
-      }
-      return;
-    }
-
     if (this.mode === 'idle') {
       if (e.code === 'KeyF' && !e.repeat && this.inDeepWater) {
         e.preventDefault();
@@ -289,7 +201,6 @@ export class OceanAdventure {
 
   private onKeyUp(e: KeyboardEvent) {
     this.keys.delete(e.code);
-    if (e.code === 'KeyF') this.reelHeld = false;
   }
 
   private sampleWave(x: number, z: number, t = this.lastWaveTime) {
@@ -313,9 +224,19 @@ export class OceanAdventure {
     const [x, , z] = this.deps.slime.position;
     return Math.hypot(x - DOCK.x, z - DOCK.z) < 4.8;
   }
-  private nearBoat() {
-    const [x, , z] = this.deps.slime.position;
-    return this.boatActive && Math.hypot(x - this.boatPos.x, z - this.boatPos.z) < 6.5;
+  private nearBoat(atWater?: boolean) {
+    if (!this.boatActive || !(atWater ?? this.atWater())) return false;
+    const p = this.boatGroup.worldToLocal(this.contactPoint.fromArray(this.deps.slime.position));
+    return Math.abs(p.z) < 2.0 && Math.abs(p.x) <= 3.25 && p.y >= -2.2 && p.y < 1.5;
+  }
+  private openWaterDepth(x: number, z: number) {
+    if (this.deps.ctx.ocean?.isOceanAt(x, z) === false) return 0;
+    const solid = this.deps.slime.world.support(x, z, Infinity, true);
+    return SEA_LEVEL - Math.max(this.bed(x, z), solid ?? -Infinity);
+  }
+  private atWater() {
+    const [x, y, z] = this.deps.slime.position;
+    return this.openWaterDepth(x, z) > .12 && y <= this.waveHeightAt(x, z) + .65;
   }
   private coast(x: number, z: number) {
     return Math.max(
@@ -336,15 +257,9 @@ export class OceanAdventure {
     if (id === 'clear') {
       this.keys.clear();
       this.deps.slime.keys.clear();
-      this.reelHeld = false;
       return;
     }
     if (this.controls.helpOpen || !this.deps.isPlaying()) return;
-    if (id === 'hook') {
-      if (down && this.session?.phase === 'bite') this.session.hook();
-      this.reelHeld = down;
-      return;
-    }
     if (down) this.keys.add(id);
     else this.keys.delete(id);
     if (this.mode === 'idle' || this.mode === 'diving') {
@@ -373,7 +288,7 @@ export class OceanAdventure {
       this.summonBoat();
       return;
     }
-    if (id === 'board' && this.nearBoat()) {
+    if (id === 'board' && !this.onBoard && this.nearBoat()) {
       this.board();
       return;
     }
@@ -385,13 +300,25 @@ export class OceanAdventure {
       this.stopBoatFishing();
       return;
     }
-    if (id === 'dive' && !run?.enemy && (this.mode === 'boat' || this.canDiveFree)) {
-      this.startDiving(this.mode === 'boat');
+    if (id === 'helm') {
+      if (this.mode === 'boat') {
+        this.standOnDeck(.05, -2.68);
+      } else if (this.mode === 'deck' && this.nearHelm()) {
+        this.mode = 'boat';
+        this.deps.slime.arm = 9.7;
+        this.deps.slime.pitch = .32;
+        this.deps.slime.yaw = this.boatYaw + Math.PI + .47;
+        this.keepSlimeOnBoat();
+      }
       return;
     }
-    if (this.mode !== 'boat' || !run) return;
+    if (id === 'dive' && !run?.enemy && (this.onBoard || this.canDiveFree)) {
+      this.startDiving(this.onBoard);
+      return;
+    }
+    if ((this.mode !== 'deck' && this.mode !== 'boat') || !run) return;
     if (id === 'port' || id === 'starboard') {
-      this.fire(run, id === 'port' ? 1 : -1);
+      if (this.mode === 'boat') this.fire(run, id === 'port' ? 1 : -1);
       return;
     }
     if (run.enemy) {
@@ -406,31 +333,57 @@ export class OceanAdventure {
     const p = this.berth();
     return Math.hypot(run.x - p.x, run.z - p.z) < 32;
   }
-  private board() {
+  private standOnDeck(x: number, z: number) {
+    this.mode = 'deck';
+    this.deckWalkSpeed = 0;
+    this.deckFoot.set(x, deckHeight(x, z), z);
+    this.deps.slime.arm = 4.2;
+    this.keepSlimeOnBoat();
+  }
+  private board(fromDock = false) {
     if (!this.run) return;
     const {slime} = this.deps;
-    if (this.mode === 'diving') this.exitDiving(true);
-    this.mode = 'boat';
-    slime.submerged = false;
-    slime.swimming = false;
+    if (this.mode === 'diving') this.deps.setOceanSurfaceBuoyancy(true);
+    const side = this.boatGroup.worldToLocal(this.contactPoint.fromArray(slime.position)).x < 0 ? -1 : 1;
+    slime.submerged = slime.swimming = false;
     slime.inputLock = true;
     slime.umbrella.cancel(true);
     slime.cling = null;
-    slime.velocity = [0, 0, 0];
-    slime.arm = 9.7;
-    slime.pitch = 0.32;
-    slime.yaw = this.boatYaw + Math.PI + 0.47;
+    if (fromDock) slime.yaw = this.boatYaw;
+    this.deckHeading = Math.PI + slime.yaw - this.boatYaw;
+    this.standOnDeck(fromDock ? .36 : side * 1.05, fromDock ? -.72 : .25);
   }
   private begin(x: number, z: number, yaw: number) {
     depart(this.deps.life, x, z, yaw);
     this.restoreVoyage();
     this.deps.save();
-    this.deps.toast('史莱姆号启航 · W 扬帆，A / D 掌舵，F1 查看航海手册');
+    this.deps.toast('已登上史莱姆号 · 走到船尾舵轮旁按 F 掌舵');
+  }
+  /** A saved hull may now lie on a procedural island. Move only stranded hulls to adjacent water. */
+  private refloat(hull: {x: number; z: number; yaw: number}) {
+    const clear = (x: number,z: number) => [-3.7,0,4.1].every(offset =>
+      this.bed(x+Math.sin(hull.yaw)*offset,z+Math.cos(hull.yaw)*offset)<SEA_LEVEL-.88);
+    if (clear(hull.x,hull.z)) return false;
+    for(let radius=4;radius<=192;radius+=4) {
+      for(let step=0;step<16;step++) {
+        const angle=hull.yaw+step*Math.PI/8;
+        const x=hull.x+Math.sin(angle)*radius,z=hull.z+Math.cos(angle)*radius;
+        if(clear(x,z)){hull.x=x;hull.z=z;return true;}
+      }
+    }
+    return false;
   }
   restoreVoyage() {
     const run = this.run;
     if (!run) return;
     this.restoreCamera = {arm: this.deps.slime.arm, pitch: this.deps.slime.pitch};
+    this.syncSea(run.x, run.z);
+    const moved=this.refloat(run);
+    const rivalMoved=run.enemy ? this.refloat(run.enemy) : false;
+    if(moved || rivalMoved){
+      this.syncSea(run.x,run.z);
+      this.deps.save();
+    }
     this.boatPos.set(run.x, SEA_LEVEL, run.z);
     this.boatYaw = run.yaw;
     this.boatSpeed = 0;
@@ -438,9 +391,9 @@ export class OceanAdventure {
     this.rival.setFlag(run.seed);
     document.body.classList.add('sailing-voyage');
     this.boatActive = this.boatGroup.visible = true;
-    this.syncSea(run.x, run.z);
     this.deps.slime.teleport([run.x, this.waveHeightAt(run.x, run.z) + 1.25, run.z]);
-    this.board();
+    this.rockHull(this.ship.group, run.x, run.z, run.yaw, this.lastWaveTime);
+    this.board(true);
   }
   summonBoat() {
     if (this.run) {
@@ -452,8 +405,19 @@ export class OceanAdventure {
     this.begin(s.position[0], s.position[2], s.yaw + Math.PI);
   }
   private syncSea(x: number, z: number) {
-    if (this.islands.sync(x, z, sailingLog(this.deps.life).waters, (a, b) => this.coast(a, b)))
+    const distance = this.coast(x,z);
+    if (!this.islands.offshore && distance < 50) return;
+    const rects = collectTerritoryRects(this.deps.getExpansions());
+    const sdf = this.deps.ctx.islandCoast.sdf;
+    const left = Math.floor(sdf.minX) | 1, back = Math.floor(sdf.minZ) | 1;
+    if (this.islands.sync(x,z,sailingLog(this.deps.life).waters,
+      (a,b)=>territoryBoxSDF(a,b,rects)-coastExtensionAt(a,b),
+      (a,b)=>combinedHeightWithRects(a,b,rects),
+      [left,back,left+2*Math.ceil((sdf.maxX-left)/2),back+2*Math.ceil((sdf.maxZ-back)/2)])) {
+      this.reef.invalidate();
+      this.deps.ctx.ocean?.setOffshoreIslands(this.islands.shores);
       this.deps.refreshOceanWorld();
+    }
   }
   private normalCamera() {
     this.deps.slime.arm = this.restoreCamera.arm;
@@ -461,14 +425,18 @@ export class OceanAdventure {
   }
   private returnHome(safe: boolean) {
     const {slime, life} = this.deps;
+    if(this.angling.active)this.angling.stop();
     const payout = finishVoyage(life, safe);
     document.body.classList.remove('sailing-voyage');
     this.boatActive = this.ship.group.visible = this.rival.group.visible = false;
     this.mode = 'idle';
     this.sea.reset();
     this.deps.ctx.ocean?.endVoyageWake();
+    this.reef.invalidate();
     this.islands.clear();
+    this.deps.ctx.ocean?.setOffshoreIslands([]);
     this.deps.setOceanSurfaceBuoyancy(true);
+    slime.releaseDeck();
     slime.inputLock = slime.submerged = slime.swimming = false;
     this.normalCamera();
     this.keys.clear();
@@ -484,11 +452,11 @@ export class OceanAdventure {
     const {slime, toast} = this.deps;
     if (this.run?.enemy) return;
     this.normalCamera();
-    this.boatSpeed = 0;
     if (this.mode === 'fishing') this.stopBoatFishing();
     this.mode = 'idle';
     slime.submerged = false;
     slime.inputLock = false;
+    slime.releaseDeck();
     // Place slime cleanly beside the boat on the current wave surface
     const sideX = -Math.cos(this.boatYaw) * 2.3;
     const sideZ = Math.sin(this.boatYaw) * 2.3;
@@ -499,19 +467,17 @@ export class OceanAdventure {
     slime.grounded = true;
     slime.swimming = true;
     slime.setSurfaceJumpLock(0.25);
-    toast('已离船入水 · 按 C 可直接下潜，靠近船梯按 F 登船', 2400);
+    toast('已离船入水', 1600);
   }
 
-  startDiving(fromBoat = this.mode === 'boat') {
+  startDiving(fromBoat = this.onBoard) {
     const {slime, toast, setOceanSurfaceBuoyancy} = this.deps;
     if (this.run?.enemy) return;
-    if (fromBoat) {
-      this.normalCamera();
-      this.boatSpeed = 0;
-    }
+    if (fromBoat) this.normalCamera();
     if (this.mode === 'fishing') this.stopBoatFishing();
     this.mode = 'diving';
     slime.inputLock = false;
+    slime.releaseDeck();
     slime.submerged = true;
     setOceanSurfaceBuoyancy(false);
     let sx: number, sz: number, startY: number;
@@ -544,21 +510,13 @@ export class OceanAdventure {
 
   exitDiving(preferBoardBoat = false) {
     const {slime, toast, setOceanSurfaceBuoyancy} = this.deps;
-    slime.submerged = false;
-    setOceanSurfaceBuoyancy(true);
-    const nearBoat =
-      this.boatActive &&
-      Math.hypot(slime.position[0] - this.boatPos.x, slime.position[2] - this.boatPos.z) < 5.5;
-    if (preferBoardBoat && nearBoat) {
-      this.mode = 'boat';
-      slime.arm = 9.7;
-      slime.pitch = 0.32;
-      slime.yaw = this.boatYaw + Math.PI + 0.47;
-      slime.inputLock = true;
-      slime.velocity = [0, 0, 0];
+    if (preferBoardBoat && this.nearBoat()) {
+      this.board();
       slime.setMood('Happy', 0.9, 60);
       toast('⛵ 已回到海舟甲板', 2000);
     } else {
+      slime.submerged = false;
+      setOceanSurfaceBuoyancy(true);
       this.mode = 'idle';
       slime.inputLock = false;
       const surfY = this.waveHeightAt(slime.position[0], slime.position[2]);
@@ -571,67 +529,28 @@ export class OceanAdventure {
     }
   }
 
-  private pickBestBait(historyDay: boolean): string | null {
-    const bag = this.deps.life.bag;
-    if (historyDay && (bag['bait-chronicle'] ?? 0) > 0) return 'bait-chronicle';
-    if ((bag['bait-element'] ?? 0) > 0) return 'bait-element';
-    if ((bag['bait-glow'] ?? 0) > 0) return 'bait-glow';
-    if ((bag['bait-worm'] ?? 0) > 0) return 'bait-worm';
-    return null;
-  }
-
   startBoatFishing() {
-    if (this.session || this.mode !== 'boat' || this.run?.enemy) return;
-    this.boatSpeed = 0;
-    const {life, isHistoryDay, ctx} = this.deps;
-    const historyDay = isHistoryDay();
-    const bait = this.pickBestBait(historyDay);
-    if (bait) {
-      takeItem(life, bait);
-      this.deps.save();
-    }
-    const sky = beijingSky(Date.now());
-    const hour = new Date().getHours();
-    const raining = (ctx.weather?.rain ?? 0) > 0.3;
-    const snowing = (ctx.weather?.snow ?? 0) > 0.3;
-    const bonus = fishingBonuses(life);
-    this.session = new FishingSession(
-      'harbor',
-      {hour, raining, snowing, season: sky.season, historyDay},
-      Math.random,
-      bait,
-      {
-        mode: 'stardew',
-        rodTier: bonus.rodTier,
-        barBonus: bonus.barBonus,
-        treasureChance: 0.28 + bonus.treasureBonus,
+    if (this.angling.active || !this.onBoard || this.run?.enemy) return;
+    this.mode='fishing';
+    this.controls.hide();
+    this.angling.start({
+      onBoat:true, hull:this.boatGroup,
+      direction:[-Math.cos(this.boatYaw),Math.sin(this.boatYaw)],
+      spot:(x,z)=>this.islands.shores.some(i=>Math.hypot(i.x-x,i.z-z)<i.r+55)?'reef':
+        this.coast(x,z)>290 || this.openWaterDepth(x,z)>38?'offshore':'harbor',
+      wet:(x,z)=>{
+        const local=this.boatGroup.worldToLocal(new THREE.Vector3(x,this.boatPos.y,z));
+        return !(Math.abs(local.x)<1.55 && Math.abs(local.z)<3.75) && this.openWaterDepth(x,z)>.25;
       },
-    );
-    this.mode = 'fishing';
-    this.deps.slime.yaw = this.boatYaw + Math.PI * 0.5;
-    this.deps.slime.arm = 5.2;
-    this.reelHeld = false;
-    this.fishT0 = 0;
-    this.fishCloseIn = 0;
-    this.bob.visible = true;
-    this.rodGroup.visible = true;
-    this.line.visible = true;
+      level:(x,z)=>this.waveHeightAt(x,z),
+      returnPort:()=>{if(this.run && this.canLand(this.run))this.returnHome(true);},
+      exit:()=>{if(this.mode==='fishing'){if(this.boatActive)this.standOnDeck(-1.12,-1.63);else this.mode='idle';}},
+    });
   }
 
-  private stopBoatFishing(msg?: string) {
-    this.session = null;
-    this.bob.visible = false;
-    this.rodGroup.visible = false;
-    this.line.visible = false;
-    for (const r of this.ripples) r.visible = false;
-    this.deps.lifeUI.fishing(null);
-    if (this.mode === 'fishing') {
-      this.mode = this.boatActive ? 'boat' : 'idle';
-      if (this.boatActive) this.board();
-    }
-    if (msg) this.deps.toast(msg, 2000);
+  private stopBoatFishing(msg?:string) {
+    this.angling.stop();if(msg)this.deps.toast(msg,2000);
   }
-
   private fire(run: Voyage, side: 1 | -1) {
     const target = run.enemy && {...run.enemy};
     const result = fireBroadside(run, side);
@@ -709,6 +628,7 @@ export class OceanAdventure {
   }
   update(t: number, dt: number) {
     this.lastWaveTime = t;
+    this.islands.update(t, this.deps.ctx.U?.uGrassDensity?.value ?? 1);
     const {slime, life} = this.deps,
       playing = this.deps.isPlaying(),
       exp = this.deps.getExpansions();
@@ -716,7 +636,6 @@ export class OceanAdventure {
     if (!playing) {
       this.controls.hide();
       this.keys.clear();
-      this.reelHeld = false;
       return;
     }
     if (this.controls.helpOpen) return;
@@ -730,16 +649,19 @@ export class OceanAdventure {
       ocean && this.currentWaterColumn >= DIVE_MIN_WATER_DEPTH && (slime.swimming || py <= surface + 0.18);
     this.inDeepWater = this.canDiveFree && this.currentWaterColumn >= DEEP_SEA_THRESHOLD;
     const run = this.run;
+    if (!run || !this.boatActive) this.syncSea(px,pz);
+    let inWater = false;
     if (run && this.boatActive) {
-      if (this.mode === 'boat') this.updateBoatControl(run, dt);
-      const onDeck = this.mode === 'boat' || this.mode === 'fishing';
+      const onDeck = this.onBoard;
       this.syncSea(onDeck ? run.x : px, onDeck ? run.z : pz);
-      this.rockHull(this.ship.group, run.x, run.z, run.yaw, t);
-      if (onDeck) this.keepSlimeOnBoat(t);
+      inWater = !onDeck && this.atWater();
+      if (!onDeck) this.resolveHullContact(inWater);
+      document.body.classList.toggle('sailing-voyage', onDeck || inWater);
       run.reload[0]=Math.max(0,run.reload[0]-dt);
       run.reload[1]=Math.max(0,run.reload[1]-dt);
-      if (this.mode === 'boat') {
+      if (this.onBoard) {
         if (sightEnemy(run, this.coast(run.x, run.z), (x, z) => this.bed(x, z) < SEA_LEVEL - 2)) {
+          if(this.mode==='fishing')this.stopBoatFishing();
           this.deps.toast('野兔发现敌帆！转动船身，炮位亮起时开火', 3600);
           this.deps.save();
         }
@@ -761,17 +683,30 @@ export class OceanAdventure {
         run.yaw,
         wind,
         e ? Math.atan2(e.x - run.x, e.z - run.z) - run.yaw : null,
-        this.session?.phase === 'bite',
+        this.angling.session?.phase === 'bite',
         run.reload,
       );
       this.deps.ctx.ocean?.setVoyageHull(0, run.x, run.z, run.yaw, this.boatSpeed);
       if (!e) this.deps.ctx.ocean?.voyageWake?.hideHull(1);
       this.sea.wake(0, run.x, run.z, run.yaw, this.boatSpeed, dt);
-      this.sea.update(t, dt, run.x, run.z, run.yaw, (x, z) => this.waveHeightAt(x, z, t), e?.aim ?? null);
+      this.sea.update(t, dt, run.x, run.z, run.yaw, (x, z) => this.waveHeightAt(x, z, t), onDeck || inWater, e?.aim ?? null);
       if ((this.saveClock += dt) >= 2) {
         this.saveClock = 0;
         this.deps.save();
       }
+    }
+    this.reef.update(t, px, py, pz, sailingLog(life).waters, this.deps.ctx.U?.uGrassDensity?.value ?? 1,
+      (x,z) => this.deps.ctx.ocean?.isOceanAt(x,z) === false ? Infinity : (this.deps.ctx.islandCoast.surfaceAt(x,z) ?? this.islands.renderedBed(x,z) ?? this.bed(x,z)));
+    if (this.mode === 'deck' && run) {
+      const actions = ['KeyW', 'KeyS', 'KeyA', 'KeyD'];
+      if (this.nearHelm()) actions.push('helm');
+      if (!run.enemy) {
+        actions.push('fish', 'dive', 'leave');
+        if (this.canLand(run)) actions.push('land');
+      }
+      const info = this.nearHelm() ? '船尾舵轮 · 按 F 掌舵' : '甲板 · 走到船尾的舵轮旁掌舵';
+      this.controls.show(info, actions, '', '', 'deck');
+      return;
     }
     if (this.mode === 'boat' && run) {
       const e = run.enemy;
@@ -790,8 +725,8 @@ export class OceanAdventure {
         ? '第 ' + (run.cleared+1) + ' 波 · 敌船 ' + e.hp + ' 耐久 · ' + (e.aim ? '避开橙色落点！' : '转舷迎战')
         : '返港 ' + dir + ' ' + Math.round(Math.hypot(berth.x - run.x, berth.z - run.z)) + 'm';
       const info =
-        '史莱姆号 · 船况 ' + run.hp + '/6 · 弹 ' + run.ammo + ' · 货箱 ' + run.cargo + ' 贝壳 · ' + nav;
-      const acts = ['KeyA', 'KeyW', 'KeyS', 'KeyD', 'port', 'starboard'];
+        '史莱姆号 · ' + Math.abs(this.boatSpeed).toFixed(1) + ' m/s · 船况 ' + run.hp + '/6 · 弹 ' + run.ammo + ' · 货箱 ' + run.cargo + ' 贝壳 · ' + nav;
+      const acts = ['KeyA', 'KeyW', 'KeyS', 'KeyD', 'helm', 'port', 'starboard'];
       if (!e) {
         acts.push('fish', 'dive', 'leave');
         if (this.canLand(run)) acts.push('land');
@@ -800,12 +735,13 @@ export class OceanAdventure {
       return;
     }
     if (this.mode === 'fishing') {
-      this.updateBoatFishing(t, dt);
-      this.controls.show('船钓 · 浮漂一沉就提竿，按住或松开追鱼', ['hook', 'cancel']);
+      if(run?.enemy)this.stopBoatFishing();
+      this.controls.hide();
       return;
     }
     if (this.mode === 'diving') {
       this.updateDivingControl(t, dt, bed, surface);
+      if (this.mode !== 'diving') { this.controls.hide(); return; }
       const acts = ['KeyA', 'KeyW', 'KeyS', 'KeyD', 'Space', 'KeyC'];
       if (this.currentDepth < 2.2) acts.push('surface');
       this.controls.show(
@@ -814,7 +750,7 @@ export class OceanAdventure {
       );
       return;
     }
-    if (this.nearBoat()) {
+    if (this.nearBoat(inWater)) {
       this.controls.show('史莱姆号 · 舷侧船梯', [
         'board',
         ...(this.canDiveFree ? ['dive'] : []),
@@ -832,7 +768,7 @@ export class OceanAdventure {
       );
       return;
     }
-    if (run || this.canDiveFree) {
+    if (run ? inWater : this.canDiveFree && this.atWater()) {
       const ids = run ? ['KeyA', 'KeyW', 'KeyS', 'KeyD'] : [];
       if (this.canDiveFree) ids.push('dive');
       if (!run && this.inDeepWater) ids.push('summon');
@@ -845,27 +781,96 @@ export class OceanAdventure {
     this.controls.hide();
   }
   private seat = new THREE.Vector3();
-  private keepSlimeOnBoat(_t: number) {
+  private contactPoint = new THREE.Vector3();
+  private hullNormal = new THREE.Vector3();
+
+  // Move the support before input, camera and worker sampling for this frame.
+  prepareHull(t: number, dt: number) {
+    const run = this.run;
+    if (!run || !this.boatActive || !this.deps.isPlaying() || this.controls.helpOpen) return;
+    this.lastWaveTime = t;
+    if (this.mode === 'boat' || this.boatSpeed !== 0) this.updateBoatControl(run, dt);
+    this.rockHull(this.ship.group, run.x, run.z, run.yaw, t);
+    if (this.mode === 'deck') this.walkDeck(dt);
+    if (this.onBoard) this.keepSlimeOnBoat();
+  }
+
+  private resolveHullContact(inWater: boolean) {
+    const slime = this.deps.slime, [x, y, z] = slime.position;
+    if (Math.hypot(x - this.boatPos.x, z - this.boatPos.z) > 6) return;
+    const p = this.boatGroup.worldToLocal(this.contactPoint.set(x, y, z));
+    const c = hullContact(p.x, p.y, p.z);
+    if (!c || c.distance > .38) return;
+    const normal = this.hullNormal.set(c.nx, 0, c.nz).applyQuaternion(this.boatGroup.quaternion);
+    const inward = slime.velocity[0] * normal.x + slime.velocity[2] * normal.z;
+    const swimmingIntoLadder = Math.abs(p.z) <= .7 && p.y > -.58 &&
+      (inward < -.12 || this.keys.has('Space')) && inWater;
+    if (swimmingIntoLadder || (p.y >= .91 && c.distance <= 0 && slime.velocity[1] <= 0)) {
+      this.board();
+      return;
+    }
+    const push = .23 - c.distance;
+    if (push <= 0) return;
+    if (p.y < c.keel && p.y + .42 - c.keel < push) {
+      p.y = c.keel - .42;
+      slime.velocity[1] = Math.min(0, slime.velocity[1]);
+    } else {
+      p.x += c.nx * push;
+      p.z += c.nz * push;
+      if (inward < 0) {
+        slime.velocity[0] -= normal.x * inward;
+        slime.velocity[2] -= normal.z * inward;
+      }
+    }
+    this.boatGroup.localToWorld(p);
+    slime.position = [p.x, p.y, p.z];
+  }
+
+  private walkDeck(dt: number) {
+    const side = Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA'));
+    const ahead = Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS'));
+    const length = Math.hypot(side, ahead);
+    this.deckWalkSpeed = 0;
+    if (!length || dt <= 0) return;
+    const angle = this.deps.slime.yaw - this.boatYaw;
+    const dx = (Math.cos(angle) * side - Math.sin(angle) * ahead) / length;
+    const dz = (-Math.sin(angle) * side - Math.cos(angle) * ahead) / length;
+    const p = this.deckFoot, step = 2.55 * Math.min(dt, .05);
+    const oldX = p.x, oldZ = p.z;
+    // Resolve each axis independently so walking into the rail or mast slides along it.
+    if (walkableDeck(p.x + dx * step, p.z)) p.x += dx * step;
+    if (walkableDeck(p.x, p.z + dz * step)) p.z += dz * step;
+    p.y = deckHeight(p.x, p.z);
+    this.deckWalkSpeed = Math.hypot(p.x - oldX, p.z - oldZ) / dt;
+    if (this.deckWalkSpeed > 0) this.deckHeading = Math.atan2(p.x - oldX, p.z - oldZ);
+  }
+
+  private keepSlimeOnBoat() {
     const {slime} = this.deps;
     if (this.mode === 'fishing') this.seat.set(-1.12, 0.98, -1.63);
+    else if (this.mode === 'deck') this.seat.copy(this.deckFoot);
     else this.seat.set(0.05, 1.29, -2.68);
     this.boatGroup.localToWorld(this.seat);
-    slime.position = [this.seat.x, this.seat.y, this.seat.z];
-    slime.velocity = [0, 0, 0];
+    this.hullNormal.set(0, 1, 0).applyQuaternion(this.boatGroup.quaternion);
+    slime.attachDeck([this.seat.x, this.seat.y, this.seat.z], [this.hullNormal.x, this.hullNormal.y, this.hullNormal.z]);
     slime.grounded = true;
     slime.swimming = false;
-    slime.forward = [Math.sin(this.boatYaw), 0, Math.cos(this.boatYaw)];
+    const heading = this.boatYaw + (this.mode === 'deck' ? this.deckHeading : 0);
+    slime.forward = [Math.sin(heading), 0, Math.cos(heading)];
+    const speed = this.mode === 'deck' ? this.deckWalkSpeed : 0;
+    slime.velocity = [slime.forward[0] * speed, 0, slime.forward[2] * speed];
   }
   private updateBoatControl(run: Voyage, dt: number) {
-    const fwd = Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS'));
-    const turn = Number(this.keys.has('KeyA')) - Number(this.keys.has('KeyD'));
+    const steering = this.mode === 'boat';
+    const fwd = steering ? Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS')) : 0;
+    const turn = steering ? Number(this.keys.has('KeyA')) - Number(this.keys.has('KeyD')) : 0;
     const dy = turn * 1.08 * dt;
     run.yaw += dy;
     this.boatYaw = run.yaw;
     this.deps.slime.yaw += dy;
     const depth = SEA_LEVEL - this.bed(run.x, run.z);
     const target = fwd * (fwd < 0 ? 4 : Math.min(24, Math.max(5, depth * 2.8)));
-    this.boatSpeed += (target - this.boatSpeed) * (1 - Math.exp(-dt * (fwd ? 1.1 : 2.6)));
+    this.boatSpeed = approachSailingSpeed(this.boatSpeed, target, dt);
     const fx = Math.sin(run.yaw),
       fz = Math.cos(run.yaw);
     const nx = run.x + fx * this.boatSpeed * dt,
@@ -898,107 +903,10 @@ export class OceanAdventure {
     }
   }
 
-  private updateBoatFishing(t: number, dt: number) {
-    const s = this.session;
-    if (!s) return;
-    const {slime, life, lifeUI, save} = this.deps;
-    s.update(dt, this.reelHeld);
-    this.fishT0 += dt;
-
-    const fx = -Math.cos(this.boatYaw),
-      fz = Math.sin(this.boatYaw);
-    const cast = Math.min(1, this.fishT0 / 0.55);
-    const bx = slime.position[0] + fx * 5.2 * cast;
-    const bz = slime.position[2] + fz * 5.2 * cast;
-    const dip = s.phase === 'bite' ? -0.14 : s.phase === 'reel' ? -0.06 + Math.sin(t * 28) * 0.04 : 0;
-    const bobWaveY = this.waveHeightAt(bx, bz, t);
-    this.bob.position.set(bx, bobWaveY + 0.03 + dip + (1 - cast) * Math.sin(cast * Math.PI) * 1.6, bz);
-
-    const flex = s.phase === 'reel' ? 0.34 + Math.sin(t * 18) * 0.08 : s.phase === 'bite' ? 0.25 : 0.08;
-    this.rodGroup.position.set(
-      slime.position[0] + fx * 0.25,
-      slime.position[1] + 0.3,
-      slime.position[2] + fz * 0.25,
-    );
-    this.rodGroup.rotation.set(0, this.boatYaw - Math.PI / 2, 0);
-    this.rodGroup.rotateX(0.92 + flex);
-    this.rodGroup.updateMatrixWorld(true);
-    const tipWorld = new THREE.Vector3(0, 2.32, 0).applyMatrix4(this.rodGroup.matrixWorld);
-
-    const attr = this.line.geometry.attributes.position as THREE.BufferAttribute;
-    attr.setXYZ(0, tipWorld.x, tipWorld.y, tipWorld.z);
-    attr.setXYZ(1, this.bob.position.x, this.bob.position.y + 0.08, this.bob.position.z);
-    attr.needsUpdate = true;
-
-    const landed = cast >= 0.96;
-    const rippleRate = s.phase === 'bite' || s.phase === 'reel' ? 1.55 : 0.65;
-    for (let i = 0; i < this.ripples.length; i++) {
-      const rMesh = this.ripples[i];
-      rMesh.visible = landed;
-      if (landed) {
-        const ph = (t * rippleRate + i * 0.5) % 1;
-        const rad = 0.16 + ph * (s.phase === 'bite' || s.phase === 'reel' ? 1.25 : 0.92);
-        rMesh.position.set(this.bob.position.x, bobWaveY + 0.04, this.bob.position.z);
-        rMesh.scale.setScalar(rad);
-        (rMesh.material as THREE.MeshBasicMaterial).opacity = (1 - ph) * (1 - ph) * 0.8;
-      }
-    }
-
-    const help =
-      '<span class="key">F</span> / 左键 按住右移绿框追住🐟，松开左滑 · 覆盖 🎁 捞海底宝箱 · <span class="key">Esc</span> 收竿';
-    if (s.phase === 'cast' || s.phase === 'wait') {
-      lifeUI.fishing({
-        title: s.misses ? '海鱼试探了一下…再等等' : '海舟抛竿中，等鱼咬钩…',
-        help: '浮漂一沉，立刻按 <span class="key">F</span> 提竿！',
-      });
-    } else if (s.phase === 'bite') {
-      lifeUI.fishing({title: '咬钩了！快按 F！', help: '大鱼上钩的瞬间！'});
-      slime.setMood('Surprised', 0.3, 70);
-    } else if (s.phase === 'reel') {
-      const green: [number, number] = [s.barPos, s.barPos + s.barSize];
-      const onFish = s.fishPos >= green[0] - 0.02 && s.fishPos <= green[1] + 0.02;
-      lifeUI.fishing({
-        title: `海上溜鱼 · ${BEHAVIOR_LABELS[s.behavior]}${s.treasure?.claimed ? ' · 🎁宝箱到手！' : s.treasure?.active ? ' · 发现海底宝箱🎁！' : ''}`,
-        help,
-        tension: s.fishPos,
-        progress: s.progress,
-        green,
-        alarm: !onFish,
-        stardew: true,
-        treasure: s.treasure
-          ? {pos: s.treasure.pos, progress: s.treasure.progress, claimed: s.treasure.claimed}
-          : undefined,
-      });
-    } else if (!this.fishCloseIn) {
-      this.fishCloseIn = 1.8;
-      if (s.phase === 'caught') {
-        const c = s.result()!;
-        const treasureId = s.claimedTreasureId();
-        const first = landCatch(life, c, treasureId);
-        const item = ITEMS[c.fish];
-        const trDef = treasureId ? ITEMS[treasureId] : null;
-        save();
-        lifeUI.refresh(life);
-        slime.setMood('Happy', 1.4, 70);
-        lifeUI.fishing({
-          title: `🎉 海钓收获 ${item.icon}${item.name} · ${c.size} cm${first ? ' · 图鉴新增！' : ''}${trDef ? ` + 🎁${trDef.icon}${trDef.name}` : ''}`,
-          help: item.desc,
-        });
-      } else {
-        lifeUI.fishing({title: '海鱼挣脱游走了…', help: '按住 F/左键 让绿框紧跟🐟图标！'});
-        slime.setMood('Hurt', 0.8, 65);
-      }
-    } else if ((this.fishCloseIn -= dt) <= 0) {
-      this.stopBoatFishing();
-    }
-  }
-
   dispose() {
     window.removeEventListener('keydown', this.keyDownFn, true);
     window.removeEventListener('pagehide', this.onPageHide);
     window.removeEventListener('keyup', this.keyUpFn);
-    window.removeEventListener('pointerdown', this.ptrDownFn);
-    window.removeEventListener('pointerup', this.ptrUpFn);
     this.deps.ctx.ocean?.endVoyageWake();
     this.controls.dispose();
     this.islands.dispose();
@@ -1006,10 +914,8 @@ export class OceanAdventure {
     this.rival.dispose();
     this.sea.dispose();
     this.marineLife.dispose();
+    this.reef.dispose();
     this.boatGroup.removeFromParent();
-    this.bob.removeFromParent();
-    this.rodGroup.removeFromParent();
-    for (const r of this.ripples) r.removeFromParent();
-    this.line.removeFromParent();
+    this.angling.dispose();
   }
 }

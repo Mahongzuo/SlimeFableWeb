@@ -7,18 +7,27 @@ export type SkillSlot = 'E' | 'R' | 'Q';
 
 export type SkillArchetype =
   | 'projectile'
-  | 'sweep'
+  | 'ring'
   | 'dome'
   | 'dash'
   | 'vortex'
+  | 'boomerang'
+  | 'breath'
+  | 'eruption'
   | 'bolt'
   | 'chain'
   | 'storm'
+  | 'creep'
   | 'field'
+  | 'rend'
+  | 'fist'
+  | 'fissure'
+  | 'leap_slam'
+  // Retired archetypes, kept so older callers and saved references still type-check and still cast something.
+  | 'sweep'
   | 'meteor'
   | 'slam'
-  | 'wave'
-  | 'leap_slam';
+  | 'wave';
 
 export interface SkillDef {
   slot: SkillSlot;
@@ -47,121 +56,126 @@ export const MAX_SKILL_ENERGY = 100;
 export const PASSIVE_ENERGY_PER_SEC = 5.0;
 
 export const ELEMENT_ROLES: readonly {element: number; role: string; style: string}[] = [
-  {element: 0, role: '中程控场法师', style: '水泡远程 + 大弧潮汐 + 水穹爆发'},
-  {element: 1, role: '高速近战刺客', style: '疾风突刺 + 聚怪旋风 + 飓风贯穿'},
-  {element: 2, role: '爆破元素法师', style: '熔岩火球 + 烈焰冲锋 + 怒炎火柱'},
-  {element: 3, role: '链式雷电法师', style: '定点天雷 + 弹射电链 + 万钧雷域'},
-  {element: 4, role: '咒术领域召唤', style: '追踪暗球 + 黑洞领域 + 陨暗星石'},
-  {element: 5, role: '重装破韧战士', style: '重锤破防 + 裂地剑气 + 天崩砸地'},
+  {element: 0, role: '潮汐控场法师', style: '水牢禁锢 + 回澜推波 + 沧海倾覆'},
+  {element: 1, role: '高速游击刺客', style: '疾风穿身 + 龙卷聚怪 + 岚刃回旋'},
+  {element: 2, role: '爆破元素法师', style: '爆炎轰击 + 龙息扫射 + 熔火喷发'},
+  {element: 3, role: '链式雷电法师', style: '定点落雷 + 连锁闪电 + 万钧雷狱'},
+  {element: 4, role: '蚀界咒术师', style: '影袭咬合 + 蚀渊牵引 + 千裂碎空'},
+  {element: 5, role: '重装破韧战士', style: '岩拳破地 + 裂地石脊 + 陨岳砸落'},
 ];
 
+/**
+ * Each element's three skills use three different mechanics, and no mechanic is shared between elements:
+ * shot / ring / dome, dash / vortex / returning blades, lobbed blast / sustained cone / eruption with fallout,
+ * strike / chain / caged storm, ground-runner / pulling field / delayed shatter, uppercut / marching line / leap.
+ */
 export const SKILL_KITS: readonly Record<SkillSlot, SkillDef>[] = [
-  // 0: WATER — 中程控场法师
+  // 0: WATER — 潮汐控场法师
   {
     E: {
-      slot: 'E', element: 0, name: '水泡弹', shortName: '水泡', icon: '🫧', archetype: 'projectile',
+      slot: 'E', element: 0, name: '水牢泡', shortName: '水牢', icon: '🫧', archetype: 'projectile',
       damage: 20, cooldown: 6, energyCost: 0, energyGain: 18, range: 16, radius: 1.6, projectileSpeed: 16,
-      desc: '发射晶莹高速水泡球，命中炸开水花并强附着「水」。',
+      desc: '吐出一颗鼓胀的大水泡，命中后把目标裹进水牢，随后炸成一圈水冠并强附着「水」。',
     },
     R: {
-      slot: 'R', element: 0, name: '潮汐鞭扫', shortName: '潮鞭', icon: '🌊', archetype: 'sweep',
-      damage: 28, cooldown: 9, energyCost: 0, energyGain: 24, range: 3.4, radius: 3.2, knockback: 4.5,
-      desc: '270° 大幅流体水浪横扫，击退周围敌人并大范围挂水。',
+      slot: 'R', element: 0, name: '回澜', shortName: '回澜', icon: '🌊', archetype: 'ring',
+      damage: 28, cooldown: 9, energyCost: 0, energyGain: 24, range: 0, radius: 3.4, knockback: 4.5,
+      desc: '以自身为圆心掀起一圈立起的水墙向外推开，击退四周敌人并大范围挂水。',
     },
     Q: {
-      slot: 'Q', element: 0, name: '苍穹泡泡爆', shortName: '泡爆', icon: '💠', archetype: 'dome',
+      slot: 'Q', element: 0, name: '沧海穹', shortName: '沧海', icon: '💠', archetype: 'dome',
       damage: 54, cooldown: 16, energyCost: 100, energyGain: 0, range: 0, radius: 4.8, duration: 1.1,
-      desc: '元素爆发：张开巨型透明水幕穹顶并引爆漫天泡泡雨！',
+      desc: '元素爆发：水幕穹顶罩住四周，中心涌泉冲上穹顶，再化作暴雨倾盆砸落！',
     },
   },
-  // 1: WIND — 高速近战刺客
+  // 1: WIND — 高速游击刺客
   {
     E: {
-      slot: 'E', element: 1, name: '疾风突进', shortName: '疾突', icon: '💨', archetype: 'dash',
+      slot: 'E', element: 1, name: '疾风步', shortName: '疾风', icon: '💨', archetype: 'dash',
       damage: 18, cooldown: 5, energyCost: 0, energyGain: 18, range: 4.6, radius: 1.5, dashDist: 4.5,
-      desc: '化作青色风带瞬间前冲 4.5m，穿透路径敌人并触发扩散。',
+      desc: '化作一缕螺旋气流瞬间前掠 4.5m，穿过路径上的敌人并留下风切。',
     },
     R: {
-      slot: 'R', element: 1, name: '风刃回旋', shortName: '旋风', icon: '🌀', archetype: 'vortex',
+      slot: 'R', element: 1, name: '龙卷', shortName: '龙卷', icon: '🌪️', archetype: 'vortex',
       damage: 26, cooldown: 9, energyCost: 0, energyGain: 24, range: 0, radius: 3.8, duration: 1.4, multiHits: 3,
-      desc: '以自身为中心卷起翠绿龙卷，牵引附近目标持续风切。',
+      desc: '在脚下卷起一道由气流带拧成的龙卷，把附近目标吸向中心并连续风切 3 次。',
     },
     Q: {
-      slot: 'Q', element: 1, name: '翠啸飓风斩', shortName: '飓斩', icon: '🌪️', archetype: 'dash',
-      damage: 50, cooldown: 15, energyCost: 100, energyGain: 0, range: 7.2, radius: 2.8, dashDist: 6.8,
-      desc: '元素爆发：超远高速贯穿冲刺并在终点绽放十字风暴裂空！',
+      slot: 'Q', element: 1, name: '岚刃回旋', shortName: '岚刃', icon: '🪃', archetype: 'boomerang',
+      damage: 50, cooldown: 15, energyCost: 100, energyGain: 0, range: 7.2, radius: 1.5,
+      desc: '元素爆发：掷出三道旋转的巨型岚刃，扇形飞出后折返归来，去程回程各切割一轮！',
     },
   },
   // 2: FIRE — 爆破元素法师
   {
     E: {
-      slot: 'E', element: 2, name: '熔岩火球', shortName: '火球', icon: '🔥', archetype: 'projectile',
+      slot: 'E', element: 2, name: '爆炎弹', shortName: '爆炎', icon: '💥', archetype: 'projectile',
       damage: 24, cooldown: 6, energyCost: 0, energyGain: 18, range: 15, radius: 2.4, projectileSpeed: 15,
-      desc: '投掷炙热熔岩火球，命中引发炽烈火环爆破与灼烧。',
+      desc: '掷出一团翻滚的爆炎，命中后炸成蘑菇状火云并在地面留下焦痕。',
     },
     R: {
-      slot: 'R', element: 2, name: '烈焰突袭', shortName: '焰突', icon: '☄️', archetype: 'dash',
-      damage: 30, cooldown: 10, energyCost: 0, energyGain: 24, range: 4.2, radius: 2.0, dashDist: 3.8,
-      desc: '裹挟炽焰猛冲 3.8m，沿途留下火星并引爆火焰冲击。',
+      slot: 'R', element: 2, name: '龙息', shortName: '龙息', icon: '🐉', archetype: 'breath',
+      damage: 30, cooldown: 10, energyCost: 0, energyGain: 24, range: 5.5, radius: 1.7, duration: 0.7, multiHits: 4,
+      desc: '向前方喷吐锥形烈焰约 0.7 秒，锥内所有敌人被连续灼烧 4 次。',
     },
     Q: {
-      slot: 'Q', element: 2, name: '岩浆怒炎阵', shortName: '怒炎', icon: '🌋', archetype: 'storm',
-      damage: 60, cooldown: 16, energyCost: 100, energyGain: 0, range: 0, radius: 5.0, duration: 1.4, multiHits: 3,
-      desc: '元素爆发：展开炽金熔岩法阵，升起冲天火柱与流星余烬雨！',
+      slot: 'Q', element: 2, name: '熔火喷发', shortName: '喷发', icon: '🌋', archetype: 'eruption',
+      damage: 60, cooldown: 16, energyCost: 100, energyGain: 0, range: 0, radius: 5.0, duration: 1.5, multiHits: 6,
+      desc: '元素爆发：脚下地面崩裂喷出熔岩火柱，再抛出六枚熔岩弹砸落四周二次爆炸！',
     },
   },
   // 3: LIGHTNING — 链式雷电法师
   {
     E: {
-      slot: 'E', element: 3, name: '落雷天罚', shortName: '落雷', icon: '⚡', archetype: 'bolt',
+      slot: 'E', element: 3, name: '落雷', shortName: '落雷', icon: '⚡', archetype: 'bolt',
       damage: 24, cooldown: 6, energyCost: 0, energyGain: 18, range: 7.5, radius: 2.2,
-      desc: '在前方落点召唤紫色天雷柱直劈而下，瞬间高额雷伤。',
+      desc: '在前方落点召下一道紫白天雷直劈而下，瞬间高额雷伤。',
     },
     R: {
-      slot: 'R', element: 3, name: '链式电弧', shortName: '电链', icon: '⛓️', archetype: 'chain',
+      slot: 'R', element: 3, name: '连锁闪电', shortName: '电链', icon: '⛓️', archetype: 'chain',
       damage: 24, cooldown: 9, energyCost: 0, energyGain: 24, range: 7.5, radius: 4.8, chainCount: 4,
-      desc: '释放高压跳跃闪电链（最多弹射 4 个目标），瞬间挂满感电。',
+      desc: '放出在敌人之间弹跳的闪电链（最多 4 个目标），瞬间挂满感电。',
     },
     Q: {
-      slot: 'Q', element: 3, name: '雷霆万钧域', shortName: '万钧', icon: '🌩️', archetype: 'storm',
+      slot: 'Q', element: 3, name: '万钧雷狱', shortName: '雷狱', icon: '🌩️', archetype: 'storm',
       damage: 62, cooldown: 16, energyCost: 100, energyGain: 0, range: 3.0, radius: 5.2, duration: 1.6, multiHits: 5,
-      desc: '元素爆发：展开巨型雷电法阵，连续劈下 5 道天雷轰鸣！',
+      desc: '元素爆发：雷云压顶、雷柱成笼，在牢笼之内连续劈下 5 道天雷！',
     },
   },
-  // 4: DARK — 咒术领域召唤
+  // 4: DARK — 蚀界咒术师
   {
     E: {
-      slot: 'E', element: 4, name: '虚空暗弹', shortName: '暗弹', icon: '🟣', archetype: 'projectile',
-      damage: 22, cooldown: 7, energyCost: 0, energyGain: 18, range: 14, radius: 2.1, projectileSpeed: 11.5,
-      desc: '发射缓慢追踪的黑紫重力法球，命中爆发暗影侵蚀。',
+      slot: 'E', element: 4, name: '影袭', shortName: '影袭', icon: '🌘', archetype: 'creep',
+      damage: 22, cooldown: 7, energyCost: 0, energyGain: 18, range: 9, radius: 1.9,
+      desc: '一道暗影裂痕贴地疾行到目标脚下，黑曜暗爪破土合拢咬住目标。',
     },
     R: {
-      slot: 'R', element: 4, name: '深渊暗雾域', shortName: '暗域', icon: '🌑', archetype: 'field',
+      slot: 'R', element: 4, name: '蚀渊', shortName: '蚀渊', icon: '🕳️', archetype: 'field',
       damage: 14, cooldown: 10, energyCost: 0, energyGain: 24, range: 3.6, radius: 3.4, duration: 4.0, multiHits: 5,
-      desc: '在前方展开持续 4s 的墨紫黑洞领域，持续造成暗伤与牵引。',
+      desc: '在前方张开持续 4 秒、被次元裂隙环绕的黑洞领域，把敌人拖向中心并持续侵蚀。',
     },
     Q: {
-      slot: 'Q', element: 4, name: '陨暗星石砸', shortName: '陨石', icon: '☄️', archetype: 'meteor',
-      damage: 64, cooldown: 17, energyCost: 100, energyGain: 0, range: 4.2, radius: 4.6, duration: 1.1,
-      desc: '元素爆发：从高空召唤巨型暗影陨石轰砸大地，震裂空间！',
+      slot: 'Q', element: 4, name: '千裂', shortName: '千裂', icon: '✴️', archetype: 'rend',
+      damage: 64, cooldown: 17, energyCost: 100, energyGain: 0, range: 4.2, radius: 4.4, duration: 1.25, multiHits: 7,
+      desc: '元素爆发：在目标区域接连划出七道次元裂痕，停顿一拍后整片空间碎裂！',
     },
   },
   // 5: PHYSICAL — 重装破韧战士
   {
     E: {
-      slot: 'E', element: 5, name: '重锤震击', shortName: '重锤', icon: '🔨', archetype: 'slam',
+      slot: 'E', element: 5, name: '崩岩拳', shortName: '岩拳', icon: '👊', archetype: 'fist',
       damage: 28, cooldown: 6, energyCost: 0, energyGain: 20, range: 2.6, radius: 2.5, knockback: 6.0,
-      desc: '全身蓄力猛砸前方地面，超高击飞并触发破韧重击。',
+      desc: '一只岩石巨拳从前方地面破土上勾，超高击飞并触发破韧重击。',
     },
     R: {
-      slot: 'R', element: 5, name: '裂地剑气劈', shortName: '剑气', icon: '⚔️', archetype: 'wave',
-      damage: 34, cooldown: 9, energyCost: 0, energyGain: 24, range: 12, radius: 2.0, projectileSpeed: 18,
-      desc: '挥出一道高速穿透前进的金白巨型月牙剑气波！',
+      slot: 'R', element: 5, name: '裂地脊', shortName: '石脊', icon: '⛰️', archetype: 'fissure',
+      damage: 34, cooldown: 9, energyCost: 0, energyGain: 24, range: 10, radius: 1.2, multiHits: 7,
+      desc: '一拳砸地，七根石刺沿直线依次破土隆起约 10 米，逐段贯穿路径上的敌人。',
     },
     Q: {
-      slot: 'Q', element: 5, name: '天崩巨锤砸', shortName: '天崩', icon: '💥', archetype: 'leap_slam',
+      slot: 'Q', element: 5, name: '陨岳', shortName: '陨岳', icon: '☄️', archetype: 'leap_slam',
       damage: 66, cooldown: 16, energyCost: 100, energyGain: 0, range: 3.0, radius: 5.0, knockback: 8.5,
-      desc: '元素爆发：高跃蓄力重砸大地，掀起金色环形地震波与碎石！',
+      desc: '元素爆发：高高跃起，裹着一座山岩重重砸落，地面塌成陨坑并掀起两圈石板与尘浪！',
     },
   },
 ];

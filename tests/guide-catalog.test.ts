@@ -4,9 +4,14 @@ import {BUILTIN_GUIDE_SECTIONS, getGuideSections, registerGuideSection} from '..
 
 test('Guide catalog covers all core gameplay modules and supports dynamic runtime extension', () => {
   const base = getGuideSections();
-  assert.ok(base.length >= 6);
+  assert.ok(base.length >= 7);
+  assert.equal(base[0].id, 'quickstart', 'F1 help should open with quickstart keybind reference first');
+  const qsKeys = (base[0].keybinds ?? []).flatMap(k => k.keys);
+  for (const requiredKey of ['F1', 'F2', 'F3', 'W', 'E', 'F', 'G', 'X', 'C']) {
+    assert.ok(qsKeys.includes(requiredKey), `quickstart guide should list key ${requiredKey}`);
+  }
   const ids = new Set(base.map(s => s.id));
-  for (const required of ['movement', 'combat', 'farming', 'building', 'ecology', 'portals']) {
+  for (const required of ['quickstart', 'movement', 'combat', 'farming', 'building', 'ecology', 'portals']) {
     assert.ok(ids.has(required), `missing guide section ${required}`);
   }
   for (const s of BUILTIN_GUIDE_SECTIONS) {

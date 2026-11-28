@@ -1,3 +1,4 @@
+import {changeShells} from './shell-wallet';
 import {ITEMS, RECIPES, RESIDENT_FISH} from './catalog';
 import {rng} from '../templates/random';
 import {takeItem, type LifeData, type RequestState} from './state';
@@ -25,5 +26,5 @@ export function today(life: LifeData, day: string) {
 }
 export function deliver(life: LifeData, day: string, id: string): {ok: boolean; reward?: number} {
   const req = today(life, day).find(q => q.id === id); if (!req || req.done || (life.bag[req.item] ?? 0) < req.count) return {ok: false};
-  takeItem(life, req.item, req.count); req.done = true; life.coins += req.reward; return {ok: true, reward: req.reward};
+  takeItem(life, req.item, req.count); req.done = true; changeShells(life, req.reward, 'earn'); return {ok: true, reward: req.reward};
 }

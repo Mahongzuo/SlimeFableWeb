@@ -2,12 +2,12 @@ import {BUILD_ITEMS,propCollisionParts} from './build-catalog';
 import type {Box} from '../slime/types';
 import {lotusPond} from './water-fish';
 import {valleyWater} from '../zones/lake-water';
-import {climateMaterial} from './climate-material';
+import {meadowGroundMaterial,sampleInlandGrassColor} from '../world/terrain-mesh';
 import type {ExpandedTile, ExpansionThemeId} from '../life/state';
 import {
   computeDynamicFrontier,
   EXPANSION_THEMES,
-  expansionHeight,
+  expansionHeight, expansionGroundAt, expansionSurfaceWeights, expansionFenceRuns, expansionSegments,
   isInsideHomeTerritory,
   slotForTile,
   type ExpansionSlot,
@@ -70,7 +70,7 @@ export class FrontierRenderer {
     for (const [id, rt] of this.rendered) {
       if (!ownedIds.has(id)) {
         for (const m of rt.models) m.dispose();
-        rt.group.traverse((node:any)=>{if(node.userData.releaseWater){node.userData.releaseWater();node.geometry.dispose();}});
+        rt.group.traverse((node:any)=>{node.userData.releaseFence?.();if(node.userData.releaseWater){node.userData.releaseWater();node.geometry.dispose();}});
         rt.group.removeFromParent();
         this.rendered.delete(id);
       }
@@ -123,6 +123,53 @@ export class FrontierRenderer {
 
   structuralBoxes(){return Array.from(this.rendered.values()).flatMap(tile=>tile.boxes);}
 
+  private addFence(tile:ExpandedTile,slot:ExpansionSlot,parent:any,boxes:Box[]) {
+    const T=this.T,theme=tile.theme;
+    const group=new T.Group();
+    group.name='terrain-fence-'+tile.id;
+    const runs=expansionFenceRuns(slot,theme);
+    const postHeight=theme==='jiangnan'?.82:theme==='meadow'?.95:.76;
+    const color=theme==='jiangnan'?0x9b9f91:theme==='coast'?0x88735b:theme==='meadow'?0x85684a:0xb08755;
+    const wood=this.ctx.mats.toon(color),trim=this.ctx.mats.toon(theme==='coast'?0xc8a46e:theme==='jiangnan'?0xd4cbb8:0xa88659);
+    const postGeo=theme==='farmland'?new T.BoxGeometry(.18,postHeight,.18):new T.CylinderGeometry(.105,.135,postHeight,theme==='jiangnan'?8:6);
+    const railGeo=theme==='coast'?new T.CylinderGeometry(.042,.042,1,5):new T.BoxGeometry(theme==='jiangnan'?.16:.085,1,theme==='jiangnan'?.13:.10);
+    const nodes=runs.reduce((n,r)=>n+r.length,0), spans=nodes-runs.length;
+    const posts=new T.InstancedMesh(postGeo,wood,nodes);
+    const rails=new T.InstancedMesh(railGeo,trim,spans*(theme==='coast'?3:theme==='meadow'?1:2));
+    posts.name='parcel-fence-posts';rails.name=theme==='coast'?'parcel-fence-rope':'parcel-fence-rails';
+    group.add(posts,rails);parent.add(group);
+    group.userData.theme=theme;group.userData.openRuns=runs.length;
+    const a=new T.Vector3(),b=new T.Vector3(),d=new T.Vector3(),mid=new T.Vector3(),m=new T.Matrix4(),q=new T.Quaternion();
+    const up=new T.Vector3(0,1,0),scale=new T.Vector3();
+    let postIndex=0,railIndex=0;
+    const rail=(a:any,b:any)=>{
+      d.subVectors(b,a);q.setFromUnitVectors(up,d.clone().normalize());
+      m.compose(mid.addVectors(a,b).multiplyScalar(.5),q,scale.set(1,d.length(),1));
+      rails.setMatrixAt(railIndex++,m);
+    };
+    for(const run of runs){
+      for(let i=0;i<run.length;i++){
+        const [x,z]=run[i],y=expansionGroundAt(x,z,slot,theme);
+        posts.setMatrixAt(postIndex++,m.makeTranslation(x,y+postHeight*.5-.025,z));
+        if(!i)continue;
+        const [px,pz]=run[i-1],py=expansionGroundAt(px,pz,slot,theme);
+        a.set(px,py+postHeight*.78,pz);b.set(x,y+postHeight*.78,z);
+        if(theme==='coast'){
+          const one=a.clone().lerp(b,1/3),two=a.clone().lerp(b,2/3);
+          one.y-=.11;two.y-=.11;rail(a,one);rail(one,two);rail(two,b);
+        }else{
+          rail(a,b);
+          if(theme!=='meadow'){a.y-=.28;b.y-=.28;rail(a,b);}
+        }
+        const length=Math.hypot(px-x,pz-z),cx=(x+px)*.5,cz=(z+pz)*.5;
+        boxes.push({name:'parcel-fence-'+tile.id+'-'+railIndex,min:[cx-length*.5-.11,Math.min(y,py)-.07,cz-.13],
+          max:[cx+length*.5+.11,Math.max(y,py)+postHeight-.025,cz+.13],yaw:-Math.atan2(z-pz,x-px),camera:true,climbable:false});
+      }
+    }
+    for(const piece of [rails,posts]){piece.castShadow=true;piece.receiveShadow=true;piece.instanceMatrix.needsUpdate=true;}
+    group.userData.releaseFence=()=>{posts.dispose();rails.dispose();postGeo.dispose();railGeo.dispose();};
+  }
+
   private mountExpandedTile(tile: ExpandedTile) {
     const slot = slotForTile(tile);
     const theme = EXPANSION_THEMES[tile.theme];
@@ -133,15 +180,13 @@ export class FrontierRenderer {
 
     const w = Math.round(slot.max[0] - slot.min[0]);
     const h = Math.round(slot.max[1] - slot.min[1]);
-    // 2m grid resolution keeps 50+ infinitely expanded tiles at crisp 60 FPS with exact shared borders
-    const segW = Math.max(8, Math.round(w / 2));
-    const segH = Math.max(8, Math.round(h / 2));
+    const segW=expansionSegments(slot.min[0],slot.max[0],0),segH=expansionSegments(slot.min[1],slot.max[1],1);
     const geo = new T.PlaneGeometry(w, h, segW, segH);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
-    const colors = new Float32Array(pos.count * 3);
+    const colors = new Float32Array(pos.count * 3), splats=new Float32Array(pos.count*2);
     const c = new T.Color();
-    const tint = new T.Color();
+    const tint = new T.Color(),seamTint=new T.Color();
     const cx = (slot.min[0] + slot.max[0]) * 0.5;
     const cz = (slot.min[1] + slot.max[1]) * 0.5;
 
@@ -151,8 +196,6 @@ export class FrontierRenderer {
       const y = expansionHeight(x, z, slot, tile.theme);
       pos.setXYZ(i, x, y, z);
 
-      const u = (x - slot.min[0]) / w;
-      const v = (z - slot.min[1]) / h;
       c.setHex(theme.grassHex).lerp(tint.setHex(0xa4ad89), .42);
       const big = Math.sin(x * 0.11 + Math.sin(z * 0.08) * 1.8) * Math.sin(z * 0.12 + Math.cos(x * 0.06) * 1.8);
       if (big > 0.25) c.lerp(tint.setHex(theme.accentHex), Math.min(0.45, (big - 0.25) * 1.1));
@@ -160,34 +203,20 @@ export class FrontierRenderer {
       const distEdge = Math.min(x - slot.min[0], slot.max[0] - x, z - slot.min[1], slot.max[1] - z);
       if (distEdge < 6) {
         const ef = 1 - distEdge / 6;
-        c.lerp(tint.setHex(0xa2b18a), ef * ef * 0.85);
+        sampleInlandGrassColor(x,z,seamTint,tint);
+        c.lerp(seamTint,ef*ef);
       }
 
-      // Gentle cross-path down the center of farmland / jiangnan tiles
-      if (tile.theme === 'farmland' || tile.theme === 'jiangnan') {
-        const dPath = Math.min(Math.abs(u - 0.5) * w, Math.abs(v - 0.5) * h);
-        if (dPath < 1.9 && !(tile.theme === 'jiangnan' && Math.hypot((u - 0.5) * 2.2, (v - 0.5) * 2.2) < 0.72)) {
-          c.lerp(tint.setHex(theme.pathHex), Math.min(1, (1.9 - dPath) / 0.8));
-        }
-      }
-      // Sandy outer shore band for coast theme
-      if (tile.theme === 'coast' && v > 0.55) {
-        c.lerp(tint.setHex(theme.pathHex), Math.min(1, (v - 0.55) / 0.25));
-      }
-      // Muddy pond bottom for jiangnan central lotus basin
-      if (tile.theme === 'jiangnan') {
-        const pondD = Math.hypot((u - 0.5) * 2.2, (v - 0.5) * 2.2);
-        if (pondD < 0.7) c.lerp(tint.setHex(0x6b7c65), Math.min(1, (0.7 - pondD) / 0.25));
-      }
+      const cover=expansionSurfaceWeights(x,z,slot,tile.theme);
+      splats.set([cover.road*(tile.theme==='farmland'?.49:1),cover.sand],i*2);
+      c.lerp(tint.setHex(0x6b7c65),cover.pond);
       colors.set([c.r, c.g, c.b], i * 3);
     }
     geo.setAttribute('color', new T.BufferAttribute(colors, 3));
+    geo.setAttribute('aSplat',new T.BufferAttribute(splats,2));
     geo.computeVertexNormals();
 
-    const mat = this.ctx.mats.toon(0xffffff, {noCache: true});
-    climateMaterial(mat,'terrain');
-    mat.vertexColors = true;
-    mat.needsUpdate = true;
+    const mat=meadowGroundMaterial(this.ctx);
     const mesh = new T.Mesh(geo, mat);
     mesh.name = `ground-exp-${tile.id}`;
     mesh.receiveShadow = true;
@@ -205,7 +234,7 @@ export class FrontierRenderer {
     for (const np of theme.naturalProps) {
       const px = slot.min[0] + w * np.u;
       const pz = slot.min[1] + h * np.v;
-      const py = expansionHeight(px, pz, slot, tile.theme);
+      const py = expansionGroundAt(px, pz, slot, tile.theme);
       const spawned = spawnPackModel(T, np.asset, np.width, {castShadow: np.width > 2.4, outline: false});
       spawned.group.position.set(px, py, pz);
       spawned.group.rotation.y = np.yaw;
@@ -216,6 +245,7 @@ export class FrontierRenderer {
       models.push(spawned);
     }
 
+    this.addFence(tile,slot,group,boxes);
     this.tilesRoot.add(group);
     this.rendered.set(tile.id, {id: tile.id, group, models,boxes});
   }
@@ -343,6 +373,7 @@ export class FrontierRenderer {
 
   dispose() {
     for (const rt of this.rendered.values()) {
+      rt.group.traverse((node:any)=>node.userData.releaseFence?.());
       for (const m of rt.models) m.dispose();
     }
     this.rendered.clear();

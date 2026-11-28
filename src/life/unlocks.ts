@@ -1,3 +1,4 @@
+import {changeShells} from './shell-wallet';
 import {BUILD_CATALOG, BUILD_ITEMS, HOME_PRESETS} from '../home/build-catalog';
 import {ensureHome, type DailyHomeTask, type DailyHomeTaskKind, type LifeData} from './state';
 
@@ -65,7 +66,7 @@ export function isPresetUnlocked(life: LifeData, presetId: string): boolean {
 export function grantStarterHomeFunds(life: LifeData): boolean {
   if (life.records['home-starter-grant']) return false;
   life.records['home-starter-grant'] = 1;
-  life.coins += 40;
+  changeShells(life, 40, 'grant');
   return true;
 }
 
@@ -119,7 +120,7 @@ export function recordHomeAction(life: LifeData, dayKey: string, kind: DailyHome
     t.progress = Math.min(t.target, t.progress + amount);
     if (t.progress >= t.target) {
       t.done = true;
-      life.coins += t.rewardCoins;
+      changeShells(life, t.rewardCoins, 'earn');
       totalXp += t.rewardXp;
       completedTasks.push(t);
     }
@@ -127,7 +128,7 @@ export function recordHomeAction(life: LifeData, dayKey: string, kind: DailyHome
   let allDoneBonus = false;
   if (!home.daily!.claimedBonus && tasks.every(t => t.done)) {
     home.daily!.claimedBonus = true;
-    life.coins += 20;
+    changeShells(life, 20, 'earn');
     totalXp += 30;
     allDoneBonus = true;
   }

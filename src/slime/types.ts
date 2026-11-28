@@ -43,6 +43,7 @@ export interface FrameInput {
   /** True while freely swimming underwater (3D neutral buoyancy). */
   submerged?:boolean;
   /** Moving/tilted support plane (e.g. swinging seat plank) so PBF particles stay flush on top with zero clipping. */
+  deckAttached?:boolean;
   ridePlane?:{point:Vec;normal:Vec}|null;
   battleTargets?:BattleCollider[];
 }

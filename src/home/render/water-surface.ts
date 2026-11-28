@@ -1,3 +1,4 @@
+import {OCEAN_CAUSTICS_GLSL} from './ocean-light';
 import * as THREE from 'three';
 
 /** Water meshes live on their own layer: the main camera draws them, the reflection camera never does. */
@@ -44,6 +45,7 @@ export function bandUniforms(band: WaterBand) {
 /** Uniform objects shared by every water material; HomeRenderPipeline writes them once per frame. */
 export function createWaterShared() {
   return {
+    tCaustics: {value: null as THREE.Texture | null},
     tOpaqueColor: {value: null as THREE.Texture | null},
     tOpaqueDepth: {value: null as THREE.Texture | null},
     tPlanarRefl: {value: null as THREE.Texture | null},
@@ -62,6 +64,7 @@ export function createWaterShared() {
     uSunColor: {value: new THREE.Color(0xfff1d5)},
     uDaylight: {value: 1},
     uStorm: {value: 0},
+    uRain: {value: 0},
     uNear: {value: 0.14},
     uFar: {value: 3200},
     uWaterTime: {value: 0},
@@ -153,6 +156,7 @@ uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform float uDaylight;
 uniform float uStorm;
+uniform float uRain;
 uniform float uNear;
 uniform float uFar;
 uniform float uWaterTime;
@@ -184,7 +188,7 @@ vec3 wSky(vec3 R) {
     vec4 c = texture2D(tCloudPano, wCloudUV(d));
     sky = sky * c.a + c.rgb;
   }
-  sky += vec3(0.010, 0.022, 0.046) * (1.0 - smoothstep(0.02, 0.35, uDaylight));
+  sky += vec3(0.008, 0.018, 0.038) * (1.0 - smoothstep(0.02, 0.35, uDaylight));
   return sky;
 }
 
@@ -280,14 +284,65 @@ vec4 wPlanar(vec3 worldPos, float level, vec2 distort) {
   vec4 p = texture2D(tPlanarRefl, clamp(uv, vec2(0.003), vec2(0.997)));
   return vec4(p.rgb / max(p.a, 1e-3), inUv * p.a);
 }
+
+// Sparse, delicate two-layer raindrop ripples shared by inland water & ocean (zero trypophobia clustering)
+float rainRingLayer(vec2 p, float t, float scale, float seedOff) {
+  vec2 sp = p * scale;
+  vec2 cell = floor(sp);
+  vec2 f = fract(sp) - 0.5;
+  float h = fract(sin(dot(cell, vec2(127.1, 311.7)) + seedOff) * 43758.5453);
+  float cycle = floor(t * 0.62 + h * 7.0);
+  float activeH = fract(sin(dot(cell + cycle * 1.73, vec2(269.5, 183.3)) + seedOff) * 29713.173);
+  if (activeH > 0.34) return 0.0;
+  float life = fract(t * 0.62 + h * 7.0);
+  vec2 o = (vec2(fract(activeH * 17.3), fract(activeH * 31.7)) - 0.5) * 0.44;
+  float r = length(f - o);
+  float rad = life * 0.40;
+  float ring = exp(-pow((r - rad) * 28.0, 2.0)) * smoothstep(0.0, 0.08, life) * pow(1.0 - life, 1.45);
+  return ring;
+}
+
+float rainRings(vec2 p, float t) {
+  vec2 pRot = mat2(0.80, -0.60, 0.60, 0.80) * p;
+  return rainRingLayer(p, t, 0.72, 1.3) + rainRingLayer(pRot + vec2(3.7, 1.9), t * 0.88, 0.52, 9.7) * 0.78;
+}
+
+float rainSplashLayer(vec2 p, float t, float scale, float seedOff) {
+  vec2 sp = p * scale;
+  vec2 cell = floor(sp);
+  vec2 f = fract(sp) - 0.5;
+  float h = fract(sin(dot(cell, vec2(127.1, 311.7)) + seedOff) * 43758.5453);
+  float cycle = floor(t * 0.62 + h * 7.0);
+  float activeH = fract(sin(dot(cell + cycle * 1.73, vec2(269.5, 183.3)) + seedOff) * 29713.173);
+  if (activeH > 0.38) return 0.0;
+  float life = fract(t * 0.62 + h * 7.0);
+  if (life > 0.38) return 0.0;
+  vec2 o = (vec2(fract(activeH * 17.3), fract(activeH * 31.7)) - 0.5) * 0.44;
+  float r = length(f - o);
+  float core = exp(-r * r * 520.0) * (1.0 - smoothstep(0.02, 0.18, life));
+  float crown = exp(-pow((r - life * 0.42) * 34.0, 2.0)) * smoothstep(0.02, 0.08, life) * (1.0 - smoothstep(0.16, 0.38, life));
+  return core * 0.9 + crown * 0.85;
+}
+
+float wRainSplash(vec2 p, float t) {
+  vec2 pRot = mat2(0.80, -0.60, 0.60, 0.80) * p;
+  return rainSplashLayer(p, t, 0.72, 1.3) + rainSplashLayer(pRot + vec2(3.7, 1.9), t * 0.88, 0.52, 9.7) * 0.72;
+}
 `;
 
 const INLAND_VERT = /* glsl */ `
 varying vec3 vWorld;
 varying vec4 vClip;
+#ifdef MAPPED_WATER_BED
+attribute float aBedDepth;
+varying float vBedDepth;
+#endif
 void main() {
   vec4 w = modelMatrix * vec4(position, 1.0);
   vWorld = w.xyz;
+  #ifdef MAPPED_WATER_BED
+  vBedDepth = aBedDepth;
+  #endif
   vClip = projectionMatrix * viewMatrix * w;
   gl_Position = vClip;
 }`;
@@ -295,12 +350,16 @@ void main() {
 const INLAND_FRAG = /* glsl */ `
 precision highp float;
 ${WATER_COMMON_GLSL}
+${OCEAN_CAUSTICS_GLSL}
+#ifdef MAPPED_WATER_BED
+varying float vBedDepth;
+#endif
 uniform vec4 contacts[8];
+uniform vec4 animalContacts[8];
 uniform float uLevel;
 uniform vec2 uFlow;
 uniform float uCalm;
 uniform float uWind;
-uniform float uRain;
 uniform vec3 uAbsorb;
 uniform float uMinRefl;
 uniform float uShoreFoam;
@@ -324,28 +383,6 @@ float puddleRadius(vec2 p) {
   return r;
 }
 
-// Sparse, delicate two-layer raindrop ripples (only ~32% cells active per cycle — zero trypophobia clustering!)
-float rainRingLayer(vec2 p, float t, float scale, float seedOff) {
-  vec2 sp = p * scale;
-  vec2 cell = floor(sp);
-  vec2 f = fract(sp) - 0.5;
-  float h = fract(sin(dot(cell, vec2(127.1, 311.7)) + seedOff) * 43758.5453);
-  float cycle = floor(t * 0.62 + h * 7.0);
-  float activeH = fract(sin(dot(cell + cycle * 1.73, vec2(269.5, 183.3)) + seedOff) * 29713.173);
-  if (activeH > 0.34) return 0.0;
-  float life = fract(t * 0.62 + h * 7.0);
-  vec2 o = (vec2(fract(activeH * 17.3), fract(activeH * 31.7)) - 0.5) * 0.44;
-  float r = length(f - o);
-  float rad = life * 0.34;
-  float ring = exp(-pow((r - rad) * 34.0, 2.0)) * smoothstep(0.0, 0.08, life) * pow(1.0 - life, 1.5);
-  return ring;
-}
-
-float rainRings(vec2 p, float t) {
-  vec2 pRot = mat2(0.80, -0.60, 0.60, 0.80) * p;
-  return rainRingLayer(p, t, 0.72, 1.3) + rainRingLayer(pRot + vec2(3.7, 1.9), t * 0.88, 0.52, 9.7) * 0.72;
-}
-
 void main() {
   vec3 toCam = cameraPosition - vWorld;
   float dist = length(toCam);
@@ -361,14 +398,19 @@ void main() {
     vec2 streakUV = vec2(dot(vWorld.xz, vec2(along.y, -along.x)) * 1.6, dot(vWorld.xz, along) * 0.22 - t * 0.9);
     slope += (texture2D(tFoam, streakUV * 0.09).g - 0.5) * 0.10 * vec2(along.y, -along.x);
   }
+  float crest = 0.0;
   for (int i = 0; i < 8; i++) {
-    float age = t - contacts[i].z;
-    if (age >= 0.0 && age < 1.8) {
-      vec2 dp = vWorld.xz - contacts[i].xy;
-      float r = length(dp);
-      float front = r - 0.21 - age * 1.42;
-      float band = exp(-front * front * 36.0) * exp(-age * 1.8);
-      slope += dp / max(0.015, r) * cos(front * 19.0) * band * contacts[i].w;
+    for (int source = 0; source < 2; source++) {
+      vec4 contact = source == 0 ? contacts[i] : animalContacts[i];
+      float age = t - contact.z;
+      if (age >= 0.0 && age < 1.8) {
+        vec2 dp = vWorld.xz - contact.xy;
+        float r = length(dp);
+        float front = r - 0.21 - age * 1.42;
+        float band = exp(-front * front * 36.0) * exp(-age * 1.8);
+        slope += dp / max(0.015, r) * cos(front * 19.0) * band * contact.w;
+        crest = max(crest, band * contact.w * max(0.0,cos(front * 19.0)));
+      }
     }
   }
   if (uRain > 0.01) {
@@ -381,6 +423,33 @@ void main() {
   }
   slope /= 1.0 + dist * 0.025;
   vec3 N = normalize(vec3(slope.x, 1.0, slope.y));
+  #ifdef MAPPED_WATER_BED
+  if (vBedDepth <= 0.) discard;
+  #endif
+  #ifdef SLOPED_WATER
+  vec3 face=cross(dFdx(vWorld),dFdy(vWorld));
+  N=normalize(normalize(face)*sign(face.y)+vec3(slope.x,0.,slope.y));
+  #endif
+  if (!gl_FrontFacing) {
+    // Broad capillary waves visibly corrugate the critical-angle rim even on a sheltered pond.
+    vec2 rippleSlope=.040*vec2(cos(dot(vWorld.xz,vec2(1.8,.88))+t*1.4),
+                               sin(dot(vWorld.xz,vec2(-.76,2.2))-t*1.1));
+    vec3 interfaceNormal=normalize(N+vec3(rippleSlope.x,0.,rippleSlope.y));
+    float incidence=max(dot(-interfaceNormal,V),0.);
+    vec3 ray = refract(-V, -interfaceNormal, 1.333);
+    float window = smoothstep(.646,.677,incidence);
+    vec2 uv = vClip.xy/vClip.w*.5+.5;
+    vec2 lookup = clamp(uv + (mat3(viewMatrix)*N).xy*.014,.002,.998);
+    float depth = texture2D(tOpaqueDepth,lookup).r;
+    vec3 sky = wSky(length(ray)>.001 ? normalize(ray) : N);
+    if(depth<.999999 && depth>gl_FragCoord.z) sky=texture2D(tOpaqueColor,lookup).rgb;
+    vec3 bounce=reflect(-V,-interfaceNormal);
+    vec4 hit=wTraceSSR((viewMatrix*vec4(vWorld,1.)).xyz,mat3(viewMatrix)*bounce,gl_FragCoord.xy);
+    vec3 reflected=mix(wBand(.9)*(.10+.58*uDaylight),hit.rgb*vec3(.42,.71,.72),hit.a*.75);
+    sky=mix(sky,sky*vec3(.77,.96,.96),.35+.40*(1.-incidence));
+    gl_FragColor=vec4(mix(reflected,sky,window),1.);
+    return;
+  }
   float ndv = max(dot(N, V), 0.001);
 
   // Thickness from the opaque copy, then a refracted bed sample that never pulls in foreground objects.
@@ -388,12 +457,27 @@ void main() {
   float waterZ = wLinearDepth(gl_FragCoord.z);
   float sceneZ = wLinearDepth(texture2D(tOpaqueDepth, suv).x);
   float thick = max(0.0, sceneZ - waterZ);
+  #ifdef MAPPED_WATER_BED
+  // Surveyed beds remain valid when the opaque pass also contains the offshore surface.
+  thick=max(thick, max(0.0,vBedDepth)/clamp(V.y,0.12,1.0));
+  #endif
   float vdepth = thick * clamp(V.y, 0.12, 1.0);
   vec2 ruv = clamp(suv + N.xz * min(0.035, 0.004 + vdepth * 0.02), vec2(0.002), vec2(0.998));
   if (wLinearDepth(texture2D(tOpaqueDepth, ruv).x) < waterZ) ruv = suv;
   vec3 bed = texture2D(tOpaqueColor, ruv).rgb;
+  float bedDepth = texture2D(tOpaqueDepth,ruv).r;
+  if(uWet < 0. && bedDepth < .999999) {
+    vec4 viewHit=uInvProj*vec4(ruv*2.-1.,bedDepth*2.-1.,1.);
+    vec3 receiver=cameraPosition+transpose(mat3(viewMatrix))*(viewHit.xyz/viewHit.w);
+    float immersion=vWorld.y-receiver.y;
+    if(immersion>.005) {
+      float sun=uUseClouds>.5 ? oceanSunTransmission(tCloudPano,receiver,cameraPosition,L) : 1.;
+      vec3 focus=oceanCaustics(receiver,L,vWorld.y,t,uDaylight,uStorm);
+      bed=lightSeabed(bed,focus*mix(.22,1.,sun),immersion,L.y);
+    }
+  }
 
-  float light = 0.20 + 0.80 * uDaylight;
+  float light = 0.085 + 0.915 * uDaylight;
   vec3 trans = exp(-uAbsorb * thick);
   vec3 body = wBand(vdepth) * light * (0.55 + 0.45 * max(L.y, 0.0));
   vec3 refr = bed * trans * mix(vec3(1.0), wBand(0.0) * 1.15, 0.25) + body * (1.0 - trans);
@@ -418,7 +502,11 @@ void main() {
   // Reflection: shared mirror plane when this surface is on it, otherwise SSR, otherwise sky.
   vec3 R = reflect(-V, N);
   vec3 refl = wSky(R);
-  vec4 planar = wPlanar(vWorld, uLevel, N.xz * 0.035);
+  #ifdef SLOPED_WATER
+  vec4 planar=vec4(0.);
+  #else
+  vec4 planar=wPlanar(vWorld,uLevel,N.xz*.035);
+  #endif
   if (planar.a > 0.0) {
     refl = mix(refl, planar.rgb, planar.a);
   } else {
@@ -452,11 +540,15 @@ void main() {
   }
 
   float alpha = uWet >= 0.0 ? cover * smoothstep(0.0, 0.004, thick) : smoothstep(0.0, 0.035, thick);
+  col=mix(col,vec3(.78,.88,.79)*light,min(.34,crest*.68));
   gl_FragColor = vec4(col, alpha);
 }`;
 
 export interface InlandWaterOptions {
   band?: WaterBand;
+  mappedBed?: boolean;
+  sloped?: boolean;
+  animalContacts?: THREE.Vector4[];
   flow?: [number, number];
   /** 0 = wind-blown, 1 = still mirror. */
   calm?: number;
@@ -484,6 +576,9 @@ export function createInlandWaterMaterial(
   });
   return new THREE.ShaderMaterial({
     name: 'InlandWater',
+    side: opts.puddle ? THREE.FrontSide : THREE.DoubleSide,
+    forceSinglePass: true,
+    defines: opts.sloped?{SLOPED_WATER:1}:opts.mappedBed?{MAPPED_WATER_BED:1}:{},
     vertexShader: INLAND_VERT,
     fragmentShader: INLAND_FRAG,
     transparent: true,
@@ -494,6 +589,7 @@ export function createInlandWaterMaterial(
       ...shared,
       ...bandUniforms(opts.band ?? LAKE_BAND),
       contacts: {value: contacts},
+      animalContacts: {value: opts.animalContacts ?? Array.from({length:8},()=>new THREE.Vector4(0,0,-100,0))},
       uLevel: {value: 0},
       uFlow: {value: new THREE.Vector2(flow[0], flow[1])},
       uCalm: {value: opts.calm ?? 0.5},

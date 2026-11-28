@@ -4,7 +4,7 @@ import {SlimeRenderer} from './render';
 import {TrailDecals} from './wet-film';
 import {FaceDirector,Mood} from './face';
 import {Combat,isSelfSkill,skillAimStatus,stopAtMeleeTarget,type CombatTarget,type SwingAreaEvent} from './combat';
-import {elements} from './elements';
+import {DEFAULT_ELEMENT,elements} from './elements';
 import {CLING,stepCling,tryAttach,type ClingState} from './cling';
 import {createWorld,CollisionWorld,FluidVolume,GroundSurface,WorldDefinition} from './world';
 import {UMBRELLA,UmbrellaLogic} from './umbrella';
@@ -35,6 +35,8 @@ export interface SlimeOptions {
 const CANNON = {speed: 28, maxSpeed: 36, gravity: 9.8, aimDistance: 40, fireInterval: 0.35, clearance: 0.03};
 const LAUNCH_CAM = {height: 0.60, shoulder: 0.45, blendSeconds: 0.18};
 const HOME_DASH = {duration: 0.18, speed: 17.5, cooldown: 0.50};
+export const CAMERA_ARM_MIN = 1.2;
+export const CAMERA_ARM_MAX = 26.0;
 
 function createUI(mount?:HTMLElement){
  const ui=document.createElement('div');ui.id='slime-ui';ui.innerHTML=`
@@ -42,7 +44,7 @@ function createUI(mount?:HTMLElement){
  <div class="top-actions"><label class="small-button quality-label"><select id="quality" aria-label="画质"><option value="high">高画质</option><option value="balanced">平衡画质</option></select></label><button class="small-button hidden" id="observe">返回观景</button><button class="small-button" id="reset">重置角色</button></div>
  <div class="metrics"><div class="status" id="status">正在唤醒果冻…</div><div id="metrics"></div></div>
  <section class="intro glass"><div class="eyebrow">A LITTLE JELLY, A QUIET HARBOR</div><h1>在晴雨之间<br>软软地出发。</h1><p>让身体随脚步轻轻晃动，留下一路元素印记。<br>分出一小团自己，再把它们慢慢收回来。</p><button id="play" class="primary"><span>开始游玩</span><span>↗</span></button><small class="note">桌面键鼠体验 · 原生软体模拟 · 六属性切换</small></section>
- <section class="element-panel glass"><div class="element-title"><span>身体里的六种天气</span><span>ELEMENT / 01—06</span></div><div class="elements">${elements.map((e,i)=>`<button class="element ${i===0?'active':''}" data-element="${i}" style="--element:${e.color}" aria-label="切换${e.name}属性" aria-pressed="${i===0}"><b>${e.icon}</b><span>${e.name}</span><kbd>${i+1}</kbd></button>`).join('')}</div><div class="element-description"><b id="element-tag">WATER / 水</b><span id="element-trail">涟漪水痕</span></div></section>
+ <section class="element-panel glass"><div class="element-title"><span>身体里的六种天气</span><span>ELEMENT / 01—06</span></div><div class="elements">${elements.map((e,i)=>`<button class="element ${i===DEFAULT_ELEMENT?'active':''}" data-element="${i}" style="--element:${e.color}" aria-label="切换${e.name}属性" aria-pressed="${i===DEFAULT_ELEMENT}"><b>${e.icon}</b><span>${e.name}</span><kbd>${i+1}</kbd></button>`).join('')}</div><div class="element-description"><b id="element-tag">${elements[DEFAULT_ELEMENT].tag} / ${elements[DEFAULT_ELEMENT].name}</b><span id="element-trail">${elements[DEFAULT_ELEMENT].trail}</span></div></section>
  <div class="hint"><div><kbd>W A S D</kbd> 移动 <kbd>Shift</kbd> 冲刺 <kbd>空格</kbd> 两段跳 / 化伞 <kbd>C</kbd> 摊开</div><div><kbd>G</kbd>/<kbd>右键</kbd> 瞄准 · 左键发射 <kbd>X</kbd> 回收 <kbd>左键</kbd> 连击 <kbd>滚轮</kbd> 视距 <kbd>Esc</kbd> 暂停</div></div><div class="crosshair ue-crosshair"><i></i><i></i><i></i><i></i></div>
  <div class="combo hidden"><span id="shot-count">分身 0 / 5</span><strong id="combo-name">自由漫游</strong><small id="combat-hint">沿码头前行，可在木靶旁试试四段连击</small></div><div class="toast" role="status"></div>`;
  (mount??document.body).appendChild(ui);ui.classList.add('viewing');
@@ -51,7 +53,7 @@ function createUI(mount?:HTMLElement){
 }
 
 export class SlimeCharacter {
- position:Vec=[0,0,0];velocity:Vec=[0,0,0];forward:Vec=[0,0,-1];grounded=true;jumps=0;spread=0;element=0;quality:Quality='high';mode:'observe'|'play'|'paused'='observe';yaw=0;pitch=.23;arm=2.6;currentArm=2.6;keys=new Set<string>();generation=0;swimming=false;submerged=false;
+ position:Vec=[0,0,0];velocity:Vec=[0,0,0];forward:Vec=[0,0,-1];grounded=true;jumps=0;spread=0;element=DEFAULT_ELEMENT;quality:Quality='high';mode:'observe'|'play'|'paused'='observe';yaw=0;pitch=.23;arm=2.6;currentArm=2.6;keys=new Set<string>();generation=0;swimming=false;submerged=false;
  /** Optional CPU ocean wave sampler injected by Home scene for wave-synced buoyancy & rocking. */
  oceanWaveSampler:((x:number,z:number,time:number)=>{height:number;normal:Vec;velocityY:number;seaLevel:number}|null)|null=null;
  private surfaceJumpLock=0;private waterNormal:Vec|null=null;private smoothedWaterNormal:Vec=[0,1,0];private waterWaveVelY=0;
@@ -116,10 +118,31 @@ export class SlimeCharacter {
 
  get umbrellaOpen(){return this.umbrella.open}
 
+ private onDeck=false;
+ attachDeck(point:Vec,normal:Vec){
+  this.onDeck=true;
+  this.homeDashTimer=0;
+  this.position=point;
+  this.ridePlane={point,normal};
+ }
+ releaseDeck(){
+  if(this.onDeck)this.ridePlane=null;
+  this.onDeck=false;
+ }
  surfaceOffset():Vec{
   const fa=this.frameAnchor;let o:Vec=[0,0,0];
-  if(fa){o=[this.position[0]-fa[0],this.position[1]-fa[1],this.position[2]-fa[2]];const l=Math.hypot(...o);if(l>.6)o=o.map(v=>v*.6/l) as Vec;}
+  if(fa){o=[this.position[0]-fa[0],this.position[1]-fa[1],this.position[2]-fa[2]];const l=Math.hypot(...o);if(!this.onDeck&&l>.6)o=o.map(v=>v*.6/l) as Vec;}
   return o;
+ }
+ fishingCastPose(seconds:number){
+  if(seconds<0||seconds>=.50)return;
+  if(seconds<.18)this.impact=Math.max(this.impact,.44*Math.sin(seconds/.18*Math.PI*.5));
+  else this.jumpStretch=Math.max(this.jumpStretch,.62*Math.sin((seconds-.18)/.32*Math.PI));
+ }
+ private gardenWalk:[number,number]|null=null;
+ setGardenWalk(direction:[number,number]|null){this.gardenWalk=direction;}
+ plantingPose(phase:number){
+  this.impact=Math.max(this.impact,.68*Math.sin(Math.PI*clamp(phase,0,1)));
  }
  dodgePose(phase:number){
   if(phase<.14||phase>.82)this.impact=Math.max(this.impact,.35);
@@ -252,6 +275,13 @@ export class SlimeCharacter {
 
  private bind(){
   this.on(window,'keydown',e=>{
+   if((e.code==='AltLeft'||e.code==='AltRight')&&this.mode==='play'&&!e.getModifierState('AltGraph')){
+    e.preventDefault();
+    this.altKeys.add(e.code);
+    this.restoreMouseLook=true;
+    this.setMenuPointer('alt',true);
+    return;
+   }
    if(e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable="true"]'))return;
    if(e.repeat&&['Space','KeyT'].includes(e.code))return;
    if(/^Digit[1-6]$/.test(e.code)){this.setElement(Number(e.code.slice(-1))-1);return}
@@ -268,13 +298,30 @@ export class SlimeCharacter {
    if(e.code==='Escape')this.pause();
   });
   this.on(window,'keyup',e=>{
+   if(this.altKeys.delete(e.code)){
+    e.preventDefault();
+    if(!this.altKeys.size)this.setMenuPointer('alt',false);
+    return;
+   }
    this.keys.delete(e.code);
    if(e.code==='Space')this.jumpHeld=false;
   });
   this.on(window,'blur',()=>{if(this.mode==='play')this.pause()});
   this.on(document,'visibilitychange',()=>{if(document.hidden&&this.mode==='play')this.pause()});
-  this.on(document,'pointerlockchange',()=>{if(!document.pointerLockElement&&this.mode==='play')this.pause()});
-  this.on(document,'mousemove',e=>{if(this.mode==='play'&&(document.pointerLockElement||this.dragging)){this.yaw-=e.movementX*.0024;this.pitch=clamp(this.pitch+e.movementY*.0022,-.32,1.18)}});
+  this.on(document,'pointerlockchange',()=>{
+   const locked=document.pointerLockElement===this.ctx.renderer.domElement;
+   const lost=this.hadPointerLock&&!locked;
+   this.hadPointerLock=locked;
+   if(locked){
+    if(this.pointerMenus.size || this.mode!=='play')this.releaseForControls();
+    return;
+   }
+   const intentional=this.unlockPending || this.pointerMenus.size>0;
+   this.unlockPending=false;
+   this.restoreAfterMenus();
+   if(lost&&!intentional&&this.mode==='play')this.pause();
+  });
+  this.on(document,'mousemove',e=>{if(this.mode==='play'&&!this.pointerMenus.size&&(document.pointerLockElement===this.ctx.renderer.domElement||this.dragging)){this.yaw-=e.movementX*.0024;this.pitch=clamp(this.pitch+e.movementY*.0022,-.32,1.18)}});
   // Mouse events also report a second button pressed while the first is held.
   if(this.options.onDodgePress){
    this.on(this.ctx.renderer.domElement,'mousedown',e=>{
@@ -285,11 +332,9 @@ export class SlimeCharacter {
    this.on(window,'mouseup',e=>{if(e.button===1)this.dragging=false;});
   }
   this.on(this.ctx.renderer.domElement,'pointerdown',e=>{
-   if(this.mode!=='play')return;
+   if(this.mode!=='play'||this.pointerMenus.size)return;
    if(e.button===0){
-    if(!document.pointerLockElement&&!this.dragging){
-     try{const p=this.ctx.renderer.domElement.requestPointerLock?.();p?.catch?.(()=>{});}catch{}
-    }
+    if(!this.dragging&&e.pointerType!=='touch')this.requestMouseLook();
     if(this.aiming)this.fire();
     else this.attack();
    }
@@ -312,7 +357,7 @@ export class SlimeCharacter {
    if(t&&t.closest('input, textarea, select, [contenteditable="true"]'))return;
    e.preventDefault();
   });
-  this.on(this.ctx.renderer.domElement,'wheel',e=>{if(this.mode==='play'){e.preventDefault();this.arm=clamp(this.arm+Math.sign(e.deltaY)*.4,1.2,5.2)}});
+  this.on(this.ctx.renderer.domElement,'wheel',e=>{if(this.mode==='play'){e.preventDefault();const step=Math.max(.4,this.arm*.14);this.arm=clamp(this.arm+Math.sign(e.deltaY)*step,CAMERA_ARM_MIN,CAMERA_ARM_MAX)}});
   this.$('#play').onclick=()=>this.play();this.$('#observe').onclick=()=>this.observe();this.$('#reset').onclick=()=>this.reset();
   this.$('#quality').onchange=e=>{this.quality=(e.target as HTMLSelectElement).value as Quality;this.toast(this.quality==='high'?'高画质 · 60 Hz 模拟 / 精细表面':'平衡画质 · 保留完整玩法 / 降低表面刷新')};
   this.ui.querySelectorAll<HTMLElement>('[data-element]').forEach(b=>b.onclick=()=>this.setElement(Number(b.dataset.element)));
@@ -350,22 +395,54 @@ export class SlimeCharacter {
   return true;
  }
 
+ private altKeys=new Set<string>();
+ private pointerMenus=new Set<'alt'|'voyage'|'quickMenu'|'angling'|'orchard'>();
+ private hadPointerLock=false;
+ private restoreMouseLook=false;
+ private requestMouseLook(){
+  if(this.mode!=='play'||this.pointerMenus.size)return;
+  if(this.unlockPending){this.restoreMouseLook=true;return;}
+  if(document.pointerLockElement)return;
+  try{this.ctx.renderer.domElement.requestPointerLock?.()?.catch?.(()=>{});}catch{}
+ }
+ private unlockPending=false;
+ private releaseForControls(){
+  if(document.pointerLockElement===this.ctx.renderer.domElement&&!this.unlockPending){
+   if(this.pointerMenus.size&&this.mode==='play')this.restoreMouseLook=true;
+   this.unlockPending=true;
+   document.exitPointerLock();
+  }
+ }
+ setMenuPointer(menu:'alt'|'voyage'|'quickMenu'|'angling'|'orchard',open:boolean){
+  if(open){
+   this.pointerMenus.add(menu);
+   this.releaseForControls();
+  }else if(this.pointerMenus.delete(menu)){
+   this.restoreAfterMenus();
+  }
+ }
+ private restoreAfterMenus(){
+  if(!this.restoreMouseLook||this.unlockPending||this.pointerMenus.size)return;
+  this.restoreMouseLook=false;
+  // A menu action can open a pause panel during the same click.
+  queueMicrotask(()=>this.requestMouseLook());
+ }
  play(){
   if(!this.ready){this.toast('身体正在生成，请稍候');return}
   if(this.mode==='observe'){this.cameraHeight.reset();this.saved={position:this.ctx.camera.position.clone(),target:this.ctx.controls.target.clone(),fov:this.ctx.camera.fov,near:this.ctx.camera.near};this.yaw=0;this.pitch=.23;this.currentArm=this.arm;this.camPos.set(this.position[0],this.position[1]+1.1,this.position[2]+this.arm)}
   this.mode='play';this.ctx.controls.enabled=false;this.ctx.camera.fov=60;this.ctx.camera.near=.04;this.ctx.camera.updateProjectionMatrix();
   this.ui.classList.remove('viewing');this.ui.classList.add('playing');this.$('#observe').classList.remove('hidden');this.$('.combo').classList.remove('hidden');
-  try{const promise=this.ctx.renderer.domElement.requestPointerLock?.();promise?.catch?.(()=>{});}catch{}
+  this.requestMouseLook();
   this.$('#status').textContent='正在漫游 · 六属性 decal';
  }
  pause(){
-  this.mode='paused';this.keys.clear();this.jumpRequest=false;this.jumpBuffer=0;this.jumpHeld=false;this.aiming=false;this.aimReady=false;this.rightAimHeld=false;this.dragging=false;
+  this.mode='paused';this.altKeys.clear();this.setMenuPointer('alt',false);this.keys.clear();this.jumpRequest=false;this.jumpBuffer=0;this.jumpHeld=false;this.aiming=false;this.aimReady=false;this.rightAimHeld=false;this.dragging=false;
   this.ui.classList.remove('playing');this.$('#play span').textContent='继续游玩';this.$('.eyebrow').textContent='TAKE A LITTLE BREATH';this.$('.intro h1').innerHTML='暂停一下，<br>港口一直都在。';this.$('.intro p').innerHTML='点击继续，重新接管这一小团果冻。<br>也可以返回观景，自由欣赏凝露港。';
-  if(document.pointerLockElement)document.exitPointerLock();this.$('#status').textContent='操控已暂停';
+  this.releaseForControls();this.$('#status').textContent='操控已暂停';
  }
  observe(){
-  this.mode='observe';this.keys.clear();this.jumpRequest=false;this.jumpBuffer=0;this.jumpHeld=false;this.aiming=false;this.aimReady=false;this.rightAimHeld=false;this.dragging=false;
-  if(document.pointerLockElement)document.exitPointerLock();
+  this.mode='observe';this.altKeys.clear();this.setMenuPointer('alt',false);this.keys.clear();this.jumpRequest=false;this.jumpBuffer=0;this.jumpHeld=false;this.aiming=false;this.aimReady=false;this.rightAimHeld=false;this.dragging=false;
+  this.releaseForControls();
   this.ctx.camera.position.copy(this.saved.position);this.ctx.camera.fov=this.saved.fov;this.ctx.camera.near=this.saved.near;this.ctx.camera.updateProjectionMatrix();this.ctx.controls.target.copy(this.saved.target);this.ctx.controls.enabled=true;this.ctx.controls.update();
   this.ui.classList.remove('playing');this.ui.classList.add('viewing');this.$('#observe').classList.add('hidden');this.$('.combo').classList.add('hidden');this.$('#play span').textContent='开始游玩';this.$('.intro h1').innerHTML='在晴雨之间<br>软软地出发。';this.$('.eyebrow').textContent='A LITTLE JELLY, A QUIET HARBOR';this.$('.intro p').innerHTML='让身体随脚步轻轻晃动，留下一路元素印记。<br>分出一小团自己，再把它们慢慢收回来。';this.$('#status').textContent='自由观景 · 点击开始游玩';
  }
@@ -569,15 +646,24 @@ export class SlimeCharacter {
   }
   this.spread=clamp(this.spread+(this.keys.has('KeyC')&&this.grounded&&!this.swimming&&!this.submerged?dt/.42:-dt/.58),0,1);
   let x=(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),z=(this.keys.has('KeyW')?1:0)-(this.keys.has('KeyS')?1:0);
+  const fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw),rightX=Math.cos(this.yaw),rightZ=-Math.sin(this.yaw);
+  if(this.options.homeDash){
+   x ||= Number(this.keys.has('ArrowRight'))-Number(this.keys.has('ArrowLeft'));
+   z ||= Number(this.keys.has('ArrowUp'))-Number(this.keys.has('ArrowDown'));
+   if(!x&&!z&&this.gardenWalk){
+    x=this.gardenWalk[0]*rightX+this.gardenWalk[1]*rightZ;
+    z=this.gardenWalk[0]*fx+this.gardenWalk[1]*fz;
+   }
+  }
   if(this.inputLock){x=0;z=0;this.jumpRequest=false;this.jumpBuffer=0}
   const norm=Math.hypot(x,z);if(norm){x/=norm;z/=norm}
-  const fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw),rightX=Math.cos(this.yaw),rightZ=-Math.sin(this.yaw);
   // While locked onto a moving seat (e.g. park swing), hold position cleanly until jump or park.ts dismounts on WASD!
   if(this.ridePlane){
    if(this.jumpRequest||this.jumpBuffer>0){
     this.ridePlane=null;
    }else{
-    this.velocity=[0,0,0];this.grounded=true;this.jumps=0;this.coyoteTimer=.12;this.umbrella.cancel();
+    if(!this.onDeck)this.velocity=[0,0,0];
+    this.grounded=true;this.jumps=0;this.coyoteTimer=.12;this.umbrella.cancel();
     return this.combat.update(dt,this.position,time,(target,damage,el,reaction)=>this.hit(target,damage,el,reaction)).pose;
    }
   }
@@ -777,7 +863,7 @@ export class SlimeCharacter {
   this.aimBlend=this.aiming?Math.min(1,this.aimBlend+rate*dt):Math.max(0,this.aimBlend-rate*dt);
   const eased=smooth(this.aimBlend);
   const right=new this.T.Vector3(Math.cos(this.yaw),0,-Math.sin(this.yaw));
-  const baseHeight=mix(.24,.36,clamp((this.arm-1.2)/4,0,1));
+  const baseHeight=mix(.24,.36,clamp((this.arm-1.2)/4,0,1))+mix(0,.22,clamp((this.arm-5.2)/20.8,0,1));
   const [x,foot,z]=this.position;
   // Descending a tread can briefly leave the capsule airborne until it finds the next tread.
   const floor=this.grounded?foot:this.world.support(x,z,foot);
@@ -802,7 +888,7 @@ export class SlimeCharacter {
   const desired=pivot.clone().addScaledVector(offset,this.arm);
   const collision=this.world.cast(pivot.toArray(),desired.toArray(),.12,true);
   const wanted=collision?Math.max(.01,this.arm*collision.t-.10):this.arm;
-  this.currentArm=wanted<this.currentArm?wanted:mix(this.currentArm,wanted,1-Math.exp(-dt*5.5));
+  this.currentArm=wanted<this.currentArm?wanted:mix(this.currentArm,wanted,1-Math.exp(-dt*7.0));
   this.camPos.copy(pivot).addScaledVector(offset,this.currentArm);
   this.ctx.camera.position.copy(this.camPos);
   if(this.shake>0){
@@ -891,6 +977,7 @@ export class SlimeCharacter {
     battleTargets:this.options.battleTargets?this.battleColliders():undefined,
     generation:this.generation,shapeBlend:this.shapeBlend,jumpStretch:this.jumpStretch,airBounce:this.airBounce,glideAmount:this.umbrella.openAmount,
     waterNormal:this.waterNormal?[...this.waterNormal]:null,waterWaveVelY:this.waterWaveVelY,submerged:this.submerged,
+    deckAttached:this.onDeck,
     ridePlane:this.ridePlane?{point:[...this.ridePlane.point],normal:[...this.ridePlane.normal]}:null,
    };
    this.sentLaunches=input.commands.filter(c=>c.type==='launch').length;

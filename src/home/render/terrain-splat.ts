@@ -5,8 +5,8 @@ export interface TerrainSplatTextures {
   flagstoneNormal: THREE.CanvasTexture;
   turfAlbedo: THREE.CanvasTexture;
   turfNormal: THREE.CanvasTexture;
-  sandAlbedo: THREE.CanvasTexture;
-  sandNormal: THREE.CanvasTexture;
+  sandAlbedo: THREE.Texture;
+  sandNormal: THREE.Texture;
 }
 
 let cachedTextures: TerrainSplatTextures | null = null;
@@ -206,45 +206,14 @@ export function getTerrainSplatTextures(): TerrainSplatTextures | null {
   turfAlbedo.anisotropy = 8;
   const turfNormal = buildNormalTexture(turfH, size, 1.8);
 
-  // --- 3. Warm Speckled Coastal Beach Sand with Ripples ---
-  const sandCanvas = document.createElement('canvas');
-  sandCanvas.width = sandCanvas.height = size;
-  const sg = sandCanvas.getContext('2d')!;
-  const sImg = sg.createImageData(size, size);
-  const sandH = new Float32Array(size * size);
-
-  for (let j = 0; j < size; j++) {
-    const v = j / size;
-    for (let i = 0; i < size; i++) {
-      const u = i / size;
-      const ripple = 0.5 + 0.5 * Math.sin((u * 6 + v * 3) * Math.PI * 2 + tileNoise(u, v, 8, 101) * 2.2);
-      const pebble = tileNoise(u, v, 28, 173);
-      const grain = tileNoise(u, v, 64, 227);
-      const h = 0.35 * ripple + 0.35 * pebble + 0.30 * grain;
-      sandH[i + j * size] = h;
-
-      const shade = 0.90 + 0.16 * h;
-      let r = Math.min(255, Math.round(238 * shade));
-      let gCol = Math.min(255, Math.round(224 * shade));
-      let b = Math.min(255, Math.round(186 * shade));
-      // Subtle mineral & shell speckles in sand (like Pine & Parcel beach!)
-      const speck = hash2(i, j, 307);
-      if (speck > 0.96) { r -= 32; gCol -= 34; b -= 30; }
-      else if (speck < 0.025) { r = Math.min(255, r + 18); gCol = Math.min(255, gCol + 16); b = Math.min(255, b + 14); }
-
-      const p = (i + j * size) * 4;
-      sImg.data[p] = r;
-      sImg.data[p + 1] = gCol;
-      sImg.data[p + 2] = b;
-      sImg.data[p + 3] = 255;
-    }
-  }
-  sg.putImageData(sImg, 0, 0);
-  const sandAlbedo = new THREE.CanvasTexture(sandCanvas);
+  const loader = new THREE.TextureLoader();
+  const sandAlbedo = loader.load(new URL('ocean/sand-color.jpg', document.baseURI).href);
+  const sandNormal = loader.load(new URL('ocean/sand-normal.jpg', document.baseURI).href);
   sandAlbedo.colorSpace = THREE.SRGBColorSpace;
-  sandAlbedo.wrapS = sandAlbedo.wrapT = THREE.RepeatWrapping;
-  sandAlbedo.anisotropy = 8;
-  const sandNormal = buildNormalTexture(sandH, size, 1.45);
+  for (const texture of [sandAlbedo, sandNormal]) {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 8;
+  }
 
   cachedTextures = {
     flagstoneAlbedo,

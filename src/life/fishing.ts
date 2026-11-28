@@ -1,3 +1,5 @@
+import {changeShells} from './shell-wallet';
+import {extraFish, lures, speciesById} from './fish-species';
 import {addItem, ensureHome, record, type LifeData} from './state';
 import {hasBuff} from './cooking';
 import {isMuseumHallRestored} from './museum';
@@ -8,7 +10,7 @@ import {isMuseumHallRestored} from './museum';
  * 5 fish swimming AI behaviors, rod/bobber upgrades, and in-reel underwater Treasure Chests!
  * Preserves 100% backward compatibility with classic tension-mode tests.
  */
-export type FishSpot = 'lake' | 'harbor' | 'canal' | 'waterfall';
+export type FishSpot = 'lake' | 'harbor' | 'canal' | 'waterfall' | 'reef' | 'offshore';
 export type FishBehavior = 'smooth' | 'sinker' | 'floater' | 'dart' | 'legend';
 
 export interface FishRow {
@@ -59,12 +61,26 @@ export const FISH_TABLE: FishRow[] = [
   {fish: 'fish-summer-marlin', spots: ['harbor'], weight: 2, size: [110, 195], fight: .92, behavior: 'legend', seasons: [1], rare: true, legendary: true},
   {fish: 'fish-autumn-sturgeon', spots: ['lake'], weight: 2, size: [95, 170], fight: .90, behavior: 'legend', seasons: [2], rare: true, legendary: true},
   {fish: 'fish-winter-icefish', spots: ['waterfall', 'lake'], weight: 2, size: [55, 92], fight: .88, behavior: 'legend', seasons: [3], rare: true, legendary: true},
+  ...extraFish.map((s):FishRow=>({fish:s.id,spots:[s.water],weight:s.rarity==='mythic'?1:s.rarity==='rare'?5:12,
+    size:[s.min,s.max],fight:Math.min(.94,.27+s.max/340), rare:s.rarity==='rare'||s.rarity==='mythic',
+    behavior:s.shape==='cat'||s.shape==='flounder'?'sinker':s.shape==='ribbon'?'floater':'dart'})),
 ];
 
+export function trophySize(id:string) {
+  const row=FISH_TABLE.find(r=>r.fish===id);
+  return speciesById.get(id)?.trophy ?? (row ? Math.ceil(row.size[1]-(row.size[1]-row.size[0])*.13) : Infinity);
+}
+export function lifetimeCatches(life:LifeData) {
+  return FISH_TABLE.reduce((sum,r)=>sum+(life.dex[r.fish]?.n??0),0);
+}
+export function equippedLure(life:LifeData) {
+  const index=ensureHome(life).fishing?.lure??0;
+  return lures[index]?.count<=lifetimeCatches(life)?index:0;
+}
 export const ROD_TIERS = [
   {tier: 1, name: '江南青竹竿', price: 0, barBonus: 0, treasureChance: 0.22, desc: '轻便好上手的基础钓竿。'},
-  {tier: 2, name: '碳素元素竿', price: 65, barBonus: 0.06, treasureChance: 0.34, desc: '捕鱼绿框加宽，拉扯鱼王更稳，宝箱出现率显著提高！'},
-  {tier: 3, name: '沧溟星轨竿', price: 145, barBonus: 0.12, treasureChance: 0.48, desc: '大师级神竿，绿框宽广且极易钓出传说鱼王与历史沉船宝箱！'},
+  {tier: 2, name: '碳素元素竿', price: 65, barBonus: 0.06, treasureChance: 0.34, desc: '收线更快，发现宝箱的几率提高。'},
+  {tier: 3, name: '沧溟星轨竿', price: 145, barBonus: 0.12, treasureChance: 0.48, desc: '收线最快，有更大机会发现沉船宝箱。'},
 ] as const;
 
 export const TREASURE_LOOT_TABLE = [
@@ -83,6 +99,7 @@ export const TREASURE_LOOT_TABLE = [
 const inHours = (h: number, [a, b]: [number, number]) => a <= b ? h >= a && h < b : h >= a || h < b;
 
 export interface FishEnv {
+  lure?:number;
   hour: number;
   raining: boolean;
   historyDay: boolean;
@@ -100,7 +117,11 @@ export function pickFish(spot: FishSpot, env: FishEnv, bait: string | null, rand
     (!r.history || env.historyDay),
   );
   const w = (r: FishRow) => {
-    let mul = 1;
+    const phases=speciesById.get(r.fish)?.phases;
+    const phase=env.hour<5 || env.hour>=20?'starlight':env.hour<9?'dawn':env.hour<16?'midday':'golden';
+    let mul = phases && !phases.includes(phase) ? .28 : 1;
+    if(env.raining && speciesById.get(r.fish)?.rainBonus) mul *= 1.45;
+    if(r.rare) mul *= lures[env.lure??0]?.rare??1;
     if (r.rare && bait === 'bait-glow') mul *= 3;
     if (r.rare && bait === 'bait-element') mul *= 2.2;
     if (r.history && bait === 'bait-chronicle') mul *= 5;
@@ -118,7 +139,7 @@ export const GREEN: [number, number] = [.25, .8];
 
 export interface FishingSessionOptions {
   /** 'classic' preserves original tension needle physics (default for legacy tests); 'stardew' enables dynamic chasing bar + AI + treasure! */
-  mode?: 'classic' | 'stardew';
+  mode?: 'classic' | 'stardew' | 'angling';
   rodTier?: number;
   barBonus?: number;
   treasureChance?: number;
@@ -141,7 +162,7 @@ export class FishingSession {
   progress = 0;
   readonly catch: {fish: string; size: number};
   readonly behavior: FishBehavior;
-  readonly mode: 'classic' | 'stardew';
+  readonly mode: 'classic' | 'stardew' | 'angling';
 
   // Stardew chasing-bar state (0..1 vertical/horizontal track)
   fishPos = 0.45;
@@ -151,6 +172,16 @@ export class FishingSession {
   barSize = 0.28;
   treasure: FishingTreasure | null = null;
 
+  private settled=false;
+  private attraction=1;
+  readonly starlight:boolean;
+  settle(life:LifeData) {
+    if(this.settled || this.phase!=='caught') return false;
+    this.settled=true;
+    landCatch(life,this.catch,this.claimedTreasureId());
+    if(this.starlight) life.dex[this.catch.fish].starlight=true;
+    return true;
+  }
   private fight: number;
   private surge = 0;
   private aiTimer = 0.5;
@@ -165,6 +196,8 @@ export class FishingSession {
   ) {
     this.mode = opts.mode ?? 'classic';
     this.catch = pickFish(spot, env, bait, rand);
+    this.starlight=this.mode==='angling' && rand()<.025;
+    this.attraction=lures[env.lure??0]?.attraction??1;
     const row = FISH_TABLE.find(r => r.fish === this.catch.fish)!;
     this.fight = row.fight;
     this.behavior = row.behavior ?? 'smooth';
@@ -173,7 +206,7 @@ export class FishingSession {
     this.barSize = Math.min(0.48, 0.28 + rod.barBonus + (opts.barBonus ?? 0) + (bait === 'bait-element' ? 0.04 : 0));
 
     // Roll underwater treasure chest in stardew mode
-    if (this.mode === 'stardew') {
+    if (this.mode !== 'classic') {
       const chance = (opts.treasureChance ?? rod.treasureChance) + (bait === 'bait-element' || bait === 'bait-chronicle' ? 0.16 : 0);
       if (rand() < chance) {
         const rewardId = TREASURE_LOOT_TABLE[Math.floor(rand() * TREASURE_LOOT_TABLE.length)];
@@ -188,7 +221,7 @@ export class FishingSession {
     }
   }
 
-  private toWait() { this.phase = 'wait'; this.timer = 1.8 + this.rand() * 5.2; }
+  private toWait() { this.phase = 'wait'; this.timer = (1.8 + this.rand() * 5.2)/this.attraction; }
 
   hook() {
     if (this.phase !== 'bite') return false;
@@ -201,7 +234,7 @@ export class FishingSession {
     return true;
   }
 
-  update(dt: number, reeling: boolean) {
+  update(dt: number, reeling: boolean, lean=0) {
     if (this.phase === 'caught' || this.phase === 'escaped') return;
     if (this.phase !== 'reel') {
       this.timer -= dt; if (this.timer > 0) return;
@@ -211,6 +244,22 @@ export class FishingSession {
       return;
     }
 
+    if(this.mode==='angling') {
+      this.aiTimer-=dt;
+      if(this.aiTimer<=0){this.fishTarget=this.rand();this.aiTimer=.65+this.rand()*1.35;}
+      this.fishPos+=(this.fishTarget-this.fishPos)*(1-Math.exp(-dt*3));
+      const run=(this.fishPos-.5)*2, counter=Math.max(0,-run*lean);
+      this.tension=Math.max(0,this.tension+dt*((reeling?.39:-.46)+Math.abs(run)*this.fight*.35-counter*.23));
+      if(this.tension>=1){this.phase='escaped';return;}
+      if(reeling && this.tension>.14) this.progress+=dt*(.17+this.barSize*.18+counter*.10);
+      else if(this.tension<.12) this.progress-=dt*.12;
+      if(this.progress<-.25){this.phase='escaped';return;}
+      if(this.treasure && !this.treasure.claimed && this.tension>.26 && this.tension<.72){
+        this.treasure.progress+=dt*.28;if(this.treasure.progress>=1)this.treasure.claimed=true;
+      }
+      if(this.progress>=1)this.phase='caught';
+      return;
+    }
     if (this.mode === 'stardew') {
       this.stepStardewReel(dt, reeling);
       return;
@@ -301,7 +350,7 @@ export function upgradeFishingRod(life: LifeData): {ok: boolean; tier: number; r
   const next = ROD_TIERS.find(r => r.tier === f.rodTier + 1);
   if (!next) return {ok: false, tier: f.rodTier, reason: '已拥有最高级钓竿'};
   if (life.coins < next.price) return {ok: false, tier: f.rodTier, reason: `贝壳不足（升级「${next.name}」需要 ${next.price} 🐚）`};
-  life.coins -= next.price;
+  changeShells(life, -(next.price), 'spend');
   f.rodTier = next.tier;
   return {ok: true, tier: f.rodTier};
 }

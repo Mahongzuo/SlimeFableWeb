@@ -3,7 +3,13 @@ import {seasonNames,weatherNames,weatherMode} from '../home/climate';
 import {SlimeCharacter} from '../slime/character';
 import type {SwingAreaEvent} from '../slime/combat';
 import type {FluidVolume,GroundSurface} from '../slime/world';
-import {Vec} from '../slime/types';
+import {type Box,Vec} from '../slime/types';
+import {houseLot} from '../home/ninglu-layout';
+import {Homestead,HOUSE} from '../home/homestead';
+import {BiomePreserves} from '../home/biome-preserves';
+import {CompanionPanel} from '../ui/companion-panel';
+import {advanceRescue} from '../life/companion-care';
+import {HomeOrchard} from '../home/orchard';
 import {buildHomeWorld} from '../world/home-world';
 import {inland, WORLD} from '../world/map';
 import {buildCoastalCollisionSurfaces, buildOceanFluidVolumes} from '../world/island-coast';
@@ -49,6 +55,14 @@ export class Game {
   private zones!: BuiltZones; private graphics!: Graphics; private life: LifeUI; private buildUI!: BuildUI; readonly builder!: HomeBuilder; readonly farmRegistry!: FarmRegistry;
   private focus: {kind: 'portal'; portal: TimePortal} | {kind: 'lectern'} | {kind: 'spot'; spot: Interactable} | null = null;
   private nativeFluids:FluidVolume[];
+  readonly cottage:Homestead;
+  readonly preserves:BiomePreserves;
+  readonly companions:CompanionPanel;
+  private guideFromCompanions=false;
+  private careAt=0;
+  private carePlayed=0;
+  private lastPlayable=false;
+  private lastCareSave=0;
   private currentExpansions: ExpandedTile[] = [];
   private coastalSurfaces: GroundSurface[] = [];
   private oceanBuoyancy = true;
@@ -57,6 +71,9 @@ export class Game {
   private pondLife:SimPondEcosystem;
   private waterImpact=0;
   private shardLayoutDirty=false;
+  readonly orchard: HomeOrchard;
+  private builderBoxes: Box[] = [];
+  private orchardBoxes: Box[] = [];
   private hudTimer = 0; private doorLatch = new Set<number>(); private T: any;
 
   constructor(private app: any) {
@@ -69,10 +86,18 @@ export class Game {
       setTime:minute=>{climate.setTime(minute);this.save.data.homeClockMinute=climate.minute;this.save.write();},
       weather: mode => {climate.mode=mode; this.save.data.homeWeather=mode;this.save.write();},
       getWeather: () => climate.mode,
-      start: () => this.start(), resume: () => this.resume(), pause: () => this.pauseGame(), openBook: () => this.openBook(), openGuide: () => this.openGuide(), closePanel: () => this.closePanel(true),
+      start: () => this.start(), resume: () => this.resume(), pause: () => this.pauseGame(), openBook: () => this.openBook(), openGuide: () => this.openGuide(), openDex: () => this.toggleDex(), closePanel: () => this.closePanel(true),
       showDay: id => this.showDay(id), showToday: () => this.showDay(null), respawn: () => this.respawn(), quality: q => { this.graphics.set(q); this.save.data.quality = q; this.save.write(); },
       toTitle: () => this.toTitle(), go: id => this.go(id),
       toggleBuild: () => this.toggleBuildMode(),
+      openOrchard: () => {
+        if (this.orchardPlaying()) {
+          this.orchard.update(0, true);
+          this.orchard.open();
+        }
+      },
+      interact: () => this.useFocusedSpot(),
+      onQuickMenuChange: open => this.slime.setMenuPointer('quickMenu', open),
     });
     ctx.camera.position.fromArray(TITLE_CAM.pos); ctx.controls.target.fromArray(TITLE_CAM.target); ctx.controls.update();
     // plaza pieces exist before the bake so their meshes become part of the height field
@@ -100,6 +125,10 @@ export class Game {
       dayKey: () => localDayKey(),
     }), world = home.world;
     this.zones = home.zones;
+    this.cottage=new Homestead(ctx,this.save.data.life);
+    world.boxes.push(...this.cottage.boxes);
+    home.footprints.push({id:'native-personal-cottage',itemId:'build-huizhou',x:HOUSE.x,y:HOUSE.y,z:HOUSE.z-.12*HOUSE.scale,yaw:0,scale:1,nativeFootprint:houseLot});
+    this.preserves=new BiomePreserves(ctx,this.save.data.life,()=>this.save.write(),s=>this.ui.toast(s,3500));
     // Keep only inland river/lake fluids as base; outer ocean fluids are dynamically composed with expansions & diving
     this.nativeFluids=(world.fluids??[]).filter(f=>f.min[0]>=WORLD.min[0]-1&&f.max[0]<=WORLD.max[0]+1&&f.min[1]>=WORLD.min[1]-1&&f.max[1]<=WORLD.max[1]+1);
     this.fx = new SeaFX(ctx);
@@ -123,15 +152,33 @@ export class Game {
       onLand: (speed, swimming) => { if (swimming && speed > 1.2) this.waterImpact=speed; },
       onElementAttack: ev => this.handleElementAttack(ev),
     }).attach();
+    ctx.pipeline.waterBed=(x:number,z:number)=>this.slime.world.terrain(x,z)??inland(x,z);
     this.slime.arm=4.8;
     this.slime.oceanWaveSampler=(x,z,t)=>ctx.ocean?.isOceanAt?.(x,z)?ctx.ocean.sampleWave(x,z,t):null;
     this.ui.bindCharacter(this.slime);
     ctx.reflectActor=(renderer:any,camera:any,target:any)=>{
       if(this.slime.running)this.slime.renderer.renderReflection(renderer,camera,target);
     };
-    ctx.rainSurface=(x:number,z:number)=>Math.max(this.slime.world.support(x,z)??ctx.groundY(x,z),this.slime.world.fluid(x,z)??-Infinity);
+    ctx.rainSurface=(x:number,z:number)=>{
+      const world=this.slime.world;
+      const solid=world.support(x,z,Infinity,true)??ctx.groundY(x,z);
+      const water=world.fluid(x,z);
+      if(water!==null && water>solid+.008){
+        const wave=ctx.ocean?.isOceanAt?.(x,z)?ctx.ocean.sampleWave(x,z):null;
+        return {height:wave?wave.seaLevel+wave.height:water,water:true};
+      }
+      return {height:ctx.grassField.rainHeight(x,z,solid),water:false};
+    };
+    ctx.rainBody=()=>{
+      const s=this.slime, frame=s.latest;
+      if(!s.running || !frame?.count || frame.generation!==s.generation || !frame.centers[0])return null;
+      const g=s.renderer.geometry;
+      return {positions:g.attributes.position.array, clusters:g.attributes.cluster.array,
+        count:g.drawRange.count,center:frame.centers[0],radii:frame.radii[0],offset:s.surfaceOffset(),generation:s.generation};
+    };
 
     this.buildUI = new BuildUI({
+      openOrchardHelp: () => this.openGuide('orchard'),
       setTool: tool => this.builder.setTool(tool),
       restore: redo => this.builder.restore(redo),
       transform: scale => this.builder.transform(scale),
@@ -166,7 +213,7 @@ export class Game {
       }),
       ground: (x, z) => this.slime.world.terrain(x, z),
       fluid: (x, z) => this.slime.world.fluid(x, z),
-      syncCollision: boxes => {this.slime.setDynamicBoxes(boxes);this.shardLayoutDirty=true;},
+      syncCollision: boxes => {this.builderBoxes = boxes; this.syncHomeBoxes();},
       syncExpansions: exps => this.syncExpansions(exps),
       farmRegistry: this.farmRegistry,
       openMuseum: () => this.life.openTab('museum', this.save.data.life, localDayKey(), this.lifeUIContext()),
@@ -180,6 +227,19 @@ export class Game {
       },
     });
 
+    this.orchard = new HomeOrchard({
+      ctx, slime: this.slime, life: this.save.data.life,
+      openHelp: () => this.openGuide('orchard'),
+      save: () => { this.save.write(); this.life.refresh(this.save.data.life); },
+      toast: (msg, ms) => this.ui.toast(msg, ms),
+      onBoxes: boxes => {
+        this.orchardBoxes = boxes;
+        this.syncHomeBoxes();
+        this.builder.syncGrassExclusionMask();
+      },
+    });
+    ctx.anglingHour=()=>this.app.director.minute===null ? new Date(Date.now()+8*3600000).getUTCHours() : Math.floor(this.app.director.minute/60);
+    ctx.anglingSupport=(x:number,z:number)=>this.slime.world.support(x,z,Infinity,true);
     this.player = this.makePlayer();
     this.oceanAdventure = new OceanAdventure({
       ctx,
@@ -197,6 +257,14 @@ export class Game {
         this.applyDynamicWorld();
       },
     });
+    const near=()=>Math.hypot(this.slime.position[0]-HOUSE.x,this.slime.position[2]-HOUSE.z)<9;
+    this.companions=new CompanionPanel({life:this.save.data.life,biomes:this.preserves,ranch:this.builder.ranch,near,
+      help:()=>{this.guideFromCompanions=true;this.openGuide('companions');},
+      position:()=>this.slime.position,change:()=>{this.save.write();this.builder.ranch.sync();this.life.refresh(this.save.data.life);},
+      furniture:()=>{this.cottage.sync();this.syncHomeBoxes();},toast:s=>this.ui.toast(s,3500),lock:on=>{this.slime.setMenuPointer('quickMenu',on);this.slime.inputLock=on||!!this.oceanAdventure.companionDeck;if(on)this.slime.keys.clear();}});
+    window.addEventListener('home-companions',()=>{this.life.dex(null);this.companions.open();});
+    document.addEventListener('visibilitychange',()=>{this.lastPlayable=false;if(document.hidden)this.flushPetTime();});
+    window.addEventListener('pagehide',()=>this.flushPetTime());
     (window as any).__ocean = this.oceanAdventure;
     this.graphics = new Graphics(ctx, this.slime, this.zones.roots); this.graphics.set(this.save.data.quality);
     this.graphics.onAutoChange = p => this.ui.toast(`画面有点吃力，已自动调到「${PRESET_NAMES[p]}」画质 · 暂停菜单里可以改`, 3600);
@@ -231,9 +299,16 @@ export class Game {
   }
 
   private openSky(){
+    this.ui.setQuickMenu(false);
     if(this.state==='sky'){this.resume();return;}
     if(this.state!=='play')return;
+    this.life.dex(null);
     this.state='sky';this.slime.pause();this.ui.skyPanel();
+  }
+  private toggleDex() {
+    if (this.state !== 'play') return;
+    this.ui.setQuickMenu(false);
+    this.life.dex(this.life.dexOpen ? null : this.save.data.life, localDayKey(), this.lifeUIContext());
   }
   private refreshShards(){
     const daily=this.save.daily();
@@ -273,9 +348,28 @@ export class Game {
     };
   }
 
+  private syncHomeBoxes() {
+    this.slime.setDynamicBoxes([...this.builderBoxes, ...this.orchardBoxes,...this.cottage.furnitureBoxes,...this.preserves.boxes]);
+    this.shardLayoutDirty = true;
+  }
+
+  private orchardPlaying() {
+    return this.state === 'play' && !this.life.dexOpen && !this.ui.quickMenuOpen &&
+      this.oceanAdventure?.mode === 'idle' && !this.oceanAdventure.angling.active;
+  }
+
+  private useFocusedSpot() {
+    if (!this.orchardPlaying() || this.orchard.action() || !this.focus) return;
+    if (this.focus.kind === 'lectern') this.openBook();
+    else if (this.focus.kind === 'spot') this.focus.spot.act();
+    else this.openDoor(this.focus.portal);
+  }
+
   private syncExpansions(expansions: ExpandedTile[]) {
     this.currentExpansions = expansions;
-    this.coastalSurfaces = buildCoastalCollisionSurfaces(expansions, 76);
+    this.preserves?.sync();
+    if(this.preserves)this.syncHomeBoxes();
+    this.coastalSurfaces = buildCoastalCollisionSurfaces(expansions, 96);
     this.fish.sync(expansions);
     this.oceanAdventure?.syncExpansions(expansions);
     this.applyDynamicWorld();
@@ -284,7 +378,7 @@ export class Game {
 
   private applyDynamicWorld() {
     const expansions = this.currentExpansions;
-    if(!this.coastalSurfaces.length)this.coastalSurfaces=buildCoastalCollisionSurfaces(expansions,76);
+    if(!this.coastalSurfaces.length)this.coastalSurfaces=buildCoastalCollisionSurfaces(expansions,96);
     const surfaces = [...this.coastalSurfaces];
     const fluids: FluidVolume[] = [...this.nativeFluids];
     for (const tile of expansions) {
@@ -297,6 +391,11 @@ export class Game {
       fluids.push(...buildOceanFluidVolumes(expansions, 76));
     }
     const bounds=computeExpandedBounds(expansions);
+    if(this.preserves){
+      surfaces.push(...this.preserves.surfaces);
+      fluids.unshift(...this.preserves.fluids);
+      for(const r of this.preserves.rects)bounds.max[2]=Math.max(bounds.max[2],r.maxZ+55);
+    }
     this.oceanAdventure?.islands.extend(surfaces,fluids,bounds,this.oceanBuoyancy);
     this.slime.setDynamicSurfaces(surfaces, bounds, fluids);
   }
@@ -335,6 +434,7 @@ export class Game {
 
   private openSeedShop() {
     if (this.state !== 'play') return;
+    this.ui.setQuickMenu(false);
     this.state = 'shop';
     this.slime.pause();
     this.ui.prompt(null);
@@ -348,6 +448,7 @@ export class Game {
 
   private openSeedPicker(onPick: (seedId: string) => void) {
     if (this.state !== 'play') return;
+    this.ui.setQuickMenu(false);
     this.state = 'shop';
     this.slime.pause();
     this.ui.prompt(null);
@@ -374,7 +475,26 @@ export class Game {
       this.returnFrom = null; history.replaceState(null, '', location.pathname);
       this.applyShowing(returnDay);
     } else if(this.save.data.life.sailing?.run){this.oceanAdventure.restoreVoyage();}
+    if(!this.save.data.life.home?.ranch?.starter && !this.save.data.life.sailing?.run)this.companions.open('starter');
     else if (this.save.add('seenHints', 'start')) setTimeout(() => this.ui.toast('临水书埠 · 西南柳岸钓台可乘史莱姆号出海，按 V 建造家园。', 4500), 600);
+  }
+  private flushPetTime(){
+    if(this.carePlayed>0)advanceRescue(this.save.data.life,Date.now(),this.carePlayed);
+    this.carePlayed=0;this.save.write();
+  }
+  private updatePets(now:number){
+    const playable=this.orchardPlaying()&&!this.companions.visible&&!document.hidden;
+    if(playable && this.lastPlayable)this.carePlayed+=Math.max(0,performance.now()-this.careAt);
+    this.careAt=performance.now();this.lastPlayable=playable;
+    if(now-this.lastCareSave<2000)return;
+    this.lastCareSave=now;
+    const life=this.save.data.life,animals=life.home?.ranch?.animals??[],before=animals.length;
+    const tracked=animals.some(a=>a.care && (now>=a.care.due || a.care.notified));
+    const ids=advanceRescue(life,now,this.carePlayed);this.carePlayed=0;
+    if(tracked || before!==animals.length)this.save.write();
+    if(before!==animals.length)this.ui.toast('有伙伴离世，名字已留在手账纪念册。',5000);
+    if(ids.length&&playable)this.companions.open('rescue');
+    this.builder.ranch.sync();
   }
   private resume() { if (this.state === 'door') this.stepOutOfDoor(); if (this.state === 'shop') this.buildUI.closeSeedShop(); if (this.state === 'title' || this.state === 'loading') { this.ui.panel(null); this.state = 'title'; return; } this.ui.panel(null); this.slime.play(); this.state = 'play'; this.ui.showHud(true); this.refreshHud(); }
   private pauseGame() { if (this.state !== 'play') return; this.state = 'pause'; this.slime.pause(); this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
@@ -386,25 +506,37 @@ export class Game {
     this.state = 'book'; if (this.slime.mode === 'play') this.slime.pause();
     this.ui.book({todayId: this.showing.today, shownId: this.showing.shown.day, souvenirs: this.save.data.souvenirs, visited: this.save.data.visited, completed: this.save.data.completed, imprintOrder: this.save.data.life.records['0101-trial-daily-imprint']});
   }
-  private openGuide() {
+  private openGuide(section?: string) {
+    this.ui.setQuickMenu(false);
     if (this.state === 'guide') { this.closePanel(true); return; }
     if (this.state === 'door') this.stepOutOfDoor();
     if (this.state === 'build') { this.builder.exit(); this.buildUI.show(false); }
-    this.panelFrom = this.state === 'title' || this.state === 'loading' ? 'title' : 'pause';
+    this.life.dex(null);
+    this.ui.dismissKeysHint();
+    this.panelFrom = this.state === 'title' || this.state === 'loading' ? 'title' : this.state === 'pause' ? 'pause' : this.state === 'shop' ? 'shop' : 'play';
+    if (this.panelFrom === 'shop') this.buildUI.setShopHelpOpen(true);
     this.state = 'guide';
     if (this.slime.mode === 'play') this.slime.pause();
-    this.ui.guide();
+    this.ui.guide(section ?? (this.orchard?.state.mode !== 'idle' || this.panelFrom === 'shop' ? 'orchard' : undefined));
   }
   /** byGesture: a click or key that may re-acquire pointer lock; Escape cannot, so it lands on the pause card instead. */
   private closePanel(byGesture: boolean) {
     if (this.state !== 'book' && this.state !== 'guide' && this.state !== 'door' && this.state !== 'pause') return;
     if (this.state === 'door') this.stepOutOfDoor();
     if (this.panelFrom === 'title' && (this.state === 'book' || this.state === 'guide')) { this.state = 'title'; this.ui.panel(null); this.titleScreen(); return; }
-    if (this.state === 'guide') { this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); return; }
+    if (this.state === 'guide') {
+      if(this.guideFromCompanions){this.guideFromCompanions=false;this.resume();this.companions.resumeHelp();return;}
+      if (this.panelFrom === 'shop') {
+        this.state = 'shop'; this.ui.panel(null); this.buildUI.setShopHelpOpen(false); return;
+      }
+      if (this.panelFrom === 'pause') { this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); return; }
+      this.resume();
+      return;
+    }
     if (byGesture) this.resume(); else { this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); }
   }
   private respawn() { this.slime.reset(); this.slime.yaw = spawnYaw; this.resume(); }
-  private toTitle() { if (this.state === 'build') { this.builder.exit(); this.buildUI.show(false); } this.state = 'title'; this.ui.panel(null); this.ui.showHud(false); this.life.show(false); this.slime.observe(); this.app.ctx.camera.position.fromArray(TITLE_CAM.pos); this.app.ctx.controls.target.fromArray(TITLE_CAM.target); this.app.ctx.controls.update(); this.titleScreen(); }
+  private toTitle() { this.orchard.cancel(); if (this.state === 'build') { this.builder.exit(); this.buildUI.show(false); } this.ui.setQuickMenu(false); this.ui.setImmersive(false, false); this.ui.resetKeysHint(); this.state = 'title'; this.ui.panel(null); this.ui.showHud(false); this.life.show(false); this.slime.observe(); this.app.ctx.camera.position.fromArray(TITLE_CAM.pos); this.app.ctx.controls.target.fromArray(TITLE_CAM.target); this.app.ctx.controls.update(); this.titleScreen(); }
   private showDay(id: DayId | null) {
     const today = realToday().id;
     this.save.data.selectedDay = id && id !== today && days[id] ? id : null; this.save.write(); this.applyShowing();
@@ -452,8 +584,31 @@ export class Game {
     this.doorLatch.add(p.slot.slot);
   }
   private key(e: KeyboardEvent) {
+    if(this.companions.visible){if(e.code==='F1'&&!e.repeat){e.preventDefault();this.companions.showHelp();}return;}
+    if (e.code === 'F1' || e.key === 'F1') {
+      e.preventDefault();
+      if (!e.repeat && ['play', 'pause', 'title', 'guide', 'shop'].includes(this.state)) this.openGuide();
+      return;
+    }
+    if (e.code === 'F2' || e.key === 'F2') {
+      e.preventDefault();
+      if (!e.repeat && this.state === 'play') {
+        if (this.life.dexOpen) this.life.dex(null);
+        this.ui.toggleQuickMenu();
+      }
+      return;
+    }
+    if (e.code === 'F3' || e.key === 'F3') {
+      e.preventDefault();
+      if (!e.repeat && this.state === 'play') {
+        if (this.life.dexOpen) this.life.dex(null);
+        this.ui.toggleImmersive();
+      }
+      return;
+    }
     if (e.code === 'KeyV' && !e.repeat && (this.state === 'play' || this.state === 'build' || this.state === 'pause')) {
       e.preventDefault();
+      this.ui.setQuickMenu(false);
       this.toggleBuildMode();
       return;
     }
@@ -461,7 +616,7 @@ export class Game {
       if(this.state==='play'||this.state==='sky'){e.preventDefault();this.openSky();return;}
     }
     if(e.code==='Escape' && this.state==='sky'){this.state='pause';this.ui.pause(this.save.data.quality,PRESET_NAMES[this.graphics.preset]);return;}
-    if (e.code === 'KeyB' && !e.repeat && this.state === 'play') { this.life.dex(this.life.dexOpen ? null : this.save.data.life, localDayKey(), this.lifeUIContext()); return; }
+    if (e.code === 'KeyB' && !e.repeat && this.state === 'play') { this.toggleDex(); return; }
     if (e.code === 'Escape' && this.life.dexOpen) { this.life.dex(null); return; }
     if (e.code === 'Escape' && this.state === 'build') { this.toggleBuildMode(false); return; }
     if (e.code === 'Escape' && this.state === 'shop') { this.buildUI.closeSeedShop(); this.state = 'pause'; this.ui.pause(this.save.data.quality, PRESET_NAMES[this.graphics.preset]); return; }
@@ -475,14 +630,15 @@ export class Game {
       return;
     }
     if (e.code === 'KeyF' && !e.repeat) {
-      if (this.oceanAdventure?.mode !== 'idle') return;
-      if (this.state === 'play' && this.focus) { if (this.focus.kind === 'lectern') this.openBook(); else if (this.focus.kind === 'spot') this.focus.spot.act(); else this.openDoor(this.focus.portal); }
+      this.useFocusedSpot();
       return;
     }
     if (e.code === 'Escape' && (this.state === 'book' || this.state === 'guide' || this.state === 'door')) { this.closePanel(false); }
   }
   private update(t: number, dt: number) {
     const s = this.slime;
+    this.oceanAdventure?.prepareHull(t, dt);
+    this.orchard.update(dt, this.orchardPlaying());
     s.update(t, dt);
     if(this.waterImpact){
       const wSample=this.app.ctx.ocean?.isOceanAt?.(s.position[0],s.position[2])?this.app.ctx.ocean.sampleWave(s.position[0],s.position[2],t):null;
@@ -493,6 +649,16 @@ export class Game {
     this.fish.update(t,this.state==='play'?s.position:null);
     this.pondLife.update(dt, this.state==='play'?s.position:null, this.state==='play'?s.velocity:null, s.spread);
     this.oceanAdventure?.update(t, dt);
+    this.cottage.update(s.position,dt);
+    this.builder.ranch.deck=this.oceanAdventure.companionDeck;
+    this.builder.ranch.interior=this.cottage.inside?this.cottage.interior:null;
+    if(this.cottage.inside){
+      const [x,y,z]=s.position;
+      const cam=this.app.ctx.camera;
+      cam.position.set(x+.46,y+2.82,z+1.50);
+      cam.lookAt(x,y+.30,z);cam.updateMatrixWorld();
+    }
+    this.preserves.update(s.position,dt);this.updatePets(Date.now());
     this.fx.update(dt, s); this.lectern.update(t);
     this.builder.update(t, dt);
     if (this.state === 'play') this.builder.stepPlayer(this.player, t, dt);
@@ -509,6 +675,7 @@ export class Game {
     const climate=this.app.director;
     this.ui.setSkyStatus(climate.sky.date,seasonNames[climate.sky.season],weatherNames[climate.target as keyof typeof weatherNames]);
     if (this.state !== 'play') {
+      this.oceanAdventure?.angling.stop();
       this.ui.setCrosshair(false, true, false);
       return;
     }
@@ -516,7 +683,10 @@ export class Game {
     this.ui.setCrosshair(s.aiming, s.aimReady, s.aimRecoil > 0.25);
     this.ui.updateCharacterHud();
     if (s.swimming && this.save.add('seenHints', 'swim')) this.ui.toast('漂起来了！水属性游得最快 · 沿浅滩或廊桥旁的石岸可以上岸', 4200);
-    this.interact();
+    if(this.oceanAdventure?.angling.active){this.ui.prompt(null);this.oceanAdventure.angling.update(t,dt);return;}
+    if(this.companions.visible){this.ui.prompt(null);return;}
+    if (this.orchard.state.mode === 'idle') this.interact();
+    else { this.focus = null; this.ui.prompt(null); }
     this.hudTimer -= dt; if (this.hudTimer <= 0) { this.hudTimer = .2; this.refreshHud(); }
   }
   private interact() {
@@ -533,6 +703,11 @@ export class Game {
     let spotPrompt: {title: string; sub: string} | null = null;
     if (!best) {
       const allSpots = [
+        ...this.preserves.spots(),
+        ...this.preserves.plots().map((p,i):Interactable=>({id:'natural-plot-'+i,position:[p.x,this.slime.world.terrain(p.x,p.z)??0,p.z],radius:3.4,
+          prompt:()=>({title:p.name,sub:'按 F 选择植物与种植位置'}),act:()=>this.companions.openPlot(i)})),
+        ...([[HOUSE.x,HOUSE.z+7.15,'凝露小院','pets'],[HOUSE.x+5.75,HOUSE.z+3.05,'布置房间','room'],[HOUSE.x-5.65,HOUSE.z+3.0,'宠物食槽','pets']] as const)
+          .map(([x,z,title,page]):Interactable=>({id:title,position:[x,HOUSE.y,z],radius:1.95,prompt:()=>({title,sub:'按 F 打开 · 直接走过门槛可进屋'}),act:()=>this.companions.open(page)})),
         ...this.zones.interactables,
         ...this.farmRegistry.getInteractables(),
         ...this.builder.getInteractables(this.player),

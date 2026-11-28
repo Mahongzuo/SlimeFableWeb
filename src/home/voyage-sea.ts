@@ -1,3 +1,5 @@
+import type {MarineModels} from './marine-models';
+import {spawnPackModel, type SpawnedPackModel} from './model-pack';
 import * as T from 'three';
 
 type Wave = (x: number, z: number) => number;
@@ -64,9 +66,12 @@ export class VoyageSea {
   private fish: T.Group[] = [];
   private leaps: {x: number; z: number; dx: number; dz: number; age: number}[] = [];
   private stamps = [0, 0];
+  private birds: SpawnedPackModel[] = [];
+  private swimmers: ReturnType<MarineModels['fish']>[] = [];
   private fishClock = 2;
   constructor(
-    scene: T.Scene,
+    scene: T.Scene, models: MarineModels,
+    private hasFishDepth: (x: number, z: number) => boolean,
     private waterImpact: (x: number, z: number, size: number) => void,
   ) {
     this.root.name = 'voyage-surface-life';
@@ -75,59 +80,18 @@ export class VoyageSea {
     this.foamMesh.count = this.shotMesh.count = 0;
     this.foamMesh.frustumCulled = this.shotMesh.frustumCulled = false;
     for (let i = 0; i < 4; i++) {
-      const gull = new T.Group(),
-        mat = new T.MeshStandardMaterial({color: 0xfff3dc, side: T.DoubleSide});
-      for (const s of [-1, 1]) {
-        const geo = new T.BufferGeometry();
-        geo.setAttribute(
-          'position',
-          new T.Float32BufferAttribute(
-            [
-              0,
-              0,
-              0.28,
-              s * 0.73,
-              0.19,
-              0.08,
-              s * 1.45,
-              0.04,
-              -0.42,
-              s * 0.64,
-              0.05,
-              -0.25,
-              0,
-              -0.015,
-              -0.21,
-            ],
-            3,
-          ),
-        );
-        geo.setIndex([0, 1, 3, 1, 2, 3, 3, 4, 0]);
-        geo.computeVertexNormals();
-        gull.add(new T.Mesh(geo, mat));
-      }
-      const body = new T.Mesh(new T.SphereGeometry(0.17, 8, 6), mat);
-      body.scale.set(0.68, 0.8, 2.25);
-      gull.add(body);
-      this.gulls.push(gull);
-      this.root.add(gull);
+      const bird = spawnPackModel(T,'sea-gull',1.65,{outline:false, clip:'Fly', phaseOffset:i*.23, onLoaded:g => g.visible=true});
+      bird.group.visible = false;
+      this.root.add(bird.group);
+      this.gulls.push(bird.group);
+      this.birds.push(bird);
     }
-    for (let i = 0; i < 3; i++) {
-      const g = new T.Group(),
-        m = new T.MeshStandardMaterial({
-          color: i === 1 ? 0x70c6d3 : 0x70a3b8,
-          metalness: 0.42,
-          roughness: 0.38,
-        });
-      const body = new T.Mesh(new T.SphereGeometry(0.32, 12, 8), m);
-      body.scale.set(0.55, 0.71, 1.65);
-      const tail = new T.Mesh(new T.ConeGeometry(0.23, 0.38, 3), m);
-      tail.rotation.x = Math.PI / 2;
-      tail.position.z = -0.56;
-      g.add(body, tail);
+    for (let i=0; i<3; i++) {
+      const g = new T.Group();
+      this.swimmers.push(models.fish(g,.85,i*.31));
       this.root.add(g);
       this.fish.push(g);
-      g.visible = false;
+      g.visible=false;
     }
     this.root.traverse((o) => o.layers.set(1));
     this.root.visible = false;
@@ -194,6 +158,7 @@ export class VoyageSea {
     z: number,
     yaw: number,
     wave: Wave,
+    allowLeaps: boolean,
     aim: {x: number; z: number} | null,
   ) {
     this.root.visible = true;
@@ -236,19 +201,36 @@ export class VoyageSea {
         r = 11 + 8 * Math.sin(0.11 * t + i) + i * 2;
       g.position.set(x + r * Math.cos(a), 4.6 + 2.3 * Math.sin(t * 0.22 + i) + i * 0.6, z + r * Math.sin(a));
       g.rotation.y = -a;
-      g.children[0].rotation.z = Math.sin(t * 4.6 + i) * 0.24;
-      g.children[1].rotation.z = -g.children[0].rotation.z;
+      g.rotation.z = .12*Math.sin(a);
+    }
+    if (!allowLeaps) {
+      if (this.leaps.length) {
+        this.leaps = [];
+        this.fish.forEach(g => { g.visible = false; });
+      }
+      return;
     }
     this.fishClock -= dt;
     if (this.fishClock <= 0) {
       this.fishClock = 7.5;
+      this.fish.forEach(g => { g.visible = false; });
       this.leaps = this.fish.map((_, i) => ({
         x: x + Math.sin(yaw) * 13 + Math.cos(yaw) * (7 + i * 1.8),
         z: z + Math.cos(yaw) * 13 - Math.sin(yaw) * (7 + i * 1.8),
         dx: -Math.cos(yaw) * 6,
         dz: Math.sin(yaw) * 6,
         age: -i * 0.22,
-      }));
+      })).filter(f => {
+        // Include the nose and tail beyond the 6 m flight, and both sides of the fish.
+        for (let step = -1; step <= 13; step++) {
+          for (const side of [-.4, 0, .4]) {
+            const px = f.x + f.dx * step / 12 - f.dz * side / 6;
+            const pz = f.z + f.dz * step / 12 + f.dx * side / 6;
+            if (!this.hasFishDepth(px, pz)) return false;
+          }
+        }
+        return true;
+      });
     }
     this.leaps.forEach((f, i) => {
       const was = f.age;
@@ -258,6 +240,7 @@ export class VoyageSea {
       if (was <= 0 && f.age > 0) this.splash(f.x, f.z, 0.5);
       if (was < 1 && f.age >= 1) this.splash(f.x + f.dx, f.z + f.dz, 0.75);
       if (!g.visible) return;
+      this.swimmers[i].update(dt);
       const px = f.x + f.dx * f.age,
         pz = f.z + f.dz * f.age;
       g.position.set(px, wave(px, pz) + 8 * f.age * (1 - f.age), pz);
@@ -273,6 +256,8 @@ export class VoyageSea {
     this.root.visible = false;
   }
   dispose() {
+    for (const bird of this.birds) bird.dispose();
+    for (const fish of this.swimmers) fish.dispose();
     const resources = new Set<{dispose: () => void}>();
     this.root.traverse((o) => {
       if (o instanceof T.Mesh) {

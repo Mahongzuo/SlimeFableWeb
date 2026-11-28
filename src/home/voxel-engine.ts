@@ -1,3 +1,4 @@
+import {changeShells} from '../life/shell-wallet';
 import {climateMaterial} from './climate-material';
 import {isInPlazaNoBuild} from './build-catalog';
 import {isInsideHomeTerritory} from '../world/expansion';
@@ -252,7 +253,7 @@ export class VoxelEngine {
     if (!check.ok) return {ok: false, reason: check.reason, cost: 0};
     const def = VOXEL_ITEMS[blockId]!;
     const cost = voxelUnitPrice(this.host.life, blockId);
-    this.host.life.coins -= cost;
+    changeShells(this.host.life, -(cost), 'spend');
     const data: VoxelBlockData = {
       x, y, z, blockId,
       shape: shape ?? def.defaultShape,
@@ -278,7 +279,7 @@ export class VoxelEngine {
     if (idx >= 0) home.voxels.splice(idx, 1);
     this.lookup.delete(k);
     const refunded = existing.paidShells ?? VOXEL_ITEMS[existing.blockId]?.price ?? 0;
-    this.host.life.coins += refunded;
+    changeShells(this.host.life, refunded, 'refund');
     this.rebuildAround(x, z);
     return {ok: true, refunded};
   }
@@ -309,7 +310,7 @@ export class VoxelEngine {
     if (!plan.length) return {ok: false, placed: 0, totalCost: 0, reason: '目标位置已存在积木'};
     if (this.host.life.coins < totalCost) return {ok: false, placed: 0, totalCost, reason: `贝壳不足（整套蓝图需 ${totalCost} 🐚）`};
 
-    this.host.life.coins -= totalCost;
+    changeShells(this.host.life, -(totalCost), 'spend');
     home.voxels ??= [];
     const dirtyChunks = new Set<string>();
     for (const item of plan) {

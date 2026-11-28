@@ -1,7 +1,9 @@
+import {changeShells} from '../life/shell-wallet';
 import {BuildHistory} from './build-history';
 import {groundTile} from './jiangnan';
 import {updateGrassExclusions, type GrassExcludeBox} from './foliage/grass-ism';
 import {nativeLane, quayPavilion} from './layout';
+import {allOrchardTrees,TREE_SPECIES} from '../life/orchard';
 import {isInsideHomeTerritory} from '../world/expansion';
 import type {GroundFinish} from '../life/state';
 import {isInPlazaNoBuild} from './build-catalog';
@@ -489,7 +491,7 @@ export class HomeBuilder {
       return false;
     }
     const before = this.history.begin(this.host.life);
-    this.host.life.coins -= cost;
+    changeShells(this.host.life, -(cost), 'spend');
     home.expansions.push({
       id: slot.id,
       gx: slot.gx,
@@ -683,6 +685,26 @@ export class HomeBuilder {
     this.host.onChange?.();
   }
 
+  private hitsParcelFence(x:number,z:number,hx:number,hz:number,yaw:number){
+    const extent=(axis:number,turn:number,w:number,d:number)=>Math.abs(Math.cos(axis-turn))*w+Math.abs(Math.sin(axis-turn))*d;
+    return this.frontier.structuralBoxes().some(b=>{
+      if(!b.name.startsWith('parcel-fence-'))return false;
+      const dx=x-(b.min[0]+b.max[0])*.5,dz=z-(b.min[2]+b.max[2])*.5;
+      const w=(b.max[0]-b.min[0])*.5,d=(b.max[2]-b.min[2])*.5,turn=b.yaw??0;
+      return [yaw,yaw+Math.PI/2,turn,turn+Math.PI/2].every(a=>
+        Math.abs(dx*Math.cos(a)-dz*Math.sin(a))<extent(a,yaw,hx,hz)+extent(a,turn,w,d));
+    });
+  }
+
+  private hitsOrchard(x:number,z:number,hx:number,hz:number,yaw:number){
+    const c=Math.cos(yaw),s=Math.sin(yaw);
+    return allOrchardTrees(this.host.life).some(t=>{
+      const dx=t.x-x,dz=t.z-z;
+      const ax=Math.max(0,Math.abs(dx*c-dz*s)-hx),az=Math.max(0,Math.abs(dx*s+dz*c)-hz);
+      return Math.hypot(ax,az)<TREE_SPECIES[t.species].trunkRadius+.12;
+    });
+  }
+
   private propPlan() {
     const home = ensureHome(this.host.life);
     const preset = HOME_PRESETS.find(p => p.id === this.presetId);
@@ -700,6 +722,8 @@ export class HomeBuilder {
       const ground = this.host.ground(x, z), fluid = this.host.fluid(x, z);
       const yaw = this.previewYaw + entry.yaw;
       const check = canPlaceProp(def, x, z, scale, existing, ground, fluid, home.expansions, yaw);
+      if(!reason && this.hitsParcelFence(x,z,def.width*scale/2,def.depth*scale/2,yaw))reason='地块栅栏占地';
+      if(!reason && this.hitsOrchard(x,z,def.width*scale/2,def.depth*scale/2,yaw))reason='树干占地';
       if (!reason && !check.ok) reason = def.name + ' · ' + check.reason;
       if (!reason && !def.waterAllowed) {
         for (const side of [-.5, .5]) for (const end of [-.5, .5]) {
@@ -739,7 +763,7 @@ export class HomeBuilder {
         delete home.souvenirSlots[p.id]; delete this.host.life.plots['home-plot-' + p.id];
         if (home.machines) delete home.machines[p.id];
         if (home.fishing?.ponds) delete home.fishing.ponds[p.id];
-        this.host.life.coins += p.paidShells ?? BUILD_ITEMS[p.itemId].price;
+        changeShells(this.host.life, p.paidShells ?? BUILD_ITEMS[p.itemId].price, 'refund');
       } else { home.paving.splice(home.paving.indexOf(tile!), 1); this.syncTiles(); }
       this.finishEdit(before); return;
     }
@@ -763,7 +787,7 @@ export class HomeBuilder {
     const plan = this.propPlan();
     if (plan.reason) { this.host.toast(plan.reason); return; }
     const before = this.history.begin(this.host.life);
-    this.host.life.coins -= plan.cost;
+    changeShells(this.host.life, -(plan.cost), 'spend');
     const listTotal = plan.items.reduce((sum, item) => sum + BUILD_ITEMS[item.itemId].price, 0);
     let listSpent = 0, allocated = 0;
     for (const item of plan.items) {
@@ -808,6 +832,8 @@ export class HomeBuilder {
       else heights.push(y);
     }
     if (Math.max(...heights) - Math.min(...heights) > .7) reason = '坡差太大';
+    if(this.hitsParcelFence(x,z,1,1,0))reason='地块栅栏占地';
+    if(this.hitsOrchard(x,z,1,1,0))reason='树干占地';
     if (home.paving.some(t => t.x === x && t.z === z && t.finish === this.tool)) reason = '已经铺设';
     return {x, z, reason};
   }
@@ -866,9 +892,11 @@ export class HomeBuilder {
     this.host.onChange?.();
   }
 
-  private syncGrassExclusionMask() {
+  syncGrassExclusionMask() {
     const home = ensureHome(this.host.life);
     const exclusions: GrassExcludeBox[] = [];
+    const cottage=this.host.nativeFootprints?.find(p=>p.id==='native-personal-cottage');
+    if(cottage?.nativeFootprint)exclusions.push({x:cottage.x,z:cottage.z,hx:cottage.nativeFootprint.width/2,hz:cottage.nativeFootprint.depth/2,yaw:0});
     // 1. Highest priority: ALL farm beds (wood/stone/large) so crops never compete with wild meadow grass
     for (const p of home.placed) {
       const def = BUILD_ITEMS[p.itemId];
@@ -901,6 +929,7 @@ export class HomeBuilder {
     // 4. Native architectural footprints (pavilion, teahouses, huts — skip trees/aquatic handled statically)
     if (this.host.nativeFootprints) {
       for (const p of this.host.nativeFootprints) {
+        if(p===cottage)continue;
         const def = BUILD_ITEMS[p.itemId];
         if (!def?.solid || def.id.startsWith('nature-') || def.id.startsWith('waterside-')) continue;
         exclusions.push({
@@ -920,7 +949,12 @@ export class HomeBuilder {
       const r = Math.max(0.68, Math.min(1.15, def.width * p.scale * 0.24 + 0.24));
       exclusions.push({x: p.x, z: p.z, hx: r, hz: r, yaw: p.yaw});
     }
+    for(const tree of allOrchardTrees(this.host.life)){
+      const r=TREE_SPECIES[tree.species].trunkRadius+.12;
+      exclusions.push({x:tree.x,z:tree.z,hx:r,hz:r});
+    }
     updateGrassExclusions(exclusions);
+    this.host.ctx.grassField?.syncExclusions(exclusions);
   }
 
   private syncCollisionAndHabitats() {
@@ -928,7 +962,7 @@ export class HomeBuilder {
     // Note: quayPavilion is already registered in base world boxes by buildQuay() with its exact width scale.
     const boxes: Box[] = [];
     for (const p of home.placed) boxes.push(...propCollisionParts(p));
-    boxes.push(...this.voxels.collisionBoxes);
+    boxes.push(...this.voxels.collisionBoxes,...this.frontier.structuralBoxes());
     this.host.syncCollision(boxes);
     this.syncGrassExclusionMask();
     this.refreshVisitors();

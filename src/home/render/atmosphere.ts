@@ -301,21 +301,55 @@ void main() {
   vec3 sunDir = normalize(uSunDir);
   vec3 sky = texture2D(tSkyView, dirToSkyUV(d)).rgb;
 
-  // Starfield + moonlight takeover at night (physically scaled for HDR auto-exposure)
-  float nightMask = 1.0 - smoothstep(0.02, 0.32, uDaylight);
-  vec3 nightSky = mix(vec3(0.018, 0.032, 0.058), vec3(0.003, 0.008, 0.024), smoothstep(-0.05, 0.65, d.y));
-  if (nightMask > 0.01 && d.y > 0.0) {
-    vec2 starGrid = vec2(atan(d.z, d.x), asin(clamp(d.y, -1.0, 1.0))) * 145.0;
-    vec2 cid = floor(starGrid);
-    vec2 f = fract(starGrid) - 0.5;
-    float h = hash21(cid);
-    float star = step(0.985, h) * (1.0 - smoothstep(0.05, 0.24, length(f))) * (0.4 + 0.6 * hash21(cid + 19.3));
-    nightSky += vec3(0.62, 0.76, 1.0) * star * smoothstep(0.04, 0.35, d.y) * (1.0 - uCloudAmount * 0.85) * 0.55;
-    // Moon disc opposite the sun
-    float moonDot = dot(d, -sunDir);
-    float moonDisc = smoothstep(0.99945, 0.99975, moonDot);
-    float moonHalo = pow(max(moonDot, 0.0), 48.0) * 0.08;
-    nightSky += vec3(0.65, 0.78, 0.96) * (moonDisc * 2.2 + moonHalo) * (1.0 - uStorminess * 0.7);
+  // UE Ultra Dynamic Sky-inspired night sky: deep midnight indigo zenith, soft cobalt horizon mist,
+  // wide moonlight atmospheric scattering glow, lunar maria disc, dual-layer starfield & faint Milky Way
+  float nightMask = 1.0 - smoothstep(0.02, 0.34, uDaylight);
+  vec3 nightZenith = vec3(0.0022, 0.0058, 0.017);
+  vec3 nightHorizon = vec3(0.015, 0.030, 0.058);
+  vec3 nightSky = mix(nightHorizon, nightZenith, smoothstep(-0.04, 0.62, d.y));
+  if (nightMask > 0.01) {
+    vec3 moonDir = normalize(-sunDir);
+    float moonDot = dot(d, moonDir);
+    float moonAbove = smoothstep(-0.06, 0.14, moonDir.y);
+    float clearSky = 1.0 - uStorminess * 0.72;
+    // Wide UDS moonlight Rayleigh/Mie atmospheric glow across the sky dome
+    float wideMoonGlow = pow(max(moonDot, 0.0), 4.5) * 0.024 * (1.0 - 0.45 * smoothstep(0.15, 0.85, d.y));
+    float innerMoonHalo = pow(max(moonDot, 0.0), 36.0) * 0.062;
+    nightSky += vec3(0.28, 0.48, 0.78) * wideMoonGlow * moonAbove * (0.45 + 0.55 * clearSky);
+    nightSky += vec3(0.56, 0.74, 0.96) * innerMoonHalo * moonAbove * clearSky;
+    if (d.y > -0.02) {
+      float starVis = smoothstep(0.02, 0.32, d.y) * (1.0 - uCloudAmount * 0.88) * (1.0 - uStorminess * 0.7);
+      // Primary crisp stars with subtle color temperature variation & gentle twinkle
+      vec2 angUV = vec2(atan(d.z, d.x), asin(clamp(d.y, -1.0, 1.0)));
+      vec2 starGrid1 = angUV * 135.0;
+      vec2 cid1 = floor(starGrid1);
+      vec2 f1 = fract(starGrid1) - 0.5;
+      float h1 = hash21(cid1);
+      float twinkle = 0.80 + 0.20 * sin(uDrift * 62.0 + h1 * 47.0);
+      float star1 = step(0.986, h1) * (1.0 - smoothstep(0.04, 0.21, length(f1))) * (0.45 + 0.55 * hash21(cid1 + 19.3)) * twinkle;
+      vec3 starTint = mix(vec3(0.72, 0.84, 1.0), vec3(1.0, 0.94, 0.82), hash21(cid1 + 7.1));
+      // Secondary dense fine star dust
+      vec2 starGrid2 = angUV * 265.0 + vec2(17.3, -9.1);
+      vec2 cid2 = floor(starGrid2);
+      vec2 f2 = fract(starGrid2) - 0.5;
+      float h2 = hash21(cid2);
+      float star2 = step(0.982, h2) * (1.0 - smoothstep(0.03, 0.19, length(f2))) * 0.32;
+      // Faint diagonal Milky Way dust band across zenith
+      float mwCoord = dot(d, normalize(vec3(0.42, 0.32, -0.85)));
+      float mwBand = exp(-mwCoord * mwCoord * 16.0);
+      float mwCloud = 0.5 + 0.5 * sin(angUV.x * 5.0 + sin(angUV.y * 7.0)) * cos(angUV.y * 9.0 - angUV.x * 3.0);
+      nightSky += vec3(0.012, 0.019, 0.034) * mwBand * (0.45 + 0.55 * mwCloud) * starVis;
+      nightSky += (starTint * star1 * 0.42 + vec3(0.68, 0.80, 1.0) * star2) * starVis;
+      // Crisp silver moon disc with subtle lunar maria shading
+      float moonDisc = smoothstep(0.99940, 0.99972, moonDot) * smoothstep(-0.02, 0.03, d.y);
+      if (moonDisc > 0.001) {
+        vec3 mRight = normalize(cross(vec3(0.0, 1.0, 0.0), moonDir + vec3(1e-4, 0.0, 0.0)));
+        vec3 mUp = cross(moonDir, mRight);
+        vec2 mUV = vec2(dot(d, mRight), dot(d, mUp)) * 34.0;
+        float maria = 0.84 + 0.16 * sin(mUV.x * 1.9 + sin(mUV.y * 2.3)) * cos(mUV.y * 1.7 - mUV.x * 1.1);
+        nightSky += vec3(0.76, 0.86, 0.98) * moonDisc * 1.15 * maria * clearSky;
+      }
+    }
   }
   sky += nightSky * nightMask;
 

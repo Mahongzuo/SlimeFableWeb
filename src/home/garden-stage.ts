@@ -1,5 +1,6 @@
 import * as T from 'three';
-import {gardenRain} from './rain-contact';
+import {gardenRain, type RainSurface} from './rain-contact';
+import type {RainBody} from './rain-body';
 import {HomeClimate} from './climate';
 import {surfaceClimate} from './climate-material';
 import {inland, LAKE, lakeEdge} from '../world/map';
@@ -11,6 +12,8 @@ import {HomePostProcess} from './render/postprocess';
 import {clampRenderParams, RENDER_PARAM_BOUNDS, type HomeRenderParams} from './render/params';
 import {IslandCoastSystem} from '../world/island-coast';
 import {waterWaves} from './water-waves';
+import {HomeMeadows} from './foliage/grass-ism';
+import {MeadowMotion} from './foliage/meadow-motion';
 import {AtmosphereMotes} from './foliage/atmosphere-motes';
 import {simpondLighting} from './simpond-assets';
 
@@ -35,15 +38,23 @@ export function createGardenStage() {
     },
   };
 
+  const meadowMotion = new MeadowMotion();
   const U = {
     uTime: {value: 0},
     uSun: {value: 1},
     uWind: {value: 0.5},
     uRain: {value: 0},
+    uBodyRainHits: {value: Array.from({length:6},()=>new T.Vector4(0,0,0,-100))},
     uShaft: {value: 0.5},
     uSunDir: {value: new T.Vector3(0.4, 0.7, 0.5)},
     uSunColor: {value: new T.Color(0xfff1d5)},
-    uSlimePos: {value: new T.Vector4(1.5, 0, 17, 0.65)},
+    uDaylight: {value: 1},
+    uSkyHorizon: {value: new T.Color().setRGB(0.24, 0.40, 0.48)},
+    uSkyZenith: {value: new T.Color().setRGB(0.36, 0.56, 0.68)},
+    uMeadowWind: meadowMotion.wind,
+    uMeadowPhase: meadowMotion.phase,
+    uMeadowTrail: {value: meadowMotion.trail},
+    uSlimePos: {value: meadowMotion.foot},
     uGrassAlbedoScale: {value: params.grassAlbedoScale},
     uGrassSssStrength: {value: params.grassSssStrength},
     /** Graphics-preset grass density (0..1), applied per instance rank in the grass shader. */
@@ -69,7 +80,8 @@ export function createGardenStage() {
       {x: 3.2, z: 18.8, rx: 0.7, rz: 0.34, rot: 0.1},
     ],
     renderSlime: null as any,
-    rainSurface: null as null | ((x: number, z: number) => number),
+    rainSurface: null as null | ((x: number, z: number) => RainSurface),
+    rainBody: null as null | (() => RainBody|null),
     reflectActor: null as any,
     islandCoast: null as IslandCoastSystem | null,
     ocean: null as OceanSystem | null,
@@ -87,6 +99,8 @@ export function createGardenStage() {
       glowSprite: pipeline.glow.bind(pipeline),
     },
   };
+
+  ctx.grassField=new HomeMeadows(ctx);
 
   // Every water surface shares the game clock (ripple events are stamped with U.uTime) and one detail-normal pair
   pipeline.water.uWaterTime = U.uTime;
@@ -147,7 +161,9 @@ export function createGardenStage() {
     });
   }
 
-  const updateRain = gardenRain(scene, camera, U, (x, z) => ctx.rainSurface?.(x, z) ?? ctx.groundY(x, z));
+  const updateRain = gardenRain(scene, camera, U,
+    (x,z)=>ctx.rainSurface?.(x,z) ?? {height:ctx.groundY(x,z),water:false},
+    ()=>ctx.rainBody?.() ?? null, ()=>pipeline.hdrTarget.height);
 
   // Snowflakes
   let seed = 379;
@@ -205,6 +221,10 @@ export function createGardenStage() {
   const fogSunset = new T.Color(0xe69f72);
   const fogStorm = new T.Color(0x8aa1ab);
   const fogNight = new T.Color(0x162436);
+  const skyNightHorizon = new T.Color().setRGB(0.018, 0.036, 0.068);
+  const skyNightZenith = new T.Color().setRGB(0.008, 0.019, 0.045);
+  const skyStormTint = new T.Color().setRGB(0.22, 0.28, 0.34);
+  const skySunsetTint = new T.Color().setRGB(0.46, 0.28, 0.20);
   const sunDirVec = new T.Vector3();
   const focusPos = new T.Vector3(0, 0, 20);
   let time = 0;
@@ -219,6 +239,7 @@ export function createGardenStage() {
     U.uTime.value = time;
     U.uRain.value = weather.rain;
     U.uWind.value = weather.wind;
+    meadowMotion.advanceWind(dt, weather.wind);
     U.uSun.value = weather.sun;
     U.uShaft.value = weather.shaft;
     U.uGrassAlbedoScale.value = params.grassAlbedoScale;
@@ -237,7 +258,6 @@ export function createGardenStage() {
     const slimeObj = (window as any).__slime;
     if (slimeObj?.position) {
       focusPos.set(slimeObj.position[0], slimeObj.position[1], slimeObj.position[2]);
-      U.uSlimePos.value.set(slimeObj.position[0], slimeObj.position[1], slimeObj.position[2], slimeObj.spread ? 1.05 : 0.68);
     } else {
       focusPos.copy(controls.target);
     }
@@ -255,6 +275,18 @@ export function createGardenStage() {
       focusPos,
     });
     U.uSunColor.value.copy(sun.color);
+    U.uDaylight.value = daylight;
+    const nightAmt = 1 - Math.min(1, Math.max(0, (daylight - 0.04) / 0.44));
+    U.uSkyHorizon.value
+      .setRGB(0.24, 0.40, 0.48)
+      .lerp(skySunsetTint, twilight * 0.42 * daylight)
+      .lerp(skyStormTint, overcast * 0.45 * daylight)
+      .lerp(skyNightHorizon, nightAmt);
+    U.uSkyZenith.value
+      .setRGB(0.36, 0.56, 0.68)
+      .lerp(skySunsetTint, twilight * 0.24 * daylight)
+      .lerp(skyStormTint, overcast * 0.45 * daylight)
+      .lerp(skyNightZenith, nightAmt);
 
     // Keep Three.js built-in scene.fog negligible so volumetric fog & aerial perspective in post-process own the look (no double-fog!)
     const fog = scene.fog as T.FogExp2;
@@ -264,6 +296,10 @@ export function createGardenStage() {
     }
 
     for (const fn of hooks) fn(time, dt);
+
+    const pos = slimeObj?.position;
+    meadowMotion.updateContact(dt, slimeObj, pos ? ctx.grassField.groundAt(pos[0], pos[2]) : null);
+    ctx.grassField.update(camera,U.uSlimePos.value,U.uGrassDensity.value);
 
     ocean.syncCameraAndEnv(camera, sun.color, daylight, overcast, Math.min(1, weather.cloud + params.cloudCoverageBias));
 
@@ -276,17 +312,20 @@ export function createGardenStage() {
     for (const band of bow.children) (band as any).material.opacity = 0.24 * weather.rainbow;
 
     const fogDens = (0.00014 + 0.00095 * weather.fog * weather.fog + 0.00038 * weather.rain) * params.fogDensityScale;
+    if (ctx.renderCottage?.(time)) return;
     pipeline.render(
       dt,
       {
         sunDir: sunDirVec,
         daylight,
         cloud: weather.cloud,
+        wind: weather.wind,
+        fog: weather.fog,
         storminess: overcast,
         fogDensity: fogDens,
         rain: weather.rain,
       },
-      {render: (pass: any) => ctx.renderSlime?.(pass)},
+      {inOcean: ocean.isOceanAt(focusPos.x, focusPos.z) || (pipeline.inlandWaterLevel(focusPos.x,focusPos.z)??-Infinity)>focusPos.y-.28, render: (pass: any) => ctx.renderSlime?.(pass)},
       ctx.reflectActor,
     );
   }

@@ -1,5 +1,10 @@
+import {
+  darkCreep, darkFieldRifts, darkRend, fireBreath, fireEruption, fireExplosion, fireball, rockFissure, rockFist, rockMeteor,
+  waterDome, waterOrb, waterPrison, waterRing, windBoomerang, windDash, windTornado, type SkillHost,
+} from './skill-forms';
 import type {SkillDef} from './skills';
 import type {Vec} from './types';
+import {VfxKit} from './vfx-kit';
 
 export interface SkillEffectCallbacks {
   getTargetPositions: () => Vec[];
@@ -17,97 +22,127 @@ interface ActiveProjectile {
   age: number;
   maxAge: number;
   mesh: any;
-  isWave: boolean;
   aimed: boolean;
   trailAcc: number;
+  onStep?: (dt: number, age: number) => void;
 }
 
 interface ActiveTimedFx {
   age: number;
   life: number;
-  update: (t: number, dt: number) => void;
+  /** Normalised progress, frame dt and age in seconds. Not called while age is still negative (delayed start). */
+  update: (t: number, dt: number, age: number) => void;
   dispose: () => void;
 }
 
-// Element palettes: [coreHDR, midHDR, edgeHDR] — crisp HDR saturation for real bloom without harsh outlines
+// Element palettes: [coreHDR, midHDR, edgeHDR]
 const EL_PAL: readonly (readonly [readonly [number, number, number], readonly [number, number, number], readonly [number, number, number]])[] = [
-  [[1.35, 1.95, 2.20], [0.22, 0.88, 1.75], [0.08, 0.36, 1.05]], // 0 Water: ice-foam -> azure -> cobalt
-  [[1.45, 2.10, 1.65], [0.24, 1.48, 0.82], [0.08, 0.65, 0.42]], // 1 Wind: mint-white -> emerald -> jade
-  [[2.35, 2.05, 1.15], [1.95, 0.68, 0.14], [1.15, 0.16, 0.04]], // 2 Fire: incandescent -> flame -> crimson ember
-  [[1.95, 1.75, 2.45], [0.92, 0.46, 2.15], [0.42, 0.14, 1.25]], // 3 Volt: plasma-white -> violet -> indigo
-  [[1.65, 1.12, 2.25], [0.68, 0.24, 1.38], [0.18, 0.06, 0.42]], // 4 Dark: lilac-star -> void-violet -> abyss
-  [[2.20, 2.05, 1.48], [1.65, 1.28, 0.46], [0.95, 0.64, 0.18]], // 5 Physical: sunlit-white -> gold -> bronze
+  [[1.40, 2.00, 2.25], [0.18, 0.86, 1.82], [0.05, 0.34, 1.08]], // 0 Water: ice-foam -> azure -> deep cobalt
+  [[1.55, 2.15, 1.80], [0.34, 1.62, 0.96], [0.10, 0.72, 0.48]], // 1 Wind: mint-white -> luminous emerald -> jade
+  [[2.45, 2.10, 1.05], [2.05, 0.64, 0.10], [1.18, 0.12, 0.02]], // 2 Fire: incandescent -> molten flame -> crimson ember
+  [[2.10, 2.05, 2.55], [0.98, 0.50, 2.25], [0.42, 0.14, 1.32]], // 3 Volt: blinding white-blue -> plasma violet -> indigo
+  [[1.75, 1.08, 2.30], [0.72, 0.22, 1.48], [0.16, 0.04, 0.44]], // 4 Dark: amethyst-magenta -> void violet -> obsidian abyss
+  [[2.25, 2.10, 1.52], [1.72, 1.32, 0.48], [0.92, 0.62, 0.20]], // 5 Physical: sunlit steel -> champagne gold -> earth bronze
 ];
 
-const EL_HEX = [0x3da8ff, 0x3be085, 0xff6b1a, 0x9b66ff, 0x7b42d6, 0xf2c96b] as const;
-const EL_CORE = [0xd6f6ff, 0xd8ffea, 0xfff0a8, 0xf0e4ff, 0xd8b4ff, 0xfffbe6] as const;
+const EL_HEX = [0x38b2ff, 0x45eb9a, 0xff6214, 0x9b66ff, 0x8a3ef0, 0xf2c96b] as const;
+const EL_CORE = [0xe0f8ff, 0xe2fff0, 0xfff2a6, 0xf2eeff, 0xe5b8ff, 0xfffce8] as const;
 
-const NIAGARA_MAX = 2600;
+const NIAGARA_MAX = 2800;
 
-const NIAGARA_VERT = `
+const NIAGARA_VERT = /* glsl */ `
 attribute vec3 aColor;
 attribute float aSize;
 attribute float aAlpha;
 attribute float aShape;
+attribute float aRot;
 varying vec3 vColor;
 varying float vAlpha;
 varying float vShape;
+varying float vRot;
 void main() {
   vColor = aColor;
   vAlpha = aAlpha;
   vShape = aShape;
+  vRot = aRot;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * mv;
   float dist = max(0.75, -mv.z);
-  gl_PointSize = clamp(aSize * (340.0 / dist), 1.5, 68.0);
+  gl_PointSize = clamp(aSize * (345.0 / dist), 1.5, 72.0);
 }
 `;
 
-const NIAGARA_FRAG = `
+/**
+ * 9 element-tailored point-sprite silhouettes:
+ * 0: soft mote  1: 4-pt anime star  2: iridescent soap bubble  3: electric plasma diamond
+ * 4: abyssal void ring  5: water teardrop  6: spinning wind leaf sliver  7: pointed flame tongue  8: faceted rock chip
+ */
+const NIAGARA_FRAG = /* glsl */ `
 precision highp float;
 varying vec3 vColor;
 varying float vAlpha;
 varying float vShape;
+varying float vRot;
 void main() {
   if (vAlpha <= 0.004) discard;
   vec2 p = gl_PointCoord * 2.0 - 1.0;
   float r = length(p);
   if (r > 1.0) discard;
+  float cs = cos(vRot), sn = sin(vRot);
+  vec2 q = vec2(cs * p.x - sn * p.y, sn * p.x + cs * p.y);
 
   float m = 0.0;
   vec3 col = vColor;
   if (vShape < 0.5) {
-    // 0: Soft glowing ember/mote with hot pinpoint center
     float halo = exp(-r * r * 4.8) * (1.0 - smoothstep(0.72, 1.0, r));
     float hot = exp(-r * r * 20.0);
     m = halo * 0.78 + hot * 0.65;
     col = mix(vColor, vColor * 1.45 + vec3(0.35), hot);
   } else if (vShape < 1.5) {
-    // 1: Crisp 4-point anime star sparkle / glint
     float ax = abs(p.x), ay = abs(p.y);
-    float crossArm = exp(-ax * 13.0) * exp(-ay * 2.6) + exp(-ay * 13.0) * exp(-ax * 2.6);
-    float core = exp(-r * r * 16.0);
-    m = clamp(crossArm * 0.72 + core * 0.95, 0.0, 1.0) * (1.0 - smoothstep(0.75, 1.0, r));
-    col = mix(vColor, vec3(1.4), core * 0.65);
+    float crossArm = exp(-ax * 14.0) * exp(-ay * 2.5) + exp(-ay * 14.0) * exp(-ax * 2.5);
+    float core = exp(-r * r * 18.0);
+    m = clamp(crossArm * 0.76 + core * 0.95, 0.0, 1.0) * (1.0 - smoothstep(0.78, 1.0, r));
+    col = mix(vColor, vec3(1.5), core * 0.68);
   } else if (vShape < 2.5) {
-    // 2: Iridescent hollow water bubble ring + upper-left specular glint
-    float rim = exp(-pow((r - 0.74) * 9.5, 2.0));
-    float spec = exp(-dot(p - vec2(-0.30, -0.32), p - vec2(-0.30, -0.32)) * 28.0);
+    float rim = exp(-pow((r - 0.74) * 10.0, 2.0));
+    float spec = exp(-dot(p - vec2(-0.30, -0.32), p - vec2(-0.30, -0.32)) * 30.0);
     float fill = (1.0 - r * r) * 0.14;
-    m = clamp(rim * 0.85 + spec * 0.95 + fill, 0.0, 1.0) * (1.0 - smoothstep(0.88, 1.0, r));
-    col = mix(vColor, vec3(1.5, 1.7, 1.85), spec * 0.8 + rim * 0.25);
+    m = clamp(rim * 0.88 + spec * 0.96 + fill, 0.0, 1.0) * (1.0 - smoothstep(0.88, 1.0, r));
+    col = mix(vColor, vec3(1.55, 1.75, 1.95), spec * 0.85 + rim * 0.28);
   } else if (vShape < 3.5) {
-    // 3: Electric plasma diamond spark
-    float d = abs(p.x) * 1.15 + abs(p.y) * 1.15;
-    float spark = exp(-d * 5.2) * (1.0 - smoothstep(0.7, 1.0, d));
-    float hot = exp(-r * r * 24.0);
-    m = clamp(spark * 0.85 + hot, 0.0, 1.0);
-    col = mix(vColor, vec3(1.6, 1.45, 2.0), hot * 0.75);
+    float d = abs(q.x) * 1.0 + abs(q.y) * 3.4;
+    float spark = (1.0 - smoothstep(0.45, 0.98, d));
+    float hot = exp(-r * r * 26.0);
+    m = clamp(spark * 0.90 + hot, 0.0, 1.0);
+    col = mix(vColor, vec3(1.75, 1.72, 2.15), hot * 0.80);
+  } else if (vShape < 4.5) {
+    float edge = exp(-pow((r - 0.58) * 7.8, 2.0));
+    float mist = exp(-r * r * 3.6) * 0.34;
+    m = clamp(edge * 0.90 + mist, 0.0, 1.0) * (1.0 - smoothstep(0.82, 1.0, r));
+  } else if (vShape < 5.5) {
+    float y = p.y;
+    float w = y > 0.18 ? sqrt(max(0.0, 1.0 - pow((y - 0.18) / 0.76, 2.0))) * 0.58 : 0.58 * clamp((y + 0.94) / 1.12, 0.0, 1.0);
+    float body = (1.0 - smoothstep(w - 0.14, w, abs(p.x))) * step(-0.94, y) * step(y, 0.94);
+    float spec = exp(-dot(p - vec2(-0.16, 0.34), p - vec2(-0.16, 0.34)) * 30.0);
+    m = clamp(body * 0.74 + spec * 0.92, 0.0, 1.0);
+    col = mix(vColor * 1.15, vec3(1.55, 1.80, 2.0), spec * 0.82);
+  } else if (vShape < 6.5) {
+    float d = length(vec2(q.x * 0.85, q.y * 3.5));
+    float vein = exp(-q.y * q.y * 130.0) * exp(-q.x * q.x * 1.5);
+    m = (1.0 - smoothstep(0.48, 0.94, d)) * 0.78 + vein * 0.62;
+    col = mix(vColor * 1.2, vec3(1.55, 1.75, 1.60), vein * 0.52);
+  } else if (vShape < 7.5) {
+    float y = -p.y;
+    float w = y < -0.18 ? sqrt(max(0.0, 1.0 - pow((y + 0.18) / 0.76, 2.0))) * 0.56 : 0.56 * clamp((0.94 - y) / 1.12, 0.0, 1.0);
+    float body = (1.0 - smoothstep(w - 0.18, w, abs(p.x))) * step(-0.94, y) * step(y, 0.94);
+    float hot = exp(-dot(p - vec2(0.0, 0.32), p - vec2(0.0, 0.32)) * 9.5);
+    m = clamp(body * 0.84 + hot * 0.65, 0.0, 1.0);
+    col = mix(vColor * 1.25, vec3(2.1, 1.85, 1.1), hot * 0.72);
   } else {
-    // 4: Abyssal wisp ring with bright glowing violet edge
-    float edge = exp(-pow((r - 0.56) * 7.0, 2.0));
-    float mist = exp(-r * r * 3.8) * 0.45;
-    m = clamp(edge * 0.85 + mist, 0.0, 1.0) * (1.0 - smoothstep(0.8, 1.0, r));
+    float d = max(abs(q.x) * 0.866 + abs(q.y) * 0.5, abs(q.y));
+    m = 1.0 - smoothstep(0.50, 0.62, d);
+    col = vColor * (0.58 + 0.56 * step(0.0, q.x + q.y * 0.55));
   }
 
   float a = clamp(m * vAlpha, 0.0, 1.0);
@@ -116,8 +151,41 @@ void main() {
 }
 `;
 
-// Razor-fine shader-driven ground wave / rune ring (replaces chunky flat RingGeometry!)
-const WAVE_RING_VERT = `
+const NOISE_GLSL = /* glsl */ `
+float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+vec2 hash22(vec2 p) { return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+    mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+    f.y
+  );
+}
+float fbm2(vec2 p) { return vnoise(p) * 0.65 + vnoise(p * 2.13 + vec2(7.3, 11.9)) * 0.35; }
+vec2 voronoi2(vec2 p) {
+  vec2 n = floor(p), f = fract(p);
+  float d1 = 8.0, d2 = 8.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j));
+      vec2 o = hash22(n + g);
+      vec2 r = g + o - f;
+      float d = dot(r, r);
+      if (d < d1) { d2 = d1; d1 = d; }
+      else if (d < d2) { d2 = d; }
+    }
+  }
+  return vec2(sqrt(d1), sqrt(d2) - sqrt(d1));
+}
+float celStep(float edge, float val) {
+  float w = max(fwidth(val) * 1.35, 0.015);
+  return smoothstep(edge - w, edge + w, val);
+}
+`;
+
+const PLAIN_VERT = /* glsl */ `
 varying vec2 vUv;
 void main() {
   vUv = uv;
@@ -125,14 +193,21 @@ void main() {
 }
 `;
 
-const WAVE_RING_FRAG = `
+/**
+ * Element-specific ground shockwaves (uMode=0) and sustained elemental fields/arrays (uMode=1).
+ * Every element has its own unmistakable geometric language — zero shared generic hex rings.
+ */
+const WAVE_RING_FRAG = /* glsl */ `
 precision highp float;
 varying vec2 vUv;
 uniform vec3 uColor;
 uniform vec3 uCore;
 uniform float uProgress;
 uniform float uTime;
-uniform float uMode; // 0 = expanding shockwave, 1 = rotating arcane rune circle
+uniform float uMode;
+uniform float uElement;
+${NOISE_GLSL}
+
 void main() {
   vec2 p = vUv * 2.0 - 1.0;
   float r = length(p);
@@ -140,84 +215,284 @@ void main() {
   float ang = atan(p.y, p.x);
 
   if (uMode < 0.5) {
-    // Delicate thin wave crest + trailing inner shimmer
-    float e = 1.0 - (1.0 - uProgress) * (1.0 - uProgress);
-    float targetR = mix(0.14, 0.94, e);
-    float ripple = sin(ang * 8.0 + uTime * 7.0) * 0.012 + sin(ang * 14.0 - uTime * 5.0) * 0.007;
-    float d = abs(r - (targetR + ripple));
-    float thinRim = exp(-d * 42.0);
-    float innerTail = smoothstep(targetR - 0.16, targetR, r) * (1.0 - smoothstep(targetR, targetR + 0.04, r)) * 0.35;
-    float fade = (1.0 - uProgress) * (1.0 - uProgress * 0.45);
-    float m = (thinRim + innerTail) * fade;
-    if (m < 0.01) discard;
-    vec3 col = mix(uColor, uCore, clamp(thinRim * 1.15, 0.0, 1.0));
-    gl_FragColor = vec4(col * m, clamp(m, 0.0, 0.92));
+    float pr = clamp(uProgress, 0.0, 1.0);
+    float e = 1.0 - (1.0 - pr) * (1.0 - pr);
+    float R = mix(0.12, 0.90, e);
+    float fade = (1.0 - pr) * (1.0 - pr * 0.42);
+    float m = 0.0;
+    float core = 0.0;
+
+    if (uElement < 0.5) {
+      // Water: triple concentric fluid ripples + wave crest shimmer
+      for (int k = 0; k < 3; k++) {
+        float fk = float(k);
+        float rr = R - fk * 0.14;
+        if (rr > 0.02) {
+          float rip = sin(ang * (8.0 + fk * 4.0) + uTime * 7.0) * 0.012;
+          m += exp(-pow((r - (rr + rip)) * (42.0 - fk * 8.0), 2.0)) * (1.0 - fk * 0.26);
+        }
+      }
+      core = exp(-pow((r - R) * 68.0, 2.0));
+    } else if (uElement < 1.5) {
+      // Wind: 3-arm spinning spiral gale + thin outer vacuum rim
+      float sp = sin(ang * 3.0 + r * 14.0 - uTime * 10.0);
+      float arms = smoothstep(0.72, 1.0, sp) * smoothstep(0.08, R, r) * (1.0 - smoothstep(R, R + 0.08, r));
+      float rim = exp(-pow((r - R) * 38.0, 2.0)) * 0.75;
+      m = arms * 0.92 + rim;
+      core = rim;
+    } else if (uElement < 2.5) {
+      // Fire: ragged flame-licked blast ring + glowing scorch center
+      float n = fbm2(vec2(ang * 4.5, uTime * 5.0 + r * 3.0));
+      float rr = R + (n - 0.5) * 0.12;
+      float rim = exp(-pow((r - rr) * 20.0, 2.0));
+      float scorch = (1.0 - smoothstep(0.0, R * 0.92, r)) * (0.18 + 0.24 * n);
+      m = rim + scorch;
+      core = exp(-pow((r - rr) * 48.0, 2.0));
+    } else if (uElement < 3.5) {
+      // Volt: 30 Hz continuous angular jagged lightning perimeter + radial discharge spokes
+      float ts = floor(uTime * 30.0);
+      float seg = (ang + 3.14159265) / 6.2831853 * 24.0;
+      float i0 = floor(seg);
+      float i1 = mod(i0 + 1.0, 24.0);
+      float jag = (mix(hash21(vec2(i0, ts)), hash21(vec2(i1, ts)), fract(seg)) - 0.5) * 0.11;
+      float rim = 1.0 - smoothstep(0.004, 0.022, abs(r - (R + jag)));
+      float rimGlow = exp(-pow((r - (R + jag)) * 18.0, 2.0)) * 0.35;
+      float spokes = step(0.91, hash21(vec2(floor(ang * 16.0), ts + 5.0))) * smoothstep(R * 0.22, R, r) * (1.0 - smoothstep(R, R + 0.03, r));
+      float strobe = 0.65 + 0.35 * step(0.3, hash21(vec2(ts, 1.0)));
+      m = (rim + rimGlow + spokes * 0.85) * strobe;
+      core = rim;
+    } else if (uElement < 4.5) {
+      // Dark: imploding gravitational pulse with inward tendrils
+      float Rd = mix(0.92, 0.12, e);
+      float rim = exp(-pow((r - Rd) * 22.0, 2.0));
+      float tend = smoothstep(0.68, 1.0, sin(ang * 7.0 + r * 10.0 + uTime * 4.5))
+        * smoothstep(Rd, Rd + 0.28, r) * (1.0 - smoothstep(Rd + 0.28, 0.98, r)) * 0.65;
+      m = rim + tend;
+      core = rim * 0.55;
+      fade = 1.0 - pr * pr;
+    } else {
+      // Physical: 11 radial earth-fracture cracks + kinetic dust compression wave
+      float sectors = 11.0;
+      float sa = (ang + 3.14159265) / 6.2831853 * sectors;
+      float sid = floor(sa);
+      float ca = (sid + 0.5 + (hash21(vec2(sid, 2.0)) - 0.5) * 0.55) / sectors * 6.2831853 - 3.14159265 + sin(r * 19.0 + sid) * 0.04;
+      float dist = abs(ang - ca) * r;
+      float crack = (1.0 - smoothstep(0.004, 0.020, dist)) * step(r, R * 1.04) * smoothstep(0.06, 0.20, r);
+      float dust = exp(-pow((r - R) * 14.0, 2.0)) * 0.62;
+      m = crack * 1.1 + dust;
+      core = crack;
+      fade = 1.0 - pr;
+    }
+
+    float a = clamp(m * fade, 0.0, 0.95);
+    if (a < 0.01) discard;
+    vec3 col = mix(uColor, uCore, clamp(core * 1.1, 0.0, 1.0));
+    gl_FragColor = vec4(col * a, a);
   } else {
-    // Intricate thin rotating arcane magic sigil (concentric hairline circles + star ticks)
     float fade = uProgress;
-    float a1 = ang + uTime * 1.3;
-    float a2 = ang - uTime * 2.1;
-    float rOut = exp(-abs(r - 0.92) * 58.0);
-    float rMid = exp(-abs(r - 0.72) * 62.0) * (0.55 + 0.45 * sin(a1 * 12.0));
-    float rIn = exp(-abs(r - 0.40) * 56.0);
-    float ticks = exp(-abs(r - 0.82) * 28.0) * smoothstep(0.65, 0.96, abs(cos(a2 * 12.0)));
-    float hex = exp(-abs(r - (0.64 + 0.075 * cos(a1 * 6.0))) * 52.0) * 0.82;
-    float glow = exp(-r * r * 5.5) * 0.22;
-    float m = clamp((rOut + rMid * 0.85 + rIn * 0.72 + ticks * 0.78 + hex + glow) * fade, 0.0, 1.0);
-    if (m < 0.01) discard;
-    vec3 col = mix(uColor, uCore, clamp(rOut + rIn + ticks * 0.6, 0.0, 1.0));
-    gl_FragColor = vec4(col * m, clamp(m * 0.92, 0.0, 0.92));
+    float m = 0.0;
+    float core = 0.0;
+
+    if (uElement < 0.5) {
+      // Water Q: shimmering caustic interference pool + concentric wave rings
+      float c1 = sin(p.x * 16.0 + uTime * 3.2) * cos(p.y * 16.0 - uTime * 2.6);
+      float c2 = sin((p.x + p.y) * 12.0 - uTime * 4.0) * cos((p.x - p.y) * 12.0 + uTime * 2.8);
+      float caust = pow(clamp(0.5 + 0.5 * (c1 * 0.55 + c2 * 0.45), 0.0, 1.0), 3.2) * (1.0 - smoothstep(0.65, 0.96, r));
+      float r1 = exp(-abs(r - 0.92) * 52.0);
+      float r2 = exp(-abs(r - (0.68 + 0.02 * sin(ang * 6.0 + uTime * 3.0))) * 44.0) * 0.72;
+      float r3 = exp(-abs(r - 0.36) * 40.0) * 0.55;
+      m = (caust * 0.62 + r1 + r2 + r3) * fade;
+      core = r1 + caust * 0.5;
+    } else if (uElement < 1.5) {
+      // Wind R: triple-spiral cyclone streamlines + dashed outer wind compass
+      float a1 = ang - uTime * 4.6;
+      float sp1 = pow(max(0.0, sin(a1 * 3.0 + r * 14.0)), 6.0) * smoothstep(0.12, 0.35, r) * (1.0 - smoothstep(0.76, 0.96, r));
+      float sp2 = pow(max(0.0, sin(a1 * 6.0 + r * 10.0 + 1.2)), 8.0) * smoothstep(0.28, 0.50, r) * (1.0 - smoothstep(0.84, 0.98, r)) * 0.6;
+      float rim = exp(-abs(r - 0.92) * 56.0) * step(0.32, fract(ang * 3.82 - uTime * 2.4));
+      float eye = exp(-abs(r - 0.22) * 42.0) * 0.75;
+      m = (sp1 * 0.95 + sp2 + rim + eye) * fade;
+      core = rim + eye + sp1 * 0.45;
+    } else if (uElement < 2.5) {
+      // Fire Q: volcanic caldera fissures + solar flame triangles
+      float a1 = ang + uTime * 0.85;
+      float magma = pow(max(0.0, 1.0 - abs(fbm2(p * 4.8 + vec2(uTime * 0.3, -uTime * 0.25)) - 0.5) * 6.5), 2.2) * (1.0 - smoothstep(0.60, 0.94, r));
+      float rim = exp(-abs(r - 0.90) * 46.0);
+      float teeth = exp(-abs(r - (0.72 + 0.14 * abs(sin(a1 * 4.0)))) * 40.0) * 0.90;
+      float heat = exp(-r * r * 3.8) * 0.32 * (0.75 + 0.25 * sin(uTime * 9.0));
+      m = (magma * 0.95 + rim + teeth + heat) * fade;
+      core = magma + rim * 0.85 + teeth * 0.5;
+    } else if (uElement < 3.5) {
+      // Volt Q: crisp Tesla octagon with interpolated continuous 30 Hz crackling lightning perimeter + 8 nodes
+      float ts = floor(uTime * 30.0);
+      float oct = cos(mod(ang + 3.14159265, 0.785398) - 0.392699);
+      float rOct = 0.82 / max(0.75, oct);
+      float seg = (ang + 3.14159265) / 6.2831853 * 32.0;
+      float i0 = floor(seg);
+      float i1 = mod(i0 + 1.0, 32.0);
+      float jag = (mix(hash21(vec2(i0, ts)), hash21(vec2(i1, ts)), fract(seg)) - 0.5) * 0.075;
+      float perim = 1.0 - smoothstep(0.004, 0.022, abs(r - (rOct + jag)));
+      float perimGlow = exp(-pow((r - (rOct + jag)) * 20.0, 2.0)) * 0.42;
+      float inner = exp(-abs(r - 0.42) * 56.0) * (0.65 + 0.35 * step(0.4, hash21(vec2(ts, 2.0))));
+      float nodes = exp(-abs(r - 0.86) * 20.0) * smoothstep(0.94, 0.995, cos(ang * 8.0));
+      float spokeAng = mod(ang + 0.392699, 0.785398) - 0.392699;
+      float spokeZig = (mix(hash21(vec2(floor(r * 14.0), ts)), hash21(vec2(floor(r * 14.0) + 1.0, ts)), fract(r * 14.0)) - 0.5) * 0.07;
+      float arcs = (1.0 - smoothstep(0.004, 0.018, abs(spokeAng * r - spokeZig))) * smoothstep(0.42, 0.86, r) * (1.0 - smoothstep(0.86, 0.90, r)) * 0.85;
+      m = (perim + perimGlow + inner * 0.75 + nodes * 1.1 + arcs) * fade;
+      core = perim + nodes + arcs;
+    } else if (uElement < 4.5) {
+      // Dark R / Q: arcane eclipse sigil + counter-rotating hexagram + inward void pull
+      float a1 = ang + uTime * 1.2;
+      float a2 = ang - uTime * 2.0;
+      float rOut = exp(-abs(r - 0.92) * 56.0);
+      float hex = exp(-abs(r - (0.64 + 0.09 * cos(a1 * 6.0))) * 50.0) * 0.88;
+      float ticks = exp(-abs(r - 0.80) * 28.0) * smoothstep(0.68, 0.96, abs(cos(a2 * 12.0)));
+      float pull = pow(max(0.0, sin(ang * 9.0 - r * 10.0 + uTime * 4.0)), 6.0) * smoothstep(0.18, 0.88, r) * 0.55;
+      float horizon = exp(-abs(r - 0.28) * 34.0) * 0.95;
+      m = (rOut + hex + ticks * 0.78 + pull + horizon) * fade;
+      core = rOut + horizon + ticks * 0.5;
+    } else {
+      // Physical: golden seismic fracture ring + geometric crest
+      float sectors = 8.0;
+      float crack = (1.0 - smoothstep(0.008, 0.030, abs(sin(ang * sectors * 0.5)) * r)) * smoothstep(0.14, 0.30, r) * (1.0 - smoothstep(0.84, 0.94, r));
+      float rOut = exp(-abs(r - 0.90) * 48.0);
+      float rIn = exp(-abs(r - 0.48) * 48.0) * 0.75;
+      m = (crack * 0.9 + rOut + rIn) * fade;
+      core = rOut + crack * 0.6;
+    }
+
+    float a = clamp(m, 0.0, 0.94);
+    if (a < 0.01) discard;
+    vec3 col = mix(uColor, uCore, clamp(core, 0.0, 1.0));
+    gl_FragColor = vec4(col * a, a);
   }
 }
 `;
 
-// Thin-film iridescent Fresnel bubble dome shader (crystal-clear center, delicate rainbow rim)
-const BUBBLE_DOME_VERT = `
-varying vec3 vNormalV;
-varying vec3 vViewPos;
-varying vec3 vLocal;
-void main() {
-  vLocal = position;
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vViewPos = -mv.xyz;
-  vNormalV = normalize(normalMatrix * normal);
-  gl_Position = projectionMatrix * mv;
-}
-`;
-
-const BUBBLE_DOME_FRAG = `
+const FLOW_MESH_FRAG = /* glsl */ `
 precision highp float;
-varying vec3 vNormalV;
-varying vec3 vViewPos;
-varying vec3 vLocal;
+varying vec2 vUv;
 uniform vec3 uColor;
 uniform vec3 uCore;
-uniform float uAlpha;
+uniform vec3 uEdge;
 uniform float uTime;
+uniform float uAlpha;
+uniform float uStyle; // 0 water wave, 1 wind funnel/ribbon, 2 fire plume/trail, 3 volt bolt strip, 4 dark accretion/rift, 5 physical sword-qi
+${NOISE_GLSL}
+
 void main() {
-  vec3 N = normalize(vNormalV);
-  if (!gl_FrontFacing) N = -N;
-  vec3 V = normalize(vViewPos);
-  float ndv = clamp(abs(dot(N, V)), 0.0, 1.0);
-  float fresnel = pow(1.0 - ndv, 2.8);
-  // Subtle soap-film rainbow shimmer along the dome surface
-  float film = sin(vLocal.y * 12.0 + vLocal.x * 6.0 - uTime * 3.8) * 0.5 + 0.5;
-  vec3 irid = mix(uColor, vec3(0.75, 1.45, 1.85), film * 0.55);
-  irid = mix(irid, uCore, fresnel * 0.85);
-  float caustics = pow(0.5 + 0.5 * sin(vLocal.x * 16.0 + uTime * 4.5) * cos(vLocal.z * 16.0 - uTime * 3.2), 4.0) * 0.25;
-  float alpha = (0.045 + fresnel * 0.72 + caustics * fresnel) * uAlpha;
-  if (alpha < 0.01) discard;
-  gl_FragColor = vec4(irid * (0.7 + fresnel * 1.15), clamp(alpha, 0.0, 0.85));
+  float u = vUv.x, v = vUv.y;
+  float a = 0.0;
+  vec3 col = uColor;
+
+  if (uStyle < 0.5) {
+    // 0: Water sweeping tidal ribbon (crisp cel-stepped wave + Voronoi foam cutouts + razor white crest)
+    float arch = sin(clamp(u, 0.0, 1.0) * 3.14159265);
+    float crest = 0.88 + sin(u * 18.0 - uTime * 12.0) * 0.04;
+    float inner = 0.16 * (1.0 - arch) + 0.08;
+    float body = celStep(0.0, min(crest - v, v - inner)) * celStep(0.04, arch);
+    vec2 vor = voronoi2(vec2(u * 15.0 - uTime * 9.0, v * 5.0));
+    float hole = (1.0 - celStep(0.28, vor.x)) * (1.0 - celStep(crest - 0.14, v));
+    float foam = celStep(crest - 0.11, v);
+    float jet = celStep(0.60, vnoise(vec2(u * 6.0 - uTime * 11.0, v * 22.0)));
+    a = body * (1.0 - hole * 0.88) * (0.68 + 0.32 * foam);
+    col = mix(uEdge * 1.1, uColor * 1.15, celStep(0.42, v));
+    col = mix(col, uCore * 1.25, clamp(foam + jet * 0.35, 0.0, 1.0));
+  } else if (uStyle < 1.5) {
+    // 1: Wind translucent vacuum streak ribbon / cyclone funnel
+    float s1 = exp(-pow((fract(v * 3.0 + u * 2.2 - uTime * 2.8) - 0.5) * 14.0, 2.0));
+    float s2 = exp(-pow((fract(v * 6.0 - u * 1.5 - uTime * 3.6) - 0.5) * 18.0, 2.0)) * 0.65;
+    float endFade = smoothstep(0.0, 0.16, v) * (1.0 - smoothstep(0.76, 1.0, v));
+    a = (s1 + s2 + 0.08) * endFade;
+    col = mix(uColor, uCore * 1.35, clamp(s1 * 0.9, 0.0, 1.0));
+  } else if (uStyle < 2.5) {
+    // 2: Fire crisp cel-stepped flame tongues (sharp Voronoi licks + crimson/orange/gold bands, zero blurry tube!)
+    vec2 vor = voronoi2(vec2(u * 7.5 + v * 1.4, v * 4.8 - uTime * 6.5));
+    float n2 = vnoise(vec2(u * 16.0, v * 10.0 - uTime * 11.0));
+    float flameField = (1.0 - vor.x) * 0.68 + n2 * 0.32 - v * 0.72;
+    float mask = celStep(0.10, flameField) * celStep(0.04, v) * (1.0 - celStep(0.95, v));
+    float midBand = celStep(0.26, flameField);
+    float hotCore = celStep(0.46, flameField);
+    a = mask * 0.92;
+    col = mix(uEdge * 1.2, uColor * 1.1, midBand);
+    col = mix(col, uCore * 1.15, hotCore);
+  } else if (uStyle < 3.5) {
+    // 3: Volt thick 3D jagged plasma bolt strip
+    float d = abs(v - 0.5) * 2.0;
+    float core = exp(-d * d * 18.0);
+    float glow = exp(-d * d * 2.8) * 0.58;
+    float tap = smoothstep(0.0, 0.05, u) * (1.0 - smoothstep(0.95, 1.0, u));
+    a = (core + glow) * tap;
+    col = mix(uColor * 1.35, uCore * 2.0, core);
+  } else if (uStyle < 4.5) {
+    // 4: Dark razor-edged gravitational accretion ring / rift streaks
+    float d = abs(v - 0.5) * 2.0;
+    float streak = celStep(0.32, sin(u * 25.1327 - uTime * 9.0 + vnoise(vec2(u * 12.0, uTime * 2.2)) * 3.2) * 0.5 + 0.5);
+    float core = 1.0 - celStep(0.24, d);
+    float outerBand = (1.0 - celStep(0.78, d)) * streak * 0.75;
+    a = max(core, outerBand);
+    col = mix(uColor * 1.15, uCore * 1.45, core);
+  } else {
+    // 5: Physical razor cel-stepped crescent sword-qi blade
+    float arch = sin(clamp(u, 0.0, 1.0) * 3.14159265);
+    float inner = mix(0.68, 0.14, arch);
+    float outer = 0.94;
+    float body = celStep(0.0, min(outer - v, v - inner)) * celStep(0.04, arch);
+    float brush = celStep(0.58, vnoise(vec2(u * 5.0 - uTime * 12.0, v * 30.0)));
+    float spine = celStep(0.87, v) * body;
+    float sheen = celStep(0.82, 1.0 - abs(u - fract(uTime * 2.4)) * 2.4) * body;
+    a = body * 0.92;
+    col = mix(uEdge * 1.1, uColor * 1.15, celStep(0.52, v) * 0.8 + brush * 0.2);
+    col = mix(col, uCore * 1.45, clamp(spine + sheen * 0.75, 0.0, 1.0));
+  }
+
+  float fa = clamp(a * uAlpha, 0.0, 1.0);
+  if (fa < 0.01) discard;
+  gl_FragColor = vec4(col * fa, fa);
 }
 `;
 
-interface ParticleSpawnOpts {
+/** Dark normal-blended obsidian shadow pool / event-horizon backing for Dark & Physical cracks. */
+const DARK_DISC_FRAG = /* glsl */ `
+precision highp float;
+varying vec2 vUv;
+uniform vec3 uColor;
+uniform float uAlpha;
+uniform float uTime;
+uniform float uMode; // 0 dark abyss pool, 1 physical crack shadow
+${NOISE_GLSL}
+void main() {
+  vec2 p = vUv * 2.0 - 1.0;
+  float r = length(p);
+  if (r > 1.0) discard;
+  float ang = atan(p.y, p.x);
+  if (uMode < 0.5) {
+    float n = fbm2(p * 3.8 + vec2(uTime * 0.5, -uTime * 0.4));
+    float pool = (1.0 - smoothstep(0.45, 0.96, r + (n - 0.5) * 0.18));
+    float a = pool * 0.78 * uAlpha;
+    if (a < 0.01) discard;
+    gl_FragColor = vec4(uColor, a);
+  } else {
+    float sectors = 11.0;
+    float sa = (ang + 3.14159265) / 6.2831853 * sectors;
+    float sid = floor(sa);
+    float ca = (sid + 0.5 + (hash21(vec2(sid, 2.0)) - 0.5) * 0.55) / sectors * 6.2831853 - 3.14159265 + sin(r * 19.0 + sid) * 0.04;
+    float dist = abs(ang - ca) * r;
+    float crack = (1.0 - smoothstep(0.008, 0.032, dist)) * smoothstep(0.05, 0.16, r) * (1.0 - smoothstep(0.84, 0.96, r));
+    float pit = (1.0 - smoothstep(0.0, 0.36, r)) * 0.65;
+    float a = clamp(crack + pit, 0.0, 0.85) * uAlpha;
+    if (a < 0.01) discard;
+    gl_FragColor = vec4(uColor, a);
+  }
+}
+`;
+
+export interface ParticleSpawnOpts {
   x: number; y: number; z: number;
   vx: number; vy: number; vz: number;
   life: number;
   size: number;
   element: number;
-  shape?: number; // 0 soft, 1 star, 2 bubble, 3 spark, 4 void
+  shape?: number;
   drag?: number;
   ay?: number;
   swirl?: number;
@@ -225,13 +500,13 @@ interface ParticleSpawnOpts {
   ax?: number;
   az?: number;
   intensity?: number;
+  spin?: number;
 }
 
 /**
- * Niagara-style GPU Particle + Fine Shader 3D Skill VFX System.
- * Zero heavy primitive outlines: relies on 2,600 HDR additive GPU particles,
- * vortex curl physics, fractal lightning forks, Fresnel soap-bubble domes,
- * and delicate rotating rune/shockwave shaders.
+ * Six-element skill VFX: shared Niagara-style particle pool, projectiles, timed effects and the hit dispatch.
+ * The bodies of the Water / Wind / Fire / Dark / Physical skills live in skill-forms.ts and are built from the
+ * per-element form language in vfx-kit.ts; Volt's plasma strips (bolt, chain, thunder cage) stay here.
  */
 export class SkillVfxSystem {
   private T: any;
@@ -239,13 +514,15 @@ export class SkillVfxSystem {
   private projectiles: ActiveProjectile[] = [];
   private fxList: ActiveTimedFx[] = [];
   private time = 0;
+  private kit: VfxKit;
+  private host: SkillHost;
 
-  // Flat typed-array Niagara particle pool (zero per-frame GC)
   private pPos = new Float32Array(NIAGARA_MAX * 3);
   private pCol = new Float32Array(NIAGARA_MAX * 3);
   private pSize = new Float32Array(NIAGARA_MAX);
   private pAlpha = new Float32Array(NIAGARA_MAX);
   private pShape = new Float32Array(NIAGARA_MAX);
+  private pRot = new Float32Array(NIAGARA_MAX);
 
   private pVelX = new Float32Array(NIAGARA_MAX);
   private pVelY = new Float32Array(NIAGARA_MAX);
@@ -261,6 +538,7 @@ export class SkillVfxSystem {
   private pAx = new Float32Array(NIAGARA_MAX);
   private pAz = new Float32Array(NIAGARA_MAX);
   private pIntensity = new Float32Array(NIAGARA_MAX);
+  private pSpin = new Float32Array(NIAGARA_MAX);
   private pCursor = 0;
   private pAliveCount = 0;
 
@@ -275,12 +553,35 @@ export class SkillVfxSystem {
     ctx.scene.add(this.root);
 
     const T = this.T;
+    this.kit = new VfxKit(T);
+    this.host = {
+      T,
+      kit: this.kit,
+      root: this.root,
+      now: () => this.time,
+      emit: o => this.emit(o),
+      burst: (c, el, count, radius, speed, lift, shape) => this.emitRadialBurst(c, el, count, radius, speed, lift, shape),
+      fx: (life, update, dispose, delay = 0) => {
+        this.fxList.push({age: -delay, life, update, dispose: dispose ?? (() => {})});
+      },
+      mesh: (geo, mat, order = 24, parent) => {
+        const m = this.prepMesh(new T.Mesh(geo, mat), order);
+        m.frustumCulled = false;
+        (parent ?? this.root).add(m);
+        return m;
+      },
+      rune: (radius, element) => this.makeShaderDisc(radius, element, 1),
+      shadow: (radius, color) => this.makeDarkBackingDisc(radius, 0, [color[0], color[1], color[2]]),
+      shockRing: (c, radius, el, life) => this.spawnShockRing(c, 0.3, radius, el, life),
+      machRing: (pos, fwd, scale, life) => this.spawnMachRing(pos, fwd, scale, 1, life),
+    };
     this.pGeo = new T.BufferGeometry();
     this.pGeo.setAttribute('position', new T.BufferAttribute(this.pPos, 3).setUsage(T.DynamicDrawUsage));
     this.pGeo.setAttribute('aColor', new T.BufferAttribute(this.pCol, 3).setUsage(T.DynamicDrawUsage));
     this.pGeo.setAttribute('aSize', new T.BufferAttribute(this.pSize, 1).setUsage(T.DynamicDrawUsage));
     this.pGeo.setAttribute('aAlpha', new T.BufferAttribute(this.pAlpha, 1).setUsage(T.DynamicDrawUsage));
     this.pGeo.setAttribute('aShape', new T.BufferAttribute(this.pShape, 1).setUsage(T.DynamicDrawUsage));
+    this.pGeo.setAttribute('aRot', new T.BufferAttribute(this.pRot, 1).setUsage(T.DynamicDrawUsage));
     this.pGeo.setDrawRange(0, 0);
 
     this.pMat = new T.ShaderMaterial({
@@ -308,6 +609,11 @@ export class SkillVfxSystem {
     return m;
   }
 
+  /** Kit materials go back to their pool (keeping shader programs compiled); everything else is disposed. */
+  private disposeGroup(g: any) {
+    this.kit.release(g);
+  }
+
   private emit(o: ParticleSpawnOpts) {
     const i = this.pCursor;
     this.pCursor = (this.pCursor + 1) % NIAGARA_MAX;
@@ -329,38 +635,56 @@ export class SkillVfxSystem {
     this.pAx[i] = o.ax ?? o.x;
     this.pAz[i] = o.az ?? o.z;
     this.pIntensity[i] = o.intensity ?? 1.0;
+    this.pRot[i] = Math.random() * Math.PI * 2;
+    this.pSpin[i] = o.spin ?? 0;
     this.pAlpha[i] = 0.01;
   }
 
   private defaultShape(el: number, idx: number): number {
-    if (el === 0) return idx % 3 === 0 ? 2 : idx % 5 === 0 ? 1 : 0; // Water: bubbles + glints + mist
-    if (el === 1) return idx % 2 === 0 ? 1 : 0; // Wind: star glints + airy motes
-    if (el === 2) return idx % 4 === 0 ? 1 : 0; // Fire: soft hot embers + sparks
-    if (el === 3) return idx % 2 === 0 ? 3 : 1; // Volt: diamond electric sparks + glints
-    if (el === 4) return idx % 3 === 0 ? 4 : 1; // Dark: void wisps + star dust
-    return idx % 2 === 0 ? 1 : 0; // Physical: gilded star sparkles + fine dust
+    if (el === 0) return idx % 3 === 0 ? 2 : idx % 3 === 1 ? 5 : 0; // Water: bubbles + teardrops + mist
+    if (el === 1) return idx % 3 === 0 ? 1 : 6; // Wind: leaf slivers + crisp glints
+    if (el === 2) return idx % 4 === 0 ? 1 : 7; // Fire: pointed flame tongues + sparks
+    if (el === 3) return idx % 3 === 0 ? 1 : 3; // Volt: electric plasma diamonds + glints
+    if (el === 4) return idx % 3 === 0 ? 1 : 4; // Dark: abyssal void wisps + starlight
+    return idx % 3 === 0 ? 1 : 8; // Physical: faceted rock chips + steel glints
   }
 
   private emitRadialBurst(center: Vec, element: number, count: number, radius: number, speed: number, lift = 1.6, shape?: number) {
+    const isDark = element === 4;
+    const isVolt = element === 3;
+    const isWater = element === 0;
+    const isFire = element === 2;
+    const isWind = element === 1;
+    const isPhys = element === 5;
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
       const elev = (Math.random() - 0.18) * 1.1;
-      const sp = speed * (0.45 + Math.random() * 0.85);
-      const r0 = Math.random() * radius * 0.25;
+      const sp = speed * (0.45 + Math.random() * 0.85) * (isVolt ? 1.55 : isPhys ? 0.95 : 1.0);
+      const r0 = isDark ? (0.45 + Math.random() * Math.max(0.9, radius * 1.8)) : Math.random() * radius * 0.25;
+      const vx = isDark ? (-Math.cos(a) * sp * 0.72 - Math.sin(a) * 1.8) : Math.cos(a) * Math.cos(elev) * sp;
+      const vz = isDark ? (-Math.sin(a) * sp * 0.72 + Math.cos(a) * 1.8) : Math.sin(a) * Math.cos(elev) * sp;
+      const vy = isWater ? (2.4 + Math.random() * 2.8)
+        : isFire ? (1.4 + Math.random() * 2.6 + lift * 0.5)
+        : isVolt ? ((Math.random() - 0.35) * sp * 0.6)
+        : isPhys ? (2.2 + Math.random() * 3.2)
+        : Math.sin(elev) * sp * 0.65 + lift * (0.4 + Math.random() * 0.7);
       this.emit({
         x: center[0] + Math.cos(a) * r0,
-        y: center[1] + 0.18 + Math.random() * 0.32,
+        y: center[1] + 0.18 + Math.random() * 0.34,
         z: center[2] + Math.sin(a) * r0,
-        vx: Math.cos(a) * Math.cos(elev) * sp,
-        vy: Math.sin(elev) * sp * 0.7 + lift * (0.4 + Math.random() * 0.8),
-        vz: Math.sin(a) * Math.cos(elev) * sp,
-        life: 0.34 + Math.random() * 0.44,
+        vx, vy, vz,
+        life: isVolt ? (0.16 + Math.random() * 0.18) : (0.36 + Math.random() * 0.44),
         size: 0.055 + Math.random() * 0.11,
         element,
         shape: shape ?? this.defaultShape(element, i),
-        drag: 3.1 + Math.random() * 1.8,
-        ay: element === 2 || element === 1 ? 1.4 : element === 0 ? -3.6 : -2.2,
-        intensity: 1.05 + Math.random() * 0.45,
+        drag: isVolt ? 6.8 : isWater || isPhys ? 1.1 : 2.8 + Math.random() * 1.4,
+        ay: isFire ? 3.2 : isWind ? 1.1 : isWater ? -9.5 : isPhys ? -12.5 : isDark ? 0.4 : 0,
+        swirl: isWind ? (Math.random() < 0.5 ? -6.5 : 6.5) : isDark ? 3.8 : 0,
+        pull: isDark ? 3.2 : 0,
+        ax: center[0],
+        az: center[2],
+        spin: isWind ? 14 : isPhys ? 9 : 0,
+        intensity: isVolt ? 1.45 : 1.1 + Math.random() * 0.4,
       });
     }
   }
@@ -370,7 +694,7 @@ export class SkillVfxSystem {
     const pal = EL_PAL[element] ?? EL_PAL[0];
     const geo = new T.PlaneGeometry(radius * 2, radius * 2).rotateX(-Math.PI / 2);
     const mat = new T.ShaderMaterial({
-      vertexShader: WAVE_RING_VERT,
+      vertexShader: PLAIN_VERT,
       fragmentShader: WAVE_RING_FRAG,
       transparent: true,
       depthWrite: false,
@@ -382,35 +706,159 @@ export class SkillVfxSystem {
         uProgress: {value: 0},
         uTime: {value: 0},
         uMode: {value: mode},
+        uElement: {value: element},
       },
     });
     return this.prepMesh(new T.Mesh(geo, mat), 23);
   }
 
-  /** Niagara-style crisp forward dash burst & elemental wake for Home exploration right-click dash. */
+  private makeDarkBackingDisc(radius: number, mode: 0 | 1, color: [number, number, number] = [0.03, 0.01, 0.08]) {
+    const T = this.T;
+    const geo = new T.PlaneGeometry(radius * 2, radius * 2).rotateX(-Math.PI / 2);
+    const mat = new T.ShaderMaterial({
+      vertexShader: PLAIN_VERT,
+      fragmentShader: DARK_DISC_FRAG,
+      transparent: true,
+      depthWrite: false,
+      blending: T.NormalBlending,
+      side: T.DoubleSide,
+      uniforms: {
+        uColor: {value: new T.Vector3(...color)},
+        uAlpha: {value: 1},
+        uTime: {value: 0},
+        uMode: {value: mode},
+      },
+    });
+    return this.prepMesh(new T.Mesh(geo, mat), 22);
+  }
+
+  private makeFlowMaterial(element: number, style: number, alpha = 1.0) {
+    const T = this.T;
+    const pal = EL_PAL[element] ?? EL_PAL[0];
+    return new T.ShaderMaterial({
+      vertexShader: PLAIN_VERT,
+      fragmentShader: FLOW_MESH_FRAG,
+      transparent: true,
+      depthWrite: false,
+      blending: T.AdditiveBlending,
+      side: T.DoubleSide,
+      uniforms: {
+        uColor: {value: new T.Vector3(...pal[1])},
+        uCore: {value: new T.Vector3(...pal[0])},
+        uEdge: {value: new T.Vector3(...pal[2])},
+        uTime: {value: this.time},
+        uAlpha: {value: alpha},
+        uStyle: {value: style},
+      },
+    });
+  }
+
+  /** Build a 3D crossed-ribbon strip mesh along a polyline so lightning arcs have real glowing width in WebGL. */
+  private makeBoltStripMesh(points: any[], width: number, element: number, order = 26) {
+    const T = this.T;
+    const segs = points.length - 1;
+    const vertsPerStrip = points.length * 2;
+    const pos = new Float32Array(vertsPerStrip * 2 * 3);
+    const uv = new Float32Array(vertsPerStrip * 2 * 2);
+    const idx: number[] = [];
+
+    for (let strip = 0; strip < 2; strip++) {
+      const vBase = strip * vertsPerStrip;
+      for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        const prev = points[Math.max(0, i - 1)];
+        const next = points[Math.min(points.length - 1, i + 1)];
+        const tx = next.x - prev.x, ty = next.y - prev.y, tz = next.z - prev.z;
+        const tl = Math.hypot(tx, ty, tz) || 1;
+        const dx = tx / tl, dy = ty / tl, dz = tz / tl;
+        // Reference vector not parallel to tangent
+        const rx = Math.abs(dy) < 0.9 ? 0 : 1;
+        const ry = Math.abs(dy) < 0.9 ? 1 : 0;
+        const rz = 0;
+        // First perpendicular u1 = cross(d, ref)
+        let u1x = dy * rz - dz * ry;
+        let u1y = dz * rx - dx * rz;
+        let u1z = dx * ry - dy * rx;
+        const u1l = Math.hypot(u1x, u1y, u1z) || 1;
+        u1x /= u1l; u1y /= u1l; u1z /= u1l;
+        // Second perpendicular u2 = cross(d, u1)
+        const u2x = dy * u1z - dz * u1y;
+        const u2y = dz * u1x - dx * u1z;
+        const u2z = dx * u1y - dy * u1x;
+
+        const wx = (strip === 0 ? u1x : u2x) * width;
+        const wy = (strip === 0 ? u1y : u2y) * width;
+        const wz = (strip === 0 ? u1z : u2z) * width;
+
+        const u = i / Math.max(1, segs);
+        const o0 = (vBase + i * 2) * 3;
+        pos[o0] = p.x - wx; pos[o0 + 1] = p.y - wy; pos[o0 + 2] = p.z - wz;
+        pos[o0 + 3] = p.x + wx; pos[o0 + 4] = p.y + wy; pos[o0 + 5] = p.z + wz;
+
+        const uv0 = (vBase + i * 2) * 2;
+        uv[uv0] = u; uv[uv0 + 1] = 0;
+        uv[uv0 + 2] = u; uv[uv0 + 3] = 1;
+        if (i < segs) {
+          const a = vBase + i * 2;
+          idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        }
+      }
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new T.BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    const mat = this.makeFlowMaterial(element, 3, 1.0);
+    return this.prepMesh(new T.Mesh(geo, mat), order);
+  }
+
+  /** Element-specific Home exploration right-click dash burst & wake. */
   spawnHomeDashFx(origin: Vec, dir: Vec, element: number) {
+    const el = Math.min(5, Math.max(0, Math.floor(element)));
     const fl = Math.hypot(dir[0], dir[2]) || 1;
     const fx = dir[0] / fl, fz = dir[2] / fl;
     const rx = -fz, rz = fx;
-    this.spawnShockRing(origin, 0.25, 1.35, element, 0.30);
+    this.spawnShockRing(origin, 0.25, 1.45, el, el === 3 ? 0.22 : 0.34);
+
+    if (el === 1) {
+      // Wind: tilted Mach-cone air ring right behind the dash
+      this.spawnMachRing([origin[0] + fx * 0.25, origin[1] + 0.42, origin[2] + fz * 0.25], [fx, 0, fz], 1.15, el, 0.28);
+    } else if (el === 3) {
+      // Volt: snapping horizontal lightning filament wake
+      const back: Vec = [origin[0] - fx * 1.4, origin[1] + 0.38, origin[2] - fz * 1.4];
+      const front: Vec = [origin[0] + fx * 0.4, origin[1] + 0.38, origin[2] + fz * 0.4];
+      const strip = this.makeBoltStripMesh(this.buildJaggedPoints(back, front, 9, 0.28), 0.045, el, 26);
+      this.root.add(strip);
+      this.fxList.push({
+        age: 0, life: 0.22,
+        update: (t) => { strip.material.uniforms.uAlpha.value = (1 - t) * (Math.sin(t * 70) > -0.3 ? 1 : 0.25); },
+        dispose: () => { strip.removeFromParent(); strip.geometry.dispose(); strip.material.dispose(); },
+      });
+    }
+
     for (let i = 0; i < 42; i++) {
       const side = (Math.random() - 0.5) * 0.65;
-      const back = Math.random() * 0.45;
-      const sp = 1.6 + Math.random() * 3.8;
+      const back = Math.random() * 0.50;
+      const sp = (el === 3 ? 3.2 : 1.6) + Math.random() * 3.6;
       this.emit({
         x: origin[0] + rx * side - fx * back,
         y: origin[1] + 0.14 + Math.random() * 0.36,
         z: origin[2] + rz * side - fz * back,
         vx: -fx * sp + rx * (side * 2.2),
-        vy: 0.4 + Math.random() * 1.4,
+        vy: el === 0 || el === 5 ? (1.4 + Math.random() * 2.0) : el === 2 ? (1.2 + Math.random() * 1.8) : (0.3 + Math.random() * 1.2),
         vz: -fz * sp + rz * (side * 2.2),
-        life: 0.26 + Math.random() * 0.32,
-        size: 0.045 + Math.random() * 0.085,
-        element,
-        shape: this.defaultShape(element, i),
-        drag: 4.0,
-        ay: element === 2 || element === 1 ? 1.2 : -1.0,
-        intensity: 1.15,
+        life: el === 3 ? (0.14 + Math.random() * 0.16) : (0.28 + Math.random() * 0.32),
+        size: 0.048 + Math.random() * 0.088,
+        element: el,
+        shape: this.defaultShape(el, i),
+        drag: el === 3 ? 6.2 : el === 0 || el === 5 ? 1.4 : 3.4,
+        ay: el === 2 ? 2.8 : el === 1 ? 0.9 : el === 0 ? -7.5 : el === 5 ? -10.5 : 0.2,
+        swirl: el === 1 ? 7.0 : el === 4 ? 3.5 : 0,
+        pull: el === 4 ? 2.4 : 0,
+        ax: origin[0],
+        az: origin[2],
+        spin: el === 1 ? 14 : el === 5 ? 9 : 0,
+        intensity: 1.18,
       });
     }
   }
@@ -419,126 +867,103 @@ export class SkillVfxSystem {
   triggerSkill(def: SkillDef, origin: Vec, forward: Vec, cb: SkillEffectCallbacks, aimPoint?: Vec, dashEnd?: Vec) {
     const fl = Math.hypot(forward[0], forward[2]) || 1;
     const fx = forward[0] / fl, fz = forward[2] / fl;
+    const fwd: Vec = [fx, 0, fz];
+    const h = this.host;
+    /** The locked target when one was passed in, otherwise the ground point `dist` ahead. */
+    const ahead = (dist: number): Vec => {
+      if (aimPoint) return [...aimPoint];
+      const x = origin[0] + fx * dist, z = origin[2] + fz * dist;
+      return [x, cb.sampleTerrain(x, z) ?? origin[1], z];
+    };
 
-    if (def.archetype === 'projectile' || def.archetype === 'wave') {
-      if (cb.castWall) {
-        const muzzle: Vec = [origin[0] + fx * .65, origin[1] + .52, origin[2] + fz * .65];
-        const wall = cb.castWall([origin[0], origin[1] + .52, origin[2]], muzzle);
-        if (wall) {
-          this.emitRadialBurst(wall, def.element, 28, 0.4, 3.2);
-          cb.onSpawnBurst(wall, def.element, 12, 1.8);
-          return;
+    switch (def.archetype) {
+      case 'projectile':
+      case 'wave': {
+        if (cb.castWall) {
+          const muzzle: Vec = [origin[0] + fx * .65, origin[1] + .52, origin[2] + fz * .65];
+          const wall = cb.castWall([origin[0], origin[1] + .52, origin[2]], muzzle);
+          if (wall) {
+            this.emitRadialBurst(wall, def.element, 28, 0.4, 3.2);
+            cb.onSpawnBurst(wall, def.element, 12, 1.8);
+            return;
+          }
         }
+        this.spawnProjectile(def, origin, fwd, aimPoint);
+        this.emitRadialBurst([origin[0] + fx * 0.55, origin[1] + 0.35, origin[2] + fz * 0.55], def.element, 24, 0.35, 3.0);
+        cb.onSpawnBurst([origin[0] + fx * 0.6, origin[1] + 0.45, origin[2] + fz * 0.6], def.element, 10, 1.8);
+        return;
       }
-      this.spawnProjectile(def, origin, [fx, 0, fz], def.archetype === 'wave', aimPoint);
-      this.emitRadialBurst([origin[0] + fx * 0.55, origin[1] + 0.35, origin[2] + fz * 0.55], def.element, 22, 0.35, 3.0);
-      cb.onSpawnBurst([origin[0] + fx * 0.6, origin[1] + 0.45, origin[2] + fz * 0.6], def.element, 10, 1.8);
-      return;
-    }
-
-    if (def.archetype === 'sweep') {
-      // Water R: shimmering thin water wave rings + spiraling hydro spray & iridescent bubbles
-      this.spawnShockRing(origin, 0.55, def.radius * 1.18, def.element, 0.50);
-      this.spawnShockRing([origin[0], origin[1] + 0.22, origin[2]], 0.35, def.radius * 0.92, def.element, 0.40);
-      for (let i = 0; i < 110; i++) {
-        const a = (i / 110) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
-        const r = 0.4 + Math.random() * def.radius * 0.45;
-        this.emit({
-          x: origin[0] + Math.cos(a) * r,
-          y: origin[1] + 0.16 + Math.random() * 0.45,
-          z: origin[2] + Math.sin(a) * r,
-          vx: Math.cos(a) * (3.5 + Math.random() * 3.8) - Math.sin(a) * 3.2,
-          vy: 1.2 + Math.random() * 2.8,
-          vz: Math.sin(a) * (3.5 + Math.random() * 3.8) + Math.cos(a) * 3.2,
-          life: 0.42 + Math.random() * 0.45,
-          size: 0.06 + Math.random() * 0.12,
-          element: def.element,
-          shape: i % 3 === 0 ? 2 : i % 5 === 0 ? 1 : 0,
-          drag: 2.6,
-          ay: -4.2,
-          swirl: 3.5,
-          ax: origin[0],
-          az: origin[2],
-          intensity: 1.2,
-        });
+      case 'ring':
+      case 'sweep':
+        waterRing(h, origin, def, cb);
+        return;
+      case 'dome':
+        waterDome(h, origin, def, cb);
+        return;
+      case 'dash': {
+        const dist = def.dashDist ?? 4.0;
+        const end: Vec = dashEnd ?? [origin[0] + fx * dist, origin[1], origin[2] + fz * dist];
+        windDash(h, origin, end);
+        cb.onSpawnBurst(origin, def.element, 14, 2.5);
+        cb.onSpawnBurst(end, def.element, 18, 3.0);
+        cb.onSkillHitArea([(origin[0] + end[0]) * 0.5, origin[1], (origin[2] + end[2]) * 0.5], def, false);
+        cb.onSkillHitArea(end, def, false);
+        return;
       }
-      cb.onSpawnBurst(origin, def.element, 24, 4.0);
-      cb.onSkillHitArea(origin, def, false);
-      return;
-    }
-
-    if (def.archetype === 'dome') {
-      this.spawnBubbleDome(origin, def, cb);
-      return;
-    }
-
-    if (def.archetype === 'dash') {
-      const dist = def.dashDist ?? 4.0;
-      const endPos: Vec = dashEnd ?? [origin[0] + fx * dist, origin[1], origin[2] + fz * dist];
-      this.spawnDashRibbon(origin, endPos, def.element, def.slot === 'Q');
-      this.emitRadialBurst(origin, def.element, 32, 0.4, 3.6);
-      this.emitRadialBurst(endPos, def.element, def.slot === 'Q' ? 95 : 54, 0.65, def.slot === 'Q' ? 6.2 : 4.2);
-      cb.onSpawnBurst(origin, def.element, 14, 2.5);
-      cb.onSpawnBurst(endPos, def.element, def.slot === 'Q' ? 32 : 18, def.slot === 'Q' ? 4.4 : 3.0);
-      if (def.slot === 'Q') {
-        this.spawnShockRing(endPos, 0.45, def.radius * 1.25, def.element, 0.56);
-        this.spawnShockRing([endPos[0], endPos[1] + 0.25, endPos[2]], 0.30, def.radius * 0.95, def.element, 0.44);
+      case 'vortex':
+        windTornado(h, origin, def, cb);
+        return;
+      case 'boomerang':
+        windBoomerang(h, origin, fwd, def, cb);
+        return;
+      case 'breath':
+        fireBreath(h, origin, fwd, def, cb);
+        return;
+      case 'eruption':
+        fireEruption(h, def.range > 0 ? ahead(def.range) : [...origin], def, cb);
+        return;
+      case 'bolt': {
+        const aimPos = aimPoint ?? this.findAimPoint(origin, fwd, def.range * 0.65, cb);
+        this.spawnLightningBolt(aimPos, 10.2, def.element);
+        this.spawnShockRing(aimPos, 0.3, def.radius * 1.18, def.element, 0.36);
+        this.emitRadialBurst(aimPos, def.element, 78, 0.5, 5.8, 1.4, 3);
+        cb.onSpawnBurst(aimPos, def.element, 22, 3.4);
+        cb.onSkillHitArea(aimPos, def, false);
+        return;
       }
-      const mid: Vec = [(origin[0] + endPos[0]) * 0.5, origin[1], (origin[2] + endPos[2]) * 0.5];
-      cb.onSkillHitArea(mid, def, def.slot === 'Q');
-      cb.onSkillHitArea(endPos, def, def.slot === 'Q');
-      return;
-    }
-
-    if (def.archetype === 'vortex') {
-      this.spawnWindVortex(origin, def, cb);
-      return;
-    }
-
-    if (def.archetype === 'bolt') {
-      const aimPos = aimPoint ?? this.findAimPoint(origin, [fx, 0, fz], def.range * 0.65, cb);
-      this.spawnLightningBolt(aimPos, 9.8, def.element);
-      this.spawnShockRing(aimPos, 0.3, def.radius * 1.15, def.element, 0.42);
-      this.emitRadialBurst(aimPos, def.element, 75, 0.5, 5.4, 2.2, 3);
-      cb.onSpawnBurst(aimPos, def.element, 22, 3.4);
-      cb.onSkillHitArea(aimPos, def, false);
-      return;
-    }
-
-    if (def.archetype === 'chain') {
-      this.spawnChainLightning(origin, [fx, 0, fz], def, cb, aimPoint);
-      return;
-    }
-
-    if (def.archetype === 'storm') {
-      const center: Vec = aimPoint ? [...aimPoint] : [origin[0] + fx * def.range, origin[1], origin[2] + fz * def.range];
-      const ty = cb.sampleTerrain(center[0], center[2]);
-      if (!aimPoint && ty !== null) center[1] = ty;
-      this.spawnElementStorm(center, def, cb);
-      return;
-    }
-
-    if (def.archetype === 'field') {
-      const center: Vec = aimPoint ? [...aimPoint] : [origin[0] + fx * def.range, origin[1], origin[2] + fz * def.range];
-      const ty = cb.sampleTerrain(center[0], center[2]);
-      if (!aimPoint && ty !== null) center[1] = ty;
-      this.spawnDarkField(center, def, cb);
-      return;
-    }
-
-    if (def.archetype === 'meteor') {
-      const target = aimPoint ?? this.findAimPoint(origin, [fx, 0, fz], def.range, cb);
-      this.spawnDarkMeteor(target, def, cb);
-      return;
-    }
-
-    if (def.archetype === 'slam' || def.archetype === 'leap_slam') {
-      const impact: Vec = aimPoint ? [...aimPoint] : [origin[0] + fx * (def.range * 0.65), origin[1], origin[2] + fz * (def.range * 0.65)];
-      const ty = cb.sampleTerrain(impact[0], impact[2]);
-      if (!aimPoint && ty !== null) impact[1] = ty;
-      this.spawnPhysicalQuake(impact, def, def.archetype === 'leap_slam');
-      cb.onSpawnBurst(impact, def.element, def.archetype === 'leap_slam' ? 36 : 20, def.archetype === 'leap_slam' ? 4.8 : 3.2);
-      cb.onSkillHitArea(impact, def, def.archetype === 'leap_slam');
+      case 'chain':
+        this.spawnChainLightning(origin, fwd, def, cb, aimPoint);
+        return;
+      case 'storm':
+        this.spawnThunderCage(ahead(def.range), def, cb);
+        return;
+      case 'creep': {
+        let target = aimPoint ? [...aimPoint] as Vec : this.findAimPoint(origin, fwd, Math.min(def.range, 5.5), cb);
+        const wall = cb.castWall?.([origin[0], origin[1] + .4, origin[2]], [target[0], target[1] + .4, target[2]]);
+        if (wall) target = [wall[0] - fx * .3, cb.sampleTerrain(wall[0], wall[2]) ?? origin[1], wall[2] - fz * .3];
+        darkCreep(h, origin, target, def, cb);
+        return;
+      }
+      case 'field': {
+        const center = ahead(def.range);
+        this.spawnDarkField(center, def, cb);
+        darkFieldRifts(h, center, def);
+        return;
+      }
+      case 'rend':
+      case 'meteor':
+        darkRend(h, aimPoint ? [...aimPoint] : this.findAimPoint(origin, fwd, def.range, cb), def, cb);
+        return;
+      case 'fist':
+      case 'slam':
+        rockFist(h, ahead(def.range * 0.65), fwd, def, cb);
+        return;
+      case 'fissure':
+        rockFissure(h, origin, fwd, def, cb);
+        return;
+      case 'leap_slam':
+        rockMeteor(h, ahead(def.range * 0.65), def, cb);
+        return;
     }
   }
 
@@ -563,59 +988,32 @@ export class SkillVfxSystem {
     return [x, y, z];
   }
 
-  private spawnProjectile(def: SkillDef, origin: Vec, forward: Vec, isWave: boolean, aimPoint?: Vec) {
-    const T = this.T;
-    const g = new T.Group();
-    const elHex = EL_HEX[def.element] ?? 0xffffff;
-    const coreHex = EL_CORE[def.element] ?? 0xffffff;
-
-    if (isWave) {
-      // Sleek razor-thin golden crescent sword-qi arc (additive fine energy blade, zero chunky torus!)
-      const bladeGeo = new T.TorusGeometry(0.76, 0.036, 8, 32, Math.PI * 0.78);
-      const blade = new T.Mesh(
-        bladeGeo,
-        new T.MeshBasicMaterial({color: coreHex, transparent: true, opacity: 0.96, blending: T.AdditiveBlending, depthWrite: false}),
-      );
-      blade.rotation.z = -Math.PI * 0.39;
-      const glow = new T.Mesh(
-        new T.TorusGeometry(0.77, 0.085, 8, 32, Math.PI * 0.84),
-        new T.MeshBasicMaterial({color: elHex, transparent: true, opacity: 0.42, blending: T.AdditiveBlending, depthWrite: false}),
-      );
-      glow.rotation.z = -Math.PI * 0.42;
-      g.add(this.prepMesh(glow, 24), this.prepMesh(blade, 25));
-      g.rotation.y = Math.atan2(forward[0], forward[2]) + Math.PI * 0.5;
-    } else {
-      // Compact luminous pinpoint energy nucleus (Niagara particle wake provides the rich visual silhouette!)
-      const core = new T.Mesh(
-        new T.SphereGeometry(0.115, 14, 10),
-        new T.MeshBasicMaterial({color: coreHex, transparent: true, opacity: 0.98, blending: T.AdditiveBlending, depthWrite: false}),
-      );
-      const aura = new T.Mesh(
-        new T.SphereGeometry(0.22, 16, 12),
-        new T.MeshBasicMaterial({color: elHex, transparent: true, opacity: 0.38, blending: T.AdditiveBlending, depthWrite: false}),
-      );
-      g.add(this.prepMesh(aura, 24), this.prepMesh(core, 25));
-    }
-
+  /** Projectile bodies come from skill-forms: Water's caged bubble (default) and Fire's rolling blast. */
+  private spawnProjectile(def: SkillDef, origin: Vec, forward: Vec, aimPoint?: Vec) {
+    const body = def.element === 2 ? fireball(this.host) : waterOrb(this.host);
+    const g = body.group;
+    g.rotation.y = Math.atan2(forward[0], forward[2]);
     const start: Vec = [origin[0] + forward[0] * 0.62, origin[1] + 0.50, origin[2] + forward[2] * 0.62];
     g.position.set(start[0], start[1], start[2]);
     this.root.add(g);
 
     const speed = def.projectileSpeed ?? 14;
+    const aimDist = aimPoint ? Math.hypot(aimPoint[0] - start[0], aimPoint[2] - start[2]) : 0;
     this.projectiles.push({
       def,
       pos: start,
       vel: [
         forward[0] * speed,
-        aimPoint ? speed * (aimPoint[1] + .52 - start[1]) / Math.max(.4, Math.hypot(aimPoint[0] - start[0], aimPoint[2] - start[2])) : 0,
+        aimPoint ? speed * (aimPoint[1] + .52 - start[1]) / Math.max(.4, aimDist) : 0,
         forward[2] * speed,
       ],
       age: 0,
-      maxAge: Math.max(0.55, def.range / speed),
+      // A locked shot bursts where the target stood at cast time; a free shot flies its full range.
+      maxAge: aimPoint ? Math.max(0.06, aimDist / speed) : Math.max(0.55, def.range / speed),
       mesh: g,
-      isWave,
       aimed: !!aimPoint,
       trailAcc: 0,
+      onStep: body.step,
     });
   }
 
@@ -638,176 +1036,35 @@ export class SkillVfxSystem {
     });
   }
 
-  private spawnDashRibbon(start: Vec, end: Vec, element: number, isUlt: boolean) {
-    const dx = end[0] - start[0], dz = end[2] - start[2];
-    const len = Math.max(0.5, Math.hypot(dx, dz));
-    const fx = dx / len, fz = dz / len;
-    const rx = -fz, rz = fx;
-    const count = isUlt ? 110 : 62;
-    for (let i = 0; i < count; i++) {
-      const f = Math.random();
-      const spread = (Math.random() - 0.5) * (isUlt ? 0.95 : 0.52);
-      const px = start[0] + dx * f + rx * spread;
-      const pz = start[2] + dz * f + rz * spread;
-      const py = start[1] + 0.16 + Math.random() * (isUlt ? 0.85 : 0.48);
-      this.emit({
-        x: px, y: py, z: pz,
-        vx: -fx * (1.5 + Math.random() * 3.2) + rx * (spread * 2.5),
-        vy: 0.4 + Math.random() * 1.9,
-        vz: -fz * (1.5 + Math.random() * 3.2) + rz * (spread * 2.5),
-        life: 0.30 + Math.random() * 0.42,
-        size: 0.045 + Math.random() * (isUlt ? 0.11 : 0.08),
-        element,
-        shape: this.defaultShape(element, i),
-        drag: 3.4,
-        ay: element === 2 || element === 1 ? 1.5 : -0.8,
-        intensity: isUlt ? 1.35 : 1.1,
-      });
-    }
-  }
-
-  private spawnBubbleDome(origin: Vec, def: SkillDef, cb: SkillEffectCallbacks) {
+  /** Tilted expanding air-pressure Mach ring perpendicular to a dash vector (Wind). */
+  private spawnMachRing(pos: Vec, forward: Vec, maxScale: number, element: number, life = 0.32) {
     const T = this.T;
-    const pal = EL_PAL[def.element] ?? EL_PAL[0];
-    const g = new T.Group();
-    g.position.set(origin[0], origin[1] + 0.04, origin[2]);
-
-    // Crystal-clear thin-film iridescent Fresnel dome (NO opaque blue shell!)
-    const domeGeo = new T.SphereGeometry(1, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.52);
-    const domeMat = new T.ShaderMaterial({
-      vertexShader: BUBBLE_DOME_VERT,
-      fragmentShader: BUBBLE_DOME_FRAG,
-      transparent: true,
-      depthWrite: false,
-      blending: T.AdditiveBlending,
-      side: T.DoubleSide,
+    const pal = EL_PAL[element] ?? EL_PAL[1];
+    const geo = new T.PlaneGeometry(maxScale * 2, maxScale * 2);
+    const mat = new T.ShaderMaterial({
+      vertexShader: PLAIN_VERT,
+      fragmentShader: WAVE_RING_FRAG,
+      transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
       uniforms: {
         uColor: {value: new T.Vector3(...pal[1])},
         uCore: {value: new T.Vector3(...pal[0])},
-        uAlpha: {value: 1},
-        uTime: {value: 0},
+        uProgress: {value: 0},
+        uTime: {value: this.time},
+        uMode: {value: 0},
+        uElement: {value: 1},
       },
     });
-    const dome = this.prepMesh(new T.Mesh(domeGeo, domeMat), 24);
-    const rune = this.makeShaderDisc(def.radius * 1.05, def.element, 1);
-    rune.position.y = 0.04;
-    g.add(dome, rune);
-    this.root.add(g);
-
-    let burstFired = false;
-    let bubbleAcc = 0;
+    const ring = this.prepMesh(new T.Mesh(geo, mat), 25);
+    ring.position.set(pos[0], pos[1], pos[2]);
+    ring.rotation.y = Math.atan2(forward[0], forward[2]);
+    this.root.add(ring);
     this.fxList.push({
-      age: 0,
-      life: 1.25,
-      update: (t, dt) => {
-        const expand = Math.min(1, t / 0.30);
-        const eased = 1 - (1 - expand) * (1 - expand);
-        const curR = 0.45 + (def.radius - 0.45) * eased;
-        dome.scale.set(curR, curR * 0.72, curR);
-        const fade = t < 0.72 ? 1 : (1 - t) / 0.28;
-        domeMat.uniforms.uAlpha.value = fade;
-        domeMat.uniforms.uTime.value = this.time;
-        rune.material.uniforms.uProgress.value = fade * 0.85;
-        rune.material.uniforms.uTime.value = this.time;
-
-        // Continuously rise dozens of delicate iridescent ring bubbles & mist motes inside the dome
-        bubbleAcc += dt * 115;
-        while (bubbleAcc >= 1 && t < 0.85) {
-          bubbleAcc -= 1;
-          const a = Math.random() * Math.PI * 2;
-          const d = Math.sqrt(Math.random()) * curR * 0.92;
-          this.emit({
-            x: origin[0] + Math.cos(a) * d,
-            y: origin[1] + 0.10 + Math.random() * 0.25,
-            z: origin[2] + Math.sin(a) * d,
-            vx: -Math.sin(a) * 0.7 + (Math.random() - 0.5) * 0.4,
-            vy: 1.3 + Math.random() * 2.1,
-            vz: Math.cos(a) * 0.7 + (Math.random() - 0.5) * 0.4,
-            life: 0.48 + Math.random() * 0.45,
-            size: 0.06 + Math.random() * 0.13,
-            element: def.element,
-            shape: Math.random() < 0.65 ? 2 : 1,
-            drag: 1.5,
-            ay: 0.8,
-            swirl: 1.6,
-            ax: origin[0],
-            az: origin[2],
-            intensity: 1.15,
-          });
-        }
-        if (!burstFired && t >= 0.30) {
-          burstFired = true;
-          this.spawnShockRing(origin, 0.5, def.radius * 1.25, def.element, 0.48);
-          this.emitRadialBurst(origin, def.element, 95, def.radius * 0.4, 5.2, 2.4, 2);
-          cb.onSpawnBurst(origin, def.element, 30, 4.5);
-          cb.onSkillHitArea(origin, def, true);
-        }
+      age: 0, life,
+      update: (t) => {
+        mat.uniforms.uProgress.value = t;
+        mat.uniforms.uTime.value = this.time;
       },
-      dispose: () => {
-        g.removeFromParent();
-        domeGeo.dispose(); domeMat.dispose();
-        rune.geometry.dispose(); rune.material.dispose();
-      },
-    });
-  }
-
-  private spawnWindVortex(origin: Vec, def: SkillDef, cb: SkillEffectCallbacks) {
-    const rune = this.makeShaderDisc(def.radius * 0.95, def.element, 1);
-    rune.position.set(origin[0], origin[1] + 0.08, origin[2]);
-    this.root.add(rune);
-
-    let hits = 0;
-    let spawnAcc = 0;
-    const totalHits = def.multiHits ?? 3;
-    this.fxList.push({
-      age: 0,
-      life: def.duration ?? 1.4,
-      update: (t, dt) => {
-        const fade = t > 0.75 ? (1 - t) / 0.25 : Math.min(1, t / 0.12);
-        rune.material.uniforms.uProgress.value = fade * 0.85;
-        rune.material.uniforms.uTime.value = this.time * 2.2;
-
-        // 240 particles/sec swirling in a fine emerald tornado helix
-        spawnAcc += dt * 240;
-        while (spawnAcc >= 1 && t < 0.88) {
-          spawnAcc -= 1;
-          const a = Math.random() * Math.PI * 2;
-          const r = 0.28 + Math.random() * (def.radius * 0.52);
-          const tanSpd = 4.2 + Math.random() * 2.8;
-          this.emit({
-            x: origin[0] + Math.cos(a) * r,
-            y: origin[1] + 0.08 + Math.random() * 0.35,
-            z: origin[2] + Math.sin(a) * r,
-            vx: -Math.sin(a) * tanSpd + Math.cos(a) * 0.65,
-            vy: 2.2 + Math.random() * 2.4,
-            vz: Math.cos(a) * tanSpd + Math.sin(a) * 0.65,
-            life: 0.48 + Math.random() * 0.42,
-            size: 0.045 + Math.random() * 0.095,
-            element: def.element,
-            shape: Math.random() < 0.48 ? 1 : 0,
-            drag: 1.4,
-            ay: 1.8,
-            swirl: 8.5,
-            pull: -1.1, // gently widens upward into a funnel
-            ax: origin[0],
-            az: origin[2],
-            intensity: 1.15,
-          });
-        }
-
-        const expected = Math.floor(t * totalHits) + 1;
-        if (hits < Math.min(totalHits, expected)) {
-          hits++;
-          this.spawnShockRing(origin, 0.3, def.radius * 1.05, def.element, 0.34);
-          cb.onSpawnBurst(origin, def.element, 12, 3.0);
-          cb.onSkillHitArea(origin, def, false);
-        }
-      },
-      dispose: () => {
-        rune.removeFromParent();
-        rune.geometry.dispose();
-        rune.material.dispose();
-      },
+      dispose: () => { ring.removeFromParent(); geo.dispose(); mat.dispose(); },
     });
   }
 
@@ -820,56 +1077,58 @@ export class SkillVfxSystem {
       const j = i === 0 || i === steps ? 0 : jitter * env;
       pts.push(new T.Vector3(
         a[0] + (b[0] - a[0]) * f + (Math.random() - 0.5) * j,
-        a[1] + (b[1] - a[1]) * f + (Math.random() - 0.5) * j * 0.65,
+        a[1] + (b[1] - a[1]) * f + (Math.random() - 0.5) * j * 0.55,
         a[2] + (b[2] - a[2]) * f + (Math.random() - 0.5) * j,
       ));
     }
     return pts;
   }
 
+  /** Volt E & Q strike: thick 3D crossed plasma ribbon main bolt + 2 offset arcs + 4 branching forks + sky flash! */
   private spawnLightningBolt(target: Vec, height: number, element: number) {
     const T = this.T;
-    const elHex = EL_HEX[element] ?? 0x9b66ff;
-    const coreHex = EL_CORE[element] ?? 0xf0e4ff;
     const g = new T.Group();
-    const disposables: {geo: any; mat: any}[] = [];
+    const mats: any[] = [];
 
-    const top: Vec = [target[0] + (Math.random() - 0.5) * 0.7, target[1] + height, target[2] + (Math.random() - 0.5) * 0.7];
-    // Main jagged white-hot bolt + 2 offset parallel aura arcs + 3 branching sub-forks (zero fat cylinder!)
-    const mainPts = this.buildJaggedPoints(top, target, 16, 0.68);
-    const makeArc = (pts: any[], hex: number, opacity: number, order: number) => {
-      const geo = new T.BufferGeometry().setFromPoints(pts);
-      const mat = new T.LineBasicMaterial({color: hex, transparent: true, opacity, blending: T.AdditiveBlending, depthWrite: false});
-      g.add(this.prepMesh(new T.Line(geo, mat), order));
-      disposables.push({geo, mat});
-    };
-    makeArc(mainPts, coreHex, 1.0, 27);
-    makeArc(this.buildJaggedPoints(top, target, 14, 0.92), elHex, 0.85, 26);
+    const top: Vec = [target[0] + (Math.random() - 0.5) * 0.8, target[1] + height, target[2] + (Math.random() - 0.5) * 0.8];
+    const mainPts = this.buildJaggedPoints(top, target, 18, 0.78);
+    const mainBolt = this.makeBoltStripMesh(mainPts, 0.14, element, 27);
+    const coronaBolt = this.makeBoltStripMesh(this.buildJaggedPoints(top, target, 14, 1.05), 0.08, element, 26);
+    g.add(mainBolt, coronaBolt);
+    mats.push(mainBolt.material, coronaBolt.material);
 
-    // 3 branching electric forks shooting off mid-bolt
-    for (let f = 0; f < 3; f++) {
-      const idx = 4 + f * 3;
+    // 4 jagged branching sub-forks shooting off the main column
+    for (let f = 0; f < 4; f++) {
+      const idx = 3 + f * 3;
       const p = mainPts[Math.min(mainPts.length - 2, idx)];
       const ang = Math.random() * Math.PI * 2;
-      const reach = 0.8 + Math.random() * 1.1;
-      const forkEnd: Vec = [p.x + Math.cos(ang) * reach, Math.max(target[1] + 0.2, p.y - 1.5 - Math.random() * 1.6), p.z + Math.sin(ang) * reach];
-      makeArc(this.buildJaggedPoints([p.x, p.y, p.z], forkEnd, 7, 0.36), f === 0 ? coreHex : elHex, 0.78, 26);
+      const reach = 0.9 + Math.random() * 1.4;
+      const forkEnd: Vec = [p.x + Math.cos(ang) * reach, Math.max(target[1] + 0.15, p.y - 1.6 - Math.random() * 1.9), p.z + Math.sin(ang) * reach];
+      const fork = this.makeBoltStripMesh(this.buildJaggedPoints([p.x, p.y, p.z], forkEnd, 7, 0.42), 0.055, element, 26);
+      g.add(fork);
+      mats.push(fork.material);
     }
 
-    // Emit crisp electric sparks along the entire bolt column
-    for (let i = 0; i < 36; i++) {
+    // Impact tight pinpoint core flash (not a bulky translucent ball!)
+    const flashMat = new T.MeshBasicMaterial({color: EL_CORE[element], transparent: true, opacity: 0.95, blending: T.AdditiveBlending, depthWrite: false});
+    const flash = this.prepMesh(new T.Mesh(new T.OctahedronGeometry(0.18, 0), flashMat), 27);
+    flash.position.set(target[0], target[1] + 0.25, target[2]);
+    g.add(flash);
+
+    // Crisp electric diamond sparks along the entire bolt column
+    for (let i = 0; i < 42; i++) {
       const p = mainPts[Math.floor(Math.random() * mainPts.length)];
       this.emit({
         x: p.x, y: p.y, z: p.z,
-        vx: (Math.random() - 0.5) * 3.8,
-        vy: (Math.random() - 0.4) * 2.5,
-        vz: (Math.random() - 0.5) * 3.8,
-        life: 0.22 + Math.random() * 0.28,
-        size: 0.04 + Math.random() * 0.08,
+        vx: (Math.random() - 0.5) * 5.2,
+        vy: (Math.random() - 0.4) * 3.0,
+        vz: (Math.random() - 0.5) * 5.2,
+        life: 0.16 + Math.random() * 0.20,
+        size: 0.045 + Math.random() * 0.085,
         element,
         shape: 3,
-        drag: 4.5,
-        intensity: 1.4,
+        drag: 6.2,
+        intensity: 1.5,
       });
     }
 
@@ -878,21 +1137,19 @@ export class SkillVfxSystem {
       age: 0,
       life: 0.34,
       update: (t) => {
-        const flicker = Math.sin(t * 68) > -0.35 ? 1 : 0.28;
+        const flicker = Math.sin(t * 78) > -0.35 ? 1 : 0.24;
         const fade = (1 - t) * flicker;
-        for (const d of disposables) d.mat.opacity = fade;
+        for (const m of mats) m.uniforms.uAlpha.value = fade;
+        flashMat.opacity = Math.max(0, (1 - t * 2.5) * 0.95);
+        flash.scale.setScalar(1 + t * 1.4);
       },
-      dispose: () => {
-        g.removeFromParent();
-        for (const d of disposables) { d.geo.dispose(); d.mat.dispose(); }
-      },
+      dispose: () => this.disposeGroup(g),
     });
   }
 
+  /** Volt R (`连锁闪电`): thick 3D jagged plasma strips chaining across targets + electric flash orbs at every node! */
   private spawnChainLightning(origin: Vec, forward: Vec, def: SkillDef, cb: SkillEffectCallbacks, aimPoint?: Vec) {
     const T = this.T;
-    const elHex = EL_HEX[def.element] ?? 0x9b66ff;
-    const coreHex = EL_CORE[def.element] ?? 0xf0e4ff;
     const targets = cb.getTargetPositions();
     const chainPts: Vec[] = [[origin[0], origin[1] + 0.42, origin[2]]];
     const used = new Set<number>();
@@ -912,7 +1169,7 @@ export class SkillVfxSystem {
       used.add(bestIdx);
       const hitPos = targets[bestIdx];
       chainPts.push([hitPos[0], hitPos[1] + 0.55, hitPos[2]]);
-      this.emitRadialBurst(hitPos, def.element, 42, 0.4, 4.4, 1.8, 3);
+      this.emitRadialBurst(hitPos, def.element, 42, 0.4, 4.8, 1.2, 3);
       cb.onSpawnBurst(hitPos, def.element, 12, 2.2);
       cb.onSkillHitArea(hitPos, {...def, radius: 1.6}, false);
       cur = hitPos;
@@ -921,98 +1178,131 @@ export class SkillVfxSystem {
     if (chainPts.length === 1) {
       const end: Vec = [origin[0] + forward[0] * 5.2, origin[1] + 0.45, origin[2] + forward[2] * 5.2];
       chainPts.push(end);
-      this.emitRadialBurst(end, def.element, 55, 0.45, 4.8, 1.8, 3);
+      this.emitRadialBurst(end, def.element, 55, 0.45, 5.2, 1.2, 3);
       cb.onSpawnBurst(end, def.element, 16, 2.6);
       if (!cb.blocked?.(origin, end)) cb.onSkillHitArea(end, {...def, radius: 2.2}, false);
     }
 
     const g = new T.Group();
-    const disposables: {geo: any; mat: any}[] = [];
+    const mats: any[] = [];
+    const nodeMats: any[] = [];
     for (let i = 0; i < chainPts.length - 1; i++) {
       const a = chainPts[i], b = chainPts[i + 1];
-      const p1 = this.buildJaggedPoints(a, b, 10, 0.34);
-      const p2 = this.buildJaggedPoints(a, b, 9, 0.52);
-      for (const [pts, hex, op] of [[p1, coreHex, 1.0], [p2, elHex, 0.8]] as const) {
-        const geo = new T.BufferGeometry().setFromPoints(pts);
-        const mat = new T.LineBasicMaterial({color: hex, transparent: true, opacity: op, blending: T.AdditiveBlending, depthWrite: false});
-        g.add(this.prepMesh(new T.Line(geo, mat), 27));
-        disposables.push({geo, mat});
-      }
-      // Fine electric sparks trailing along the arc segment
-      for (let s = 0; s < 14; s++) {
+      const p1 = this.buildJaggedPoints(a, b, 11, 0.36);
+      const p2 = this.buildJaggedPoints(a, b, 10, 0.56);
+      const s1 = this.makeBoltStripMesh(p1, 0.085, def.element, 27);
+      const s2 = this.makeBoltStripMesh(p2, 0.048, def.element, 26);
+      g.add(s1, s2);
+      mats.push(s1.material, s2.material);
+
+      const nMat = new T.MeshBasicMaterial({color: EL_CORE[3], transparent: true, opacity: 0.92, blending: T.AdditiveBlending, depthWrite: false});
+      const node = this.prepMesh(new T.Mesh(new T.SphereGeometry(0.24, 12, 10), nMat), 27);
+      node.position.set(b[0], b[1], b[2]);
+      g.add(node);
+      nodeMats.push(nMat);
+
+      for (let s = 0; s < 16; s++) {
         const p = p1[Math.floor(Math.random() * p1.length)];
         this.emit({
           x: p.x, y: p.y, z: p.z,
-          vx: (Math.random() - 0.5) * 3.0,
-          vy: 0.6 + Math.random() * 2.0,
-          vz: (Math.random() - 0.5) * 3.0,
-          life: 0.24 + Math.random() * 0.24,
-          size: 0.04 + Math.random() * 0.07,
+          vx: (Math.random() - 0.5) * 4.2,
+          vy: 0.4 + Math.random() * 2.0,
+          vz: (Math.random() - 0.5) * 4.2,
+          life: 0.16 + Math.random() * 0.18,
+          size: 0.045 + Math.random() * 0.075,
           element: def.element,
           shape: 3,
-          drag: 4.0,
-          intensity: 1.35,
+          drag: 5.8,
+          intensity: 1.45,
         });
       }
     }
     this.root.add(g);
-    this.spawnShockRing(chainPts[chainPts.length - 1], 0.25, 1.9, def.element, 0.34);
+    this.spawnShockRing(chainPts[chainPts.length - 1], 0.25, 2.0, def.element, 0.32);
 
     this.fxList.push({
       age: 0,
       life: 0.38,
       update: (t) => {
-        const op = (1 - t) * (Math.sin(t * 62) > -0.35 ? 1 : 0.32);
-        for (const d of disposables) d.mat.opacity = op;
+        const op = (1 - t) * (Math.sin(t * 72) > -0.35 ? 1 : 0.28);
+        for (const m of mats) m.uniforms.uAlpha.value = op;
+        for (const nm of nodeMats) nm.opacity = op * 0.9;
       },
-      dispose: () => {
-        g.removeFromParent();
-        for (const d of disposables) { d.geo.dispose(); d.mat.dispose(); }
-      },
+      dispose: () => this.disposeGroup(g),
     });
   }
 
-  private spawnElementStorm(center: Vec, def: SkillDef, cb: SkillEffectCallbacks) {
-    const rune = this.makeShaderDisc(def.radius * 1.05, def.element, 1);
+  /** Volt Q (`万钧雷狱`): a thundercloud closes overhead, a cage of standing bolts rings the area, then the strikes fall inside it. */
+  private spawnThunderCage(center: Vec, def: SkillDef, cb: SkillEffectCallbacks) {
+    const T = this.T;
+    const R = def.radius;
+    const cloudY = 5.4;
+    const rune = this.makeShaderDisc(R * 1.06, def.element, 1);
     rune.position.set(center[0], center[1] + 0.08, center[2]);
     this.root.add(rune);
+    const cloud = this.makeDarkBackingDisc(R * 1.18, 0, [0.07, 0.055, 0.15]);
+    cloud.position.set(center[0], center[1] + cloudY, center[2]);
+    cloud.renderOrder = 23;
+    this.root.add(cloud);
 
-    const isFire = def.element === 2;
+    // Cage bars: two pre-rolled jagged strips each, swapped at ~20 Hz so they crackle without rebuilding geometry.
+    const cage = new T.Group();
+    const bars: any[][] = [];
+    const barCount = 8;
+    for (let k = 0; k < barCount; k++) {
+      const a = (k / barCount) * Math.PI * 2 + 0.2;
+      const bx = center[0] + Math.cos(a) * R * 0.94, bz = center[2] + Math.sin(a) * R * 0.94;
+      const by = cb.sampleTerrain(bx, bz) ?? center[1];
+      const pair = [0, 1].map(() => this.makeBoltStripMesh(this.buildJaggedPoints([bx, center[1] + cloudY, bz], [bx, by, bz], 12, 0.5), 0.075, def.element, 26));
+      cage.add(pair[0], pair[1]);
+      bars.push(pair);
+    }
+    this.root.add(cage);
+
     const totalStrikes = def.multiHits ?? 4;
     let struck = 0;
     let ambientAcc = 0;
+    let lastSpot: Vec | null = null;
 
     this.fxList.push({
       age: 0,
       life: def.duration ?? 1.55,
       update: (t, dt) => {
         const fade = t > 0.78 ? (1 - t) / 0.22 : Math.min(1, t / 0.10);
-        rune.material.uniforms.uProgress.value = fade * 0.92;
-        rune.material.uniforms.uTime.value = this.time * 1.6;
+        rune.material.uniforms.uProgress.value = fade * 0.94;
+        rune.material.uniforms.uTime.value = this.time * 2.0;
+        cloud.material.uniforms.uAlpha.value = fade * 1.1;
+        cloud.material.uniforms.uTime.value = this.time * 2.5;
+        const frame = Math.floor(this.time * 20);
+        for (let k = 0; k < bars.length; k++) {
+          const on = (frame + k) % 2;
+          const dim = (frame * 7 + k * 3) % 5 === 0 ? 0.25 : 0.85;
+          bars[k][0].visible = on === 0;
+          bars[k][1].visible = on === 1;
+          for (const bar of bars[k]) bar.material.uniforms.uAlpha.value = fade * dim;
+        }
 
-        // Rising ambient embers / crackling plasma sparks inside the magic array
-        ambientAcc += dt * 95;
+        ambientAcc += dt * 105;
         while (ambientAcc >= 1 && t < 0.88) {
           ambientAcc -= 1;
           const a = Math.random() * Math.PI * 2;
-          const r = Math.sqrt(Math.random()) * def.radius * 0.95;
+          const r = Math.sqrt(Math.random()) * R * 0.95;
           this.emit({
             x: center[0] + Math.cos(a) * r,
             y: center[1] + 0.08,
             z: center[2] + Math.sin(a) * r,
-            vx: -Math.sin(a) * 1.1,
-            vy: 1.8 + Math.random() * 2.6,
-            vz: Math.cos(a) * 1.1,
-            life: 0.40 + Math.random() * 0.45,
-            size: 0.045 + Math.random() * 0.085,
+            vx: -Math.sin(a) * 2.6,
+            vy: 0.8 + Math.random() * 2.2,
+            vz: Math.cos(a) * 2.6,
+            life: 0.18 + Math.random() * 0.22,
+            size: 0.05 + Math.random() * 0.09,
             element: def.element,
-            shape: isFire ? (Math.random() < 0.25 ? 1 : 0) : 3,
-            drag: 1.6,
-            ay: isFire ? 2.2 : 0.6,
-            swirl: 2.5,
+            shape: 3,
+            drag: 4.8,
+            ay: 0.4,
             ax: center[0],
             az: center[2],
-            intensity: 1.25,
+            intensity: 1.3,
           });
         }
 
@@ -1020,79 +1310,67 @@ export class SkillVfxSystem {
         if (struck < Math.min(totalStrikes, want)) {
           const idx = struck++;
           const ang = (idx / totalStrikes) * Math.PI * 2 + 0.4;
-          const dist = idx === 0 ? 0 : def.radius * 0.52;
+          const dist = idx === 0 ? 0 : R * 0.54;
           const sx = center[0] + Math.cos(ang) * dist;
           const sz = center[2] + Math.sin(ang) * dist;
           const sy = cb.sampleTerrain(sx, sz) ?? center[1];
           const spot: Vec = [sx, sy, sz];
-          if (isFire) {
-            this.spawnFirePlume(spot, def.element);
-          } else {
-            this.spawnLightningBolt(spot, 10.5, def.element);
+          this.spawnLightningBolt(spot, cloudY + center[1] - sy, def.element);
+          if (lastSpot) {
+            // Arc-bridge leaping across the cage between consecutive strikes.
+            const bridge = this.makeBoltStripMesh(
+              this.buildJaggedPoints([lastSpot[0], lastSpot[1] + 0.65, lastSpot[2]], [spot[0], spot[1] + 0.65, spot[2]], 10, 0.45),
+              0.065, def.element, 26,
+            );
+            this.root.add(bridge);
+            this.fxList.push({
+              age: 0, life: 0.28,
+              update: (bt) => { bridge.material.uniforms.uAlpha.value = (1 - bt) * (Math.sin(bt * 70) > -0.3 ? 1 : 0.2); },
+              dispose: () => { bridge.removeFromParent(); bridge.geometry.dispose(); bridge.material.dispose(); },
+            });
           }
-          this.spawnShockRing(spot, 0.35, 2.5, def.element, 0.38);
-          this.emitRadialBurst(spot, def.element, 55, 0.45, 4.8, 2.6);
+          lastSpot = spot;
+          this.spawnShockRing(spot, 0.35, 2.6, def.element, 0.32);
+          this.emitRadialBurst(spot, def.element, 58, 0.45, 5.0, 2.6);
           cb.onSpawnBurst(spot, def.element, 18, 3.6);
-          cb.onSkillHitArea(spot, {...def, radius: def.radius * 0.62, damage: Math.round(def.damage / totalStrikes * 1.4)}, idx === 0);
+          cb.onSkillHitArea(spot, {...def, radius: R * 0.62, damage: Math.round(def.damage / totalStrikes * 1.4)}, idx === 0);
         }
       },
       dispose: () => {
-        rune.removeFromParent();
-        rune.geometry.dispose();
-        rune.material.dispose();
-      },
-    });
-  }
-
-  /** Niagara helical roaring flame & ember plume (replaces chunky solid CylinderGeometry fire pillar!). */
-  private spawnFirePlume(spot: Vec, element: number) {
-    let emitAcc = 0;
-    this.fxList.push({
-      age: 0,
-      life: 0.52,
-      update: (t, dt) => {
-        emitAcc += dt * 320 * (1 - t * 0.7);
-        while (emitAcc >= 1) {
-          emitAcc -= 1;
-          const a = Math.random() * Math.PI * 2;
-          const r = 0.08 + Math.random() * 0.52;
-          const hotCore = r < 0.24;
-          this.emit({
-            x: spot[0] + Math.cos(a) * r,
-            y: spot[1] + 0.08 + Math.random() * 0.45,
-            z: spot[2] + Math.sin(a) * r,
-            vx: -Math.sin(a) * 2.6 + Math.cos(a) * 0.9,
-            vy: 4.8 + Math.random() * 4.5,
-            vz: Math.cos(a) * 2.6 + Math.sin(a) * 0.9,
-            life: 0.34 + Math.random() * 0.42,
-            size: hotCore ? 0.09 + Math.random() * 0.12 : 0.045 + Math.random() * 0.08,
-            element,
-            shape: hotCore ? 0 : (Math.random() < 0.35 ? 1 : 0),
-            drag: 1.8,
-            ay: 3.4,
-            swirl: 6.2,
-            pull: 0.8,
-            ax: spot[0],
-            az: spot[2],
-            intensity: hotCore ? 1.55 : 1.15,
-          });
+        for (const disc of [rune, cloud]) {
+          disc.removeFromParent();
+          disc.geometry.dispose();
+          disc.material.dispose();
         }
+        this.disposeGroup(cage);
       },
-      dispose: () => {},
     });
   }
 
+  /** Dark R (`蚀渊`): normal-blended obsidian pool + eclipse sigil + hovering black hole & tilted accretion disc! */
   private spawnDarkField(center: Vec, def: SkillDef, cb: SkillEffectCallbacks) {
     const T = this.T;
     const g = new T.Group();
-    g.position.set(center[0], center[1] + 0.08, center[2]);
-    const rune = this.makeShaderDisc(def.radius * 1.05, def.element, 1);
-    const singularity = this.prepMesh(new T.Mesh(
-      new T.OctahedronGeometry(0.18, 1),
-      new T.MeshBasicMaterial({color: EL_CORE[def.element], transparent: true, opacity: 0.92, blending: T.AdditiveBlending, depthWrite: false}),
-    ), 25);
-    singularity.position.y = 0.65;
-    g.add(rune, singularity);
+    g.position.set(center[0], center[1] + 0.06, center[2]);
+
+    const shadowPool = this.makeDarkBackingDisc(def.radius * 1.04, 0, [0.025, 0.008, 0.06]);
+    const rune = this.makeShaderDisc(def.radius * 1.06, 4, 1);
+    rune.position.y = 0.03;
+
+    // Hovering obsidian event-horizon black hole + glowing accretion ring
+    const bhGroup = new T.Group();
+    bhGroup.position.y = 0.78;
+    const bhMat = new T.MeshBasicMaterial({color: 0x04010a, transparent: true, opacity: 0.96});
+    const bhCore = this.prepMesh(new T.Mesh(new T.SphereGeometry(0.32, 20, 16), bhMat), 25);
+    const accMat = this.makeFlowMaterial(4, 4, 1.0);
+    const accRing = this.prepMesh(new T.Mesh(new T.RingGeometry(0.34, 0.88, 36), accMat), 26);
+    accRing.rotation.x = Math.PI * 0.38;
+    const accRing2 = this.prepMesh(new T.Mesh(new T.RingGeometry(0.38, 0.72, 32), accMat), 26);
+    accRing2.rotation.x = -Math.PI * 0.32;
+    accRing2.rotation.y = 1.1;
+    bhGroup.add(bhCore, accRing, accRing2);
+
+    g.add(shadowPool, rune, bhGroup);
     this.root.add(g);
 
     let ticks = 0;
@@ -1102,178 +1380,54 @@ export class SkillVfxSystem {
       age: 0,
       life: def.duration ?? 4.0,
       update: (t, dt) => {
-        singularity.rotation.y += dt * 4.5;
-        singularity.rotation.x += dt * 2.2;
-        singularity.position.y = 0.62 + Math.sin(t * 16) * 0.10;
         const fade = t > 0.82 ? (1 - t) / 0.18 : Math.min(1, t / 0.08);
+        shadowPool.material.uniforms.uAlpha.value = fade;
+        shadowPool.material.uniforms.uTime.value = this.time;
         rune.material.uniforms.uProgress.value = fade * 0.95;
         rune.material.uniforms.uTime.value = this.time * 1.3;
-        singularity.material.opacity = 0.92 * fade;
+        accMat.uniforms.uTime.value = this.time * 1.6;
+        accMat.uniforms.uAlpha.value = fade;
+        bhMat.opacity = 0.96 * fade;
+        accRing.rotation.z += dt * 4.8;
+        accRing2.rotation.z -= dt * 3.6;
+        bhGroup.position.y = 0.76 + Math.sin(t * 14) * 0.10;
+        bhGroup.scale.setScalar(0.85 + 0.18 * Math.sin(t * 22));
 
-        // Inward-spiraling abyssal star-dust & void wisps
-        wispAcc += dt * 115;
+        wispAcc += dt * 125;
         while (wispAcc >= 1 && t < 0.92) {
           wispAcc -= 1;
           const a = Math.random() * Math.PI * 2;
-          const r = 0.45 + Math.random() * (def.radius * 0.95);
+          const r = 0.55 + Math.random() * (def.radius * 0.95);
           this.emit({
             x: center[0] + Math.cos(a) * r,
-            y: center[1] + 0.08 + Math.random() * 0.35,
+            y: center[1] + 0.10 + Math.random() * 0.38,
             z: center[2] + Math.sin(a) * r,
-            vx: -Math.cos(a) * 1.5 - Math.sin(a) * 2.2,
-            vy: 0.9 + Math.random() * 1.6,
-            vz: -Math.sin(a) * 1.5 + Math.cos(a) * 2.2,
+            vx: -Math.cos(a) * 1.8 - Math.sin(a) * 2.4,
+            vy: 0.75 + Math.random() * 1.4,
+            vz: -Math.sin(a) * 1.8 + Math.cos(a) * 2.4,
             life: 0.55 + Math.random() * 0.50,
-            size: 0.05 + Math.random() * 0.095,
-            element: def.element,
-            shape: Math.random() < 0.55 ? 4 : 1,
-            drag: 1.5,
-            ay: 0.5,
-            swirl: 4.5,
-            pull: 2.8,
+            size: 0.055 + Math.random() * 0.10,
+            element: 4,
+            shape: Math.random() < 0.60 ? 4 : 1,
+            drag: 1.4,
+            ay: 0.4,
+            swirl: 5.0,
+            pull: 3.4,
             ax: center[0],
             az: center[2],
-            intensity: 1.2,
+            intensity: 1.25,
           });
         }
 
         const want = Math.floor(t * totalTicks) + 1;
         if (ticks < Math.min(totalTicks, want)) {
           ticks++;
-          this.spawnShockRing(center, 0.25, def.radius * 0.95, def.element, 0.38);
+          this.spawnShockRing(center, 0.25, def.radius * 0.98, 4, 0.42);
           cb.onSpawnBurst(center, def.element, 10, 2.5);
           cb.onSkillHitArea(center, def, false);
         }
       },
-      dispose: () => {
-        g.removeFromParent();
-        rune.geometry.dispose(); rune.material.dispose();
-        singularity.geometry.dispose(); singularity.material.dispose();
-      },
-    });
-  }
-
-  private spawnDarkMeteor(target: Vec, def: SkillDef, cb: SkillEffectCallbacks) {
-    const T = this.T;
-    const rune = this.makeShaderDisc(def.radius * 1.02, def.element, 1);
-    rune.position.set(target[0], target[1] + 0.08, target[2]);
-    this.root.add(rune);
-
-    // Compact obsidian-crystal star core (surrounded by rich blazing violet comet tail particles!)
-    const meteor = new T.Group();
-    const rock = this.prepMesh(new T.Mesh(
-      new T.IcosahedronGeometry(0.46, 1),
-      new T.MeshStandardMaterial({color: 0x1a0d30, emissive: EL_HEX[def.element], emissiveIntensity: 1.6, roughness: 0.35, metalness: 0.3}),
-    ), 25);
-    const core = this.prepMesh(new T.Mesh(
-      new T.SphereGeometry(0.62, 16, 12),
-      new T.MeshBasicMaterial({color: EL_HEX[def.element], transparent: true, opacity: 0.42, blending: T.AdditiveBlending, depthWrite: false}),
-    ), 26);
-    meteor.add(rock, core);
-    const startPos: Vec = [target[0] - 2.8, target[1] + 10.5, target[2] - 2.2];
-    meteor.position.set(...startPos);
-    this.root.add(meteor);
-
-    let impacted = false;
-    let tailAcc = 0;
-    this.fxList.push({
-      age: 0,
-      life: 1.15,
-      update: (t, dt) => {
-        rock.rotation.x += dt * 5.0;
-        rock.rotation.y += dt * 7.0;
-        rune.material.uniforms.uTime.value = this.time * 2.4;
-        const fallT = Math.min(1, t / 0.46);
-        const easeFall = fallT * fallT;
-        if (!impacted) {
-          const mx = startPos[0] + (target[0] - startPos[0]) * easeFall;
-          const my = startPos[1] + (target[1] + 0.45 - startPos[1]) * easeFall;
-          const mz = startPos[2] + (target[2] - startPos[2]) * easeFall;
-          meteor.position.set(mx, my, mz);
-          // Blazing dense comet-tail particle stream
-          tailAcc += dt * 280;
-          while (tailAcc >= 1) {
-            tailAcc -= 1;
-            this.emit({
-              x: mx + (Math.random() - 0.5) * 0.45,
-              y: my + (Math.random() - 0.5) * 0.45,
-              z: mz + (Math.random() - 0.5) * 0.45,
-              vx: (Math.random() - 0.5) * 1.8 - 0.8,
-              vy: 2.2 + Math.random() * 2.8,
-              vz: (Math.random() - 0.5) * 1.8 - 0.6,
-              life: 0.30 + Math.random() * 0.38,
-              size: 0.055 + Math.random() * 0.12,
-              element: def.element,
-              shape: Math.random() < 0.45 ? 1 : 4,
-              drag: 2.2,
-              intensity: 1.4,
-            });
-          }
-          if (fallT >= 1) {
-            impacted = true;
-            meteor.visible = false;
-            this.spawnShockRing(target, 0.4, def.radius * 1.35, def.element, 0.58);
-            this.spawnShockRing([target[0], target[1] + 0.22, target[2]], 0.25, def.radius * 1.0, def.element, 0.44);
-            this.emitRadialBurst(target, def.element, 140, 0.65, 6.8, 3.0);
-            cb.onSpawnBurst(target, def.element, 36, 5.2);
-            cb.onSkillHitArea(target, def, true);
-          }
-        }
-        rune.material.uniforms.uProgress.value = impacted ? Math.max(0, (1 - (t - 0.46) / 0.54) * 0.9) : 0.92;
-      },
-      dispose: () => {
-        rune.removeFromParent(); rune.geometry.dispose(); rune.material.dispose();
-        meteor.removeFromParent(); rock.geometry.dispose(); rock.material.dispose();
-        core.geometry.dispose(); core.material.dispose();
-      },
-    });
-  }
-
-  private spawnPhysicalQuake(center: Vec, def: SkillDef, isUlt: boolean) {
-    this.spawnShockRing(center, 0.35, def.radius * (isUlt ? 1.32 : 1.05), def.element, isUlt ? 0.58 : 0.42);
-    this.spawnShockRing([center[0], center[1] + 0.20, center[2]], 0.20, def.radius * 0.88, def.element, isUlt ? 0.46 : 0.32);
-
-    // Fountain of gilded star sparks & radial golden dust
-    this.emitRadialBurst(center, def.element, isUlt ? 130 : 68, def.radius * 0.35, isUlt ? 6.4 : 4.4, isUlt ? 3.4 : 2.2);
-
-    // Slender crystalline gilded energy lances (fine sharp faceted prisms instead of clunky thick cones!)
-    const T = this.T;
-    const g = new T.Group();
-    g.position.set(center[0], center[1], center[2]);
-    const count = isUlt ? 12 : 6;
-    const lanceGeo = new T.ConeGeometry(isUlt ? 0.085 : 0.065, isUlt ? 1.35 : 0.88, 4).translate(0, isUlt ? 0.67 : 0.44, 0);
-    const lanceMat = new T.MeshBasicMaterial({
-      color: EL_CORE[def.element],
-      transparent: true,
-      opacity: 0.92,
-      blending: T.AdditiveBlending,
-      depthWrite: false,
-    });
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2;
-      const dist = def.radius * (isUlt ? 0.62 : 0.54);
-      const sp = this.prepMesh(new T.Mesh(lanceGeo, lanceMat), 25);
-      sp.position.set(Math.cos(a) * dist, 0, Math.sin(a) * dist);
-      sp.rotation.z = -Math.cos(a) * 0.36;
-      sp.rotation.x = Math.sin(a) * 0.36;
-      g.add(sp);
-    }
-    this.root.add(g);
-
-    this.fxList.push({
-      age: 0,
-      life: isUlt ? 0.64 : 0.44,
-      update: (t) => {
-        const rise = Math.min(1, t / 0.14);
-        const fade = t > 0.45 ? 1 - (t - 0.45) / 0.55 : 1;
-        g.scale.set(1, Math.max(0.01, rise * (0.4 + 0.6 * fade)), 1);
-        lanceMat.opacity = 0.92 * fade;
-      },
-      dispose: () => {
-        g.removeFromParent();
-        lanceGeo.dispose();
-        lanceMat.dispose();
-      },
+      dispose: () => this.disposeGroup(g),
     });
   }
 
@@ -1293,7 +1447,7 @@ export class SkillVfxSystem {
       const t = age / life;
       const drag = Math.exp(-this.pDrag[i] * dt);
       let vx = this.pVelX[i] * drag;
-      let vy = (this.pVelY[i] + this.pAy[i] * dt) * drag;
+      let vy = (this.pVelY[i] + this.pAy[i] * dt) * Math.exp(-this.pDrag[i] * 0.35 * dt);
       let vz = this.pVelZ[i] * drag;
 
       let x = this.pPos[i * 3];
@@ -1316,8 +1470,8 @@ export class SkillVfxSystem {
       z += vz * dt;
       this.pVelX[i] = vx; this.pVelY[i] = vy; this.pVelZ[i] = vz;
       this.pPos[i * 3] = x; this.pPos[i * 3 + 1] = y; this.pPos[i * 3 + 2] = z;
+      if (this.pSpin[i] !== 0) this.pRot[i] += this.pSpin[i] * dt;
 
-      // Smooth Niagara color-over-life gradient (incandescent core -> vivid mid -> rich trailing edge)
       const pal = EL_PAL[this.pEl[i]] ?? EL_PAL[0];
       const c0 = t < 0.35 ? pal[0] : pal[1];
       const c1 = t < 0.35 ? pal[1] : pal[2];
@@ -1327,11 +1481,12 @@ export class SkillVfxSystem {
       this.pCol[i * 3 + 1] = (c0[1] + (c1[1] - c0[1]) * f) * inten;
       this.pCol[i * 3 + 2] = (c0[2] + (c1[2] - c0[2]) * f) * inten;
 
-      // Crisp birth pop + graceful long taper-out
-      const fadeIn = Math.min(1, t / 0.12);
+      const fadeIn = Math.min(1, t / 0.10);
       const fadeOut = (1 - t) * (1 - t);
       this.pAlpha[i] = fadeIn * fadeOut;
-      this.pSize[i] = this.pBaseSize[i] * (0.45 + 0.75 * fadeIn) * (1 - 0.55 * t);
+      const shape = this.pShape[i];
+      const scaleCurve = shape > 3.5 && shape < 4.5 ? (1 + 0.45 * t) : (1 - 0.52 * t);
+      this.pSize[i] = this.pBaseSize[i] * (0.48 + 0.72 * fadeIn) * scaleCurve;
     }
 
     this.pAliveCount = alive;
@@ -1343,12 +1498,12 @@ export class SkillVfxSystem {
       this.pGeo.attributes.aSize.needsUpdate = true;
       this.pGeo.attributes.aAlpha.needsUpdate = true;
       this.pGeo.attributes.aShape.needsUpdate = true;
+      this.pGeo.attributes.aRot.needsUpdate = true;
     }
   }
 
   update(dt: number, cb: SkillEffectCallbacks) {
     this.time += dt;
-    // 1. Step active projectiles & emit continuous helical Niagara trails
     const targets = cb.getTargetPositions();
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
@@ -1362,70 +1517,79 @@ export class SkillVfxSystem {
       const wall = cb.castWall?.(from, p.pos);
       if (wall) p.pos = wall;
       p.mesh.position.set(p.pos[0], p.pos[1], p.pos[2]);
+      p.onStep?.(dt, p.age);
 
-      // Continuous helical fine trail particles behind every projectile & sword-qi wave
-      p.trailAcc += dt * (p.isWave ? 170 : 135);
+      // Element-distinct projectile trail wake
+      const el = p.def.element;
+      p.trailAcc += dt * 140;
       while (p.trailAcc >= 1) {
         p.trailAcc -= 1;
         const a = this.time * 18 + Math.random() * Math.PI * 2;
-        const rad = p.isWave ? 0.55 * (Math.random() - 0.5) : 0.14;
+        const rad = el === 4 ? (0.36 + Math.random() * 0.24) : 0.18;
         this.emit({
           x: p.pos[0] + Math.cos(a) * rad,
           y: p.pos[1] + Math.sin(a) * rad,
-          z: p.pos[2] + (Math.random() - 0.5) * 0.16,
-          vx: -p.vel[0] * 0.12 + (Math.random() - 0.5) * 1.2,
-          vy: (p.def.element === 2 ? 0.9 : 0.25) + (Math.random() - 0.5) * 0.9,
-          vz: -p.vel[2] * 0.12 + (Math.random() - 0.5) * 1.2,
-          life: 0.26 + Math.random() * 0.30,
-          size: 0.04 + Math.random() * 0.075,
-          element: p.def.element,
-          shape: this.defaultShape(p.def.element, Math.floor(Math.random() * 6)),
-          drag: 3.4,
-          ay: p.def.element === 2 ? 1.4 : -0.6,
-          intensity: 1.2,
+          z: p.pos[2] + (Math.random() - 0.5) * 0.18,
+          vx: el === 4 ? (-Math.cos(a) * 1.4) : (-p.vel[0] * 0.12 + (Math.random() - 0.5) * 1.2),
+          vy: el === 2 ? (1.4 + Math.random() * 1.2) : el === 5 ? (1.2 + Math.random() * 1.6) : (0.25 + (Math.random() - 0.5) * 0.8),
+          vz: el === 4 ? (-Math.sin(a) * 1.4) : (-p.vel[2] * 0.12 + (Math.random() - 0.5) * 1.2),
+          life: 0.28 + Math.random() * 0.30,
+          size: 0.045 + Math.random() * 0.08,
+          element: el,
+          shape: this.defaultShape(el, Math.floor(Math.random() * 6)),
+          drag: el === 0 || el === 5 ? 1.4 : 3.2,
+          ay: el === 2 ? 2.6 : el === 0 ? -5.5 : el === 5 ? -9.5 : 0.2,
+          pull: el === 4 ? 2.6 : 0,
+          swirl: el === 4 ? 3.5 : 0,
+          ax: p.pos[0],
+          az: p.pos[2],
+          spin: el === 5 ? 9 : 0,
+          intensity: 1.22,
         });
       }
 
       let hitTarget = false;
       for (const tp of targets) {
         const heightGap = cb.castWall ? tp[1] + .52 - p.pos[1] : 0;
-        if (Math.hypot(tp[0] - p.pos[0], heightGap, tp[2] - p.pos[2]) < (p.isWave ? 1.5 : 1.05)) {
+        if (Math.hypot(tp[0] - p.pos[0], heightGap, tp[2] - p.pos[2]) < 1.05) {
           hitTarget = true;
           break;
         }
       }
       if (wall || hitTarget || p.age >= p.maxAge) {
-        this.spawnShockRing(p.pos, 0.25, p.def.radius, p.def.element, 0.38);
-        this.emitRadialBurst(p.pos, p.def.element, 58, 0.45, 4.4, 1.8);
+        const floor = cb.sampleTerrain(p.pos[0], p.pos[2]) ?? p.pos[1] - 0.5;
+        if (p.def.element === 2) fireExplosion(this.host, [...p.pos], floor, p.def);
+        else if (p.def.element === 0) {
+          waterPrison(this.host, [...p.pos], floor, p.def);
+          this.emitRadialBurst(p.pos, 0, 30, 0.4, 3.6, 1.6);
+        } else {
+          this.spawnShockRing(p.pos, 0.25, p.def.radius, p.def.element, 0.42);
+          this.emitRadialBurst(p.pos, p.def.element, 64, 0.48, 4.6, 1.8);
+        }
         cb.onSpawnBurst(p.pos, p.def.element, 20, 3.2);
         if (!wall) cb.onSkillHitArea(p.pos, p.def, false);
-        p.mesh.removeFromParent();
-        p.mesh.traverse((n: any) => { n.geometry?.dispose?.(); n.material?.dispose?.(); });
+        this.disposeGroup(p.mesh);
         this.projectiles.splice(i, 1);
       }
     }
 
-    // 2. Step timed 3D effects
     for (let i = this.fxList.length - 1; i >= 0; i--) {
       const fx = this.fxList[i];
       fx.age += dt;
+      if (fx.age < 0) continue;
       const t = Math.min(1, fx.age / fx.life);
-      fx.update(t, dt);
+      fx.update(t, dt, fx.age);
       if (fx.age >= fx.life) {
         fx.dispose();
         this.fxList.splice(i, 1);
       }
     }
 
-    // 3. Step GPU Niagara particle pool
     this.stepParticles(dt);
   }
 
   reset() {
-    for (const p of this.projectiles) {
-      p.mesh.removeFromParent();
-      p.mesh.traverse((n: any) => { n.geometry?.dispose?.(); n.material?.dispose?.(); });
-    }
+    for (const p of this.projectiles) this.disposeGroup(p.mesh);
     this.projectiles.length = 0;
     for (const fx of this.fxList) fx.dispose();
     this.fxList.length = 0;
@@ -1437,6 +1601,7 @@ export class SkillVfxSystem {
 
   dispose() {
     this.reset();
+    this.kit.dispose();
     this.pGeo.dispose();
     this.pMat.dispose();
     this.root.removeFromParent();

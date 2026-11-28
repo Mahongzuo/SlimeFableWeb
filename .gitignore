@@ -5,7 +5,9 @@ release/
 *.tsbuildinfo
 # local QA output (screenshots, reports, logs)
 qa/shots/
+qa/evidence/
 qa/*.json
+tasks/reports/
 *.log
 # editors / OS
 .DS_Store

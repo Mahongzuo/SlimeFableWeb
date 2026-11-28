@@ -26,7 +26,7 @@ with sync_playwright() as pw:
     def boot():
         page.wait_for_function('window.__slime?.ready && window.__game.state==="play"', timeout=120000)
         page.evaluate("""() => {window.o=window.__ocean;window.s=window.__slime;window.g=window.__game;
-        window.advance=(n,dt=.05)=>{for(let i=0;i<n;i++)o.update(o.lastWaveTime+dt,dt)};
+        window.advance=(n,dt=.05)=>{for(let i=0;i<n;i++){const t=o.lastWaveTime+dt;o.prepareHull(t,dt);o.update(t,dt)}};
         window.place=(x,z,yaw=0)=>{Object.assign(o.run,{x,z,yaw});o.boatYaw=yaw;o.boatSpeed=0;
           o.boatPos.set(x,-.38,z);s.yaw=yaw+Math.PI+.47;s.teleport([x,1,z]);advance(1)};
         window.__graphics.set('medium');window.__homeCalib.setInstantExposure(true);window.proofView=null;
@@ -36,6 +36,18 @@ with sync_playwright() as pw:
         return page.locator('[data-voyage="'+id+'"]')
     def check(expr):
         assert page.evaluate(expr), expr
+    def take_helm():
+        check('o.mode==="deck"')
+        page.evaluate("""()=>{s.yaw=o.boatYaw;
+          const side=o.deckFoot.x>0?'KeyA':'KeyD';
+          if(Math.abs(o.deckFoot.x)>.48){
+            o.keys.add(side);for(let i=0;i<20&&Math.abs(o.deckFoot.x)>.48;i++)advance(1);o.keys.delete(side);
+          }
+          const dir=o.deckFoot.z>-2.14?'KeyW':'KeyS';
+          o.keys.add(dir);for(let i=0;i<40&&!o.nearHelm();i++)advance(1);o.keys.delete(dir);advance(1)}""")
+        page.keyboard.press('f')
+        check('o.mode==="boat"')
+
     def shot(id):
         page.screenshot(path=OUT / ('slime-voyage-'+id+'.jpg'), type='jpeg', quality=86)
     boot()
@@ -45,6 +57,7 @@ with sync_playwright() as pw:
     button('buy').click()
     check('g.save.data.life.coins===12')
     button('launch').click()
+    take_helm()
     check('o.run.ammo===18 && o.mode==="boat"')
     page.wait_for_function('o.ship.crew.every(p=>p.group.children.length && p.group.children[0].isGroup)',timeout=45000)
     page.keyboard.down('w')
@@ -130,7 +143,7 @@ with sync_playwright() as pw:
           while(o.bed(x,z)>-3||o.bed(x,z-8)>-3)x+=12;
           place(x,z,Math.PI);o.run.threshold=o.coast(x,z)+1;}""")
         page.keyboard.down('w')
-        page.evaluate('advance(10)')
+        page.evaluate('advance(24)')
         page.keyboard.up('w')
         check('!!o.run.enemy')
         if wave == 0:
@@ -148,7 +161,7 @@ with sync_playwright() as pw:
                 page.evaluate('advance(36)')
         check('!o.run.enemy')
     check('o.run.ammo===9 && o.run.cargo===15')
-    page.reload();boot()
+    page.reload();boot();take_helm()
     check('o.mode==="boat" && o.run.ammo===9 && o.run.cargo===15 && g.save.data.life.sailing.flag===4205')
     # Real island land / step into shallows / dive / ladder.
     island=page.evaluate("""() => {const tile=[...o.islands.tiles.values()].find(t=>t.island.kind!==2)||[...o.islands.tiles.values()][0];
@@ -171,7 +184,7 @@ with sync_playwright() as pw:
     check('s.submerged && o.mode==="diving"')
     page.keyboard.down('Space');page.wait_for_function('o.mode==="idle"',timeout=25000);page.keyboard.up('Space')
     button('board').tap()
-    check('o.mode==="boat"')
+    check('o.mode==="deck"')
     button('leave').tap()
     # Walk ashore under the normal character solver, from the boat's seaward edge.
     page.evaluate('s.yaw=Math.PI/2')
@@ -181,7 +194,7 @@ with sync_playwright() as pw:
     page.evaluate('''() => {const [x,y,z]=s.position;window.proofView=[[x+32,24,z+30],[x,y,z]]}''')
     page.wait_for_timeout(350);shot('shore-high');page.evaluate('window.proofView=null')
     page.evaluate('s.teleport([o.run.x,o.waveHeightAt(o.run.x,o.run.z),o.run.z]);advance(1)')
-    button('board').tap()
+    button('board').tap();take_helm()
     page.set_viewport_size({'width':412,'height':850})
     button('help').tap()
     page.locator('.voyage-guide').evaluate('e=>e.scrollTop=e.scrollHeight')
@@ -199,11 +212,11 @@ with sync_playwright() as pw:
     button('fish').tap();check('o.mode==="fishing"');button('cancel').tap()
     button('dive').tap();check('o.mode==="diving"')
     page.evaluate('s.position[1]=o.waveHeightAt(s.position[0],s.position[2])-.3;advance(1)')
-    button('surface').tap();check('o.mode==="boat"')
+    button('surface').tap();check('o.mode==="deck"')
     page.evaluate('()=>{const p=o.berth();place(p.x,p.z,Math.PI)}')
     button('land').tap()
     check('!o.run && g.save.data.life.coins===27 && !s.inputLock')
-    button('launch').tap()
+    button('launch').tap();take_helm()
     check('o.run.ammo===18')
     # Expended-ammunition fixture. The ship must actually sail out of engagement range.
     page.evaluate("""()=>{let x=10;const z=-850;

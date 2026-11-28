@@ -152,8 +152,7 @@ export class TimePortal {
     shape.absarc(0, PORTAL_BASE + PORTAL_ARCH_H, PORTAL_ARCH_W, 0, Math.PI, false);
     shape.lineTo(-PORTAL_ARCH_W, stepTop);
 
-    const opaqueTex = ctx.pipeline?.water?.tOpaqueColor?.value ?? null;
-    const {material: discMat, uniforms} = createPortalMembraneMaterial(opaqueTex);
+    const {material: discMat, uniforms} = createPortalMembraneMaterial();
     this.uniforms = uniforms;
     this.disc = new T.Mesh(new T.ShapeGeometry(shape, 32), discMat);
     this.disc.name = 'fx-portal-membrane';
@@ -314,12 +313,6 @@ export class TimePortal {
     this.uniforms.uTime.value = t;
     this.uniforms.uOpen.value = this.open;
     this.uniforms.uHover.value = this.hover;
-
-    const opaqueTex = this.ctx.pipeline?.water?.tOpaqueColor?.value ?? null;
-    if (opaqueTex && this.uniforms.tOpaqueColor.value !== opaqueTex) {
-      this.uniforms.tOpaqueColor.value = opaqueTex;
-      this.uniforms.uHasOpaque.value = 1;
-    }
 
     const vis = this.open > .01;
     this.disc.visible = vis;

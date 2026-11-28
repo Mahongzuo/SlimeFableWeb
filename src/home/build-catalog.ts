@@ -1,3 +1,4 @@
+import {landscapeAssetUrl} from './architecture-assets';
 import {propStructures} from '../world/linqi/prop-structures';
 import {valleyHeight,riverLevel} from './waterway';
 import {portalSlots, plazaCenter, quayPavilion, nativeLane} from './layout';
@@ -19,7 +20,7 @@ export interface BuildItemDef {
   id: string;
   name: string;
   category: BuildCategory;
-  /** DreamWorld GLB basename (in /models/dreamworld) or 'procedural-*' for functional facilities & farm beds. */
+  /** Local GLB basename or 'procedural-*' for functional facilities & farm beds. */
   asset: string;
   thumb: string;
   icon: string;
@@ -51,7 +52,7 @@ export interface PresetBlueprint {
   items: {itemId: string; dx: number; dz: number; yaw: number; scale?: number}[];
 }
 
-const thumb = (asset: string) => `/models/dreamworld/${asset}.png`;
+const thumb = (asset: string) => landscapeAssetUrl(asset, 'png');
 
 export const BUILD_CATALOG: BuildItemDef[] = [
   // ---- Placeable Farm Beds (UE RaisedBed / Planter style) ----
@@ -276,12 +277,12 @@ export const BUILD_CATALOG: BuildItemDef[] = [
   {
     id: 'poi-coop', name: '林间小动物牧舍', category: 'facility', asset: 'procedural-coop', thumb: '', icon: '🏡',
     width: 3.2, depth: 2.6, height: 2.2, price: 34, unlockLevel: 1, solid: true, tags: ['ranch', 'coop', 'pasture'],
-    desc: '收容野兔、锦鸡、松鼠、水獭等小型物种（+4 牧场容量），每日产出灵蛋与绒毛。',
+    desc: '收容野兔、锦鸡、松鼠、水獭等小型物种，提供独立安置地点，每日产出灵蛋与绒毛。',
   },
   {
     id: 'poi-barn', name: '敞篷灵兽鹿苑', category: 'facility', asset: 'procedural-barn', thumb: '', icon: '🦌',
     width: 4.4, depth: 3.4, height: 2.9, price: 50, unlockLevel: 2, solid: true, tags: ['ranch', 'barn', 'pasture'],
-    desc: '收容梅花鹿、白鹿、雪狐、水豚、小熊猫等中大型灵兽（+6 牧场容量），每日产出鲜乳与珍稀露。',
+    desc: '收容梅花鹿、白鹿、雪狐、水豚、小熊猫等中大型灵兽，提供独立安置地点，每日产出鲜乳与珍稀露。',
   },
   {
     id: 'poi-fishpond', name: '生态养殖鱼塘', category: 'facility', asset: 'procedural-fishpond', thumb: '', icon: '🐟',
@@ -427,10 +428,10 @@ export function canPlaceProp(
       margin*(Math.abs(Math.cos(angle-rotation))*w + Math.abs(Math.sin(angle-rotation))*d);
     const separated=[yaw,yaw+Math.PI/2,p.yaw,p.yaw+Math.PI/2].some(angle=>{
       const distance=Math.abs((x-p.x)*Math.cos(angle)-(z-p.z)*Math.sin(angle));
-      return distance>=extent(angle,yaw,item.width*scale,item.depth*scale)+extent(angle,p.yaw,other.width*p.scale,other.depth*p.scale);
+      return distance>=extent(angle,yaw,item.width*scale,item.depth*scale)+extent(angle,p.yaw,p.nativeFootprint?.width??other.width*p.scale,p.nativeFootprint?.depth??other.depth*p.scale);
     });
     if (!separated) {
-      return {ok: false, reason: `与已摆放的「${other.name}」重叠`};
+      return {ok: false, reason: `与已摆放的「${p.nativeFootprint?.name??other.name}」重叠`};
     }
   }
   return {ok: true};

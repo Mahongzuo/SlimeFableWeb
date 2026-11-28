@@ -39,14 +39,14 @@ void main() {
       sky = sky * c.a + c.rgb;
     }
     sky *= 0.24;
-    vec3 night = mix(vec3(0.042, 0.072, 0.125), vec3(0.024, 0.046, 0.088), max(d.y, 0.0));
+    vec3 night = mix(vec3(0.025, 0.048, 0.088), vec3(0.013, 0.027, 0.056), max(d.y, 0.0));
     vec3 col = sky + night * (1.0 - smoothstep(0.02, 0.35, uDaylight));
     // Keep IBL physically balanced against direct sun (5:1 to 7:1 contrast ratio)
     gl_FragColor = vec4(min(col, vec3(1.6)), 1.0);
   } else {
     // Lower hemisphere: physical ocean + sunlit island ground bounce
     vec3 horizon = texture2D(tSkyView, dirToSkyUV(normalize(vec3(d.x, 0.04, d.z)))).rgb * 0.20;
-    vec3 bounce = mix(horizon * 0.55, uGroundTint * (0.15 + 0.28 * uDaylight), smoothstep(-0.02, -0.55, d.y));
+    vec3 bounce = mix(horizon * 0.55, uGroundTint * (0.075 + 0.355 * uDaylight), smoothstep(-0.02, -0.55, d.y));
     gl_FragColor = vec4(min(bounce, vec3(0.85)), 1.0);
   }
 }`;

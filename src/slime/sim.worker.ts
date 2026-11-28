@@ -43,6 +43,7 @@ self.onmessage=(event:MessageEvent<WorkerMsg>)=>{
    lastGeneration=-1;
   }
   if(input.generation!==lastGeneration){solver.reset(input.anchor);accumulator=0;lastGeneration=input.generation}
+  if(input.deckAttached)solver.carryBodyTo(input.anchor);
   for(const c of input.commands){
    if(c.type==='launch'&&c.target)solver.launch(c.target,input.forward,c.cannon);
   }

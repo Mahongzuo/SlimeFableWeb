@@ -42,7 +42,7 @@ export function calibratePortalColors(hexA: string, hexB: string) {
 const MEMBRANE_VERT = /* glsl */ `
 varying vec2 vLocalPos;
 varying vec3 vViewLocal;
-varying vec4 vScreenPos;
+
 
 void main() {
   vLocalPos = position.xy;
@@ -51,19 +51,19 @@ void main() {
   vec3 camLocal = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
   vViewLocal = normalize(camLocal - position);
   vec4 clip = projectionMatrix * viewMatrix * worldPos;
-  vScreenPos = clip;
+
   gl_Position = clip;
 }`;
 
 const MEMBRANE_FRAG = /* glsl */ `
 precision highp float;
-uniform float uTime, uOpen, uHover, uHasOpaque;
+uniform float uTime, uOpen, uHover;
 uniform vec3 uCore, uMid, uRim;
-uniform sampler2D tOpaqueColor;
+
 
 varying vec2 vLocalPos;
 varying vec3 vViewLocal;
-varying vec4 vScreenPos;
+
 
 const float ARCH_W = ${PORTAL_ARCH_W.toFixed(3)};
 const float ARCH_SPRING = ${(PORTAL_BASE + PORTAL_ARCH_H).toFixed(3)};
@@ -185,24 +185,14 @@ void main() {
   vec3 rimCol = mix(uMid * 1.60, uRim * 2.15 + vec3(0.24), clamp(rimTight + 0.30 * uHover, 0.0, 1.0));
   vec3 col = vortexCol + rimCol * rimStrength;
 
-  // 4. Subtle gravitational-lens screen-space refraction confined strictly to the outer arch edge
-  float innerAlpha = smoothstep(0.0, 0.058, edgeDist);
-  float bottomFade = smoothstep(0.0, 0.075, vLocalPos.y - STEP_TOP);
-  if (uHasOpaque > 0.5) {
-    vec2 suv = vScreenPos.xy / vScreenPos.w * 0.5 + 0.5;
-    vec2 lensOff = normalize(base + vec2(1e-4)) * (0.011 * rimWisp * (1.0 + 0.45 * uHover));
-    vec3 bg = texture2D(tOpaqueColor, clamp(suv + lensOff, vec2(0.002), vec2(0.998))).rgb;
-    float veil = smoothstep(0.015, 0.095, edgeDist);
-    col = mix(bg * 0.65 + rimCol * rimTight * 1.15, col, mix(0.35, 1.0, veil));
-  }
-
   // Softly compress peak linear radiance so dusk/night auto-exposure preserves vivid color
   col = min(col, vec3(2.65));
 
   // Opening iris wipe when a gate turns on/off
-  float iris = smoothstep(0.0, 0.35, uOpen * 1.35 - r0 * 0.45);
-  float alpha = clamp((0.97 + 0.025 * uHover) * innerAlpha * bottomFade * uOpen * iris, 0.0, 0.995);
-  gl_FragColor = vec4(max(col, vec3(0.0)), alpha);
+  // Reveal the actual aperture as the gate opens. Uncovered pixels keep the background depth.
+  float aperture = uOpen * 2.85 - length((vLocalPos - vec2(0., CENTER_Y)) * vec2(1., .76));
+  if (aperture <= 0.0) discard;
+  gl_FragColor = vec4(max(col, vec3(0.0)), 1.0);
 }`;
 
 const RIBBON_VERT = /* glsl */ `
@@ -283,14 +273,12 @@ export interface PortalVfxUniforms {
   uTime: {value: number};
   uOpen: {value: number};
   uHover: {value: number};
-  uHasOpaque: {value: number};
   uCore: {value: THREE.Color};
   uMid: {value: THREE.Color};
   uRim: {value: THREE.Color};
-  tOpaqueColor: {value: THREE.Texture | null};
 }
 
-export function createPortalMembraneMaterial(opaqueTex: THREE.Texture | null): {
+export function createPortalMembraneMaterial(): {
   material: THREE.ShaderMaterial;
   uniforms: PortalVfxUniforms;
 } {
@@ -298,18 +286,15 @@ export function createPortalMembraneMaterial(opaqueTex: THREE.Texture | null): {
     uTime: {value: 0},
     uOpen: {value: 0},
     uHover: {value: 0},
-    uHasOpaque: {value: opaqueTex ? 1 : 0},
     uCore: {value: new THREE.Color('#0a1c26')},
     uMid: {value: new THREE.Color('#34b8a8')},
     uRim: {value: new THREE.Color('#9ff7ef')},
-    tOpaqueColor: {value: opaqueTex},
   };
   const material = new THREE.ShaderMaterial({
     uniforms: uniforms as any,
     vertexShader: MEMBRANE_VERT,
     fragmentShader: MEMBRANE_FRAG,
-    transparent: true,
-    depthWrite: false,
+    depthWrite: true,
     side: THREE.DoubleSide,
   });
   return {material, uniforms};

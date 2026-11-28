@@ -1,3 +1,4 @@
+import {OCEAN_CAUSTICS_GLSL} from './ocean-light';
 import * as THREE from 'three';
 import {GTAOPass} from './gtao';
 import type {PostProcessHook} from './pipeline';
@@ -38,19 +39,14 @@ uniform float uUseClouds;
 uniform float uUseShafts;
 uniform float uSeaLevel;
 uniform float uTime;
-uniform float uUnderwater;
+uniform float uOcean;
+uniform float uOvercast;
+uniform vec3 uWaveNormal;
 uniform float uCamDepth;
 
 const float PI = 3.14159265359;
 
-float causticsPattern(vec2 p, float t) {
-  vec2 p1 = p * 0.55 + vec2(t * 0.24, -t * 0.19);
-  vec2 p2 = p * 0.82 - vec2(t * 0.17, t * 0.26);
-  float c1 = sin(p1.x + sin(p1.y * 1.3 + t * 0.6)) * cos(p1.y - cos(p1.x * 1.1));
-  float c2 = sin(p2.x * 1.2 - cos(p2.y)) * cos(p2.y * 1.1 + sin(p2.x - t * 0.5));
-  float v = 1.0 - abs(c1 + c2) * 0.5;
-  return pow(clamp(v, 0.0, 1.0), 4.0);
-}
+${OCEAN_CAUSTICS_GLSL}
 
 vec2 dirToSkyUV(vec3 d) {
   float azim = atan(d.x, d.z);
@@ -71,16 +67,27 @@ vec3 multiBounceAO(float ao, vec3 albedo) {
 
 void main() {
   // Subtle underwater optical refraction ripple when camera is submerged
-  vec2 sampleUv = vUv;
+  vec4 nearView = uInvProj * vec4(vUv * 2.0 - 1.0, -1.0, 1.0);
+  vec3 lens = (uCamWorld * vec4(nearView.xyz / nearView.w, 1.0)).xyz;
+  float clearance = dot(lens - vec3(uCamPos.x,uSeaLevel,uCamPos.z),uWaveNormal);
+  float aa = max(0.001, fwidth(clearance));
+  float uUnderwater = uOcean * (1.0-smoothstep(-aa,aa,clearance));
+  float rim = uOcean * (1.0-smoothstep(aa,aa+.009,abs(clearance)));
+  vec2 edge = min(vUv, 1.0-vUv);
+  float margin = smoothstep(0.,.035,min(edge.x,edge.y));
+  vec2 sampleUv = vUv + margin * rim * normalize(vec2(dFdx(clearance),dFdy(clearance))+vec2(1.e-8)) * .012;
   if (uUnderwater > 0.01) {
     vec2 ripple = vec2(
       sin(vUv.y * 22.0 + uTime * 2.1) * 0.0022,
       cos(vUv.x * 18.0 - uTime * 1.7) * 0.0018
     ) * uUnderwater;
-    sampleUv = clamp(vUv + ripple, vec2(0.001), vec2(0.999));
+    sampleUv = clamp(sampleUv + ripple * margin, vec2(0.001), vec2(0.999));
   }
 
-  vec3 col = texture2D(tColor, sampleUv).rgb;
+  vec4 scene = texture2D(tColor, sampleUv);
+  float waterCoverage = clamp(1.0 - scene.a, 0.0, 1.0);
+  float seaGrade = max(waterCoverage, uUnderwater);
+  vec3 col = scene.rgb;
   float rawDepth = texture2D(tDepth, sampleUv).x;
 
   vec4 ndc = vec4(sampleUv * 2.0 - 1.0, rawDepth * 2.0 - 1.0, 1.0);
@@ -91,19 +98,13 @@ void main() {
   float dist = length(rayVec);
   vec3 rd = rayVec / max(dist, 1e-4);
 
-  bool isSky = rawDepth >= 0.9996;
+  bool isSky = rawDepth >= 0.9999999;
 
   // 1. Multi-bounce GTAO on opaque geometry (clean and subtle)
   if (!isSky && uUseGTAO > 0.5) {
     float ao = texture2D(tGTAO, sampleUv).r;
     vec3 approxAlbedo = clamp(col / max(col + vec3(0.45), vec3(0.01)), 0.08, 0.95);
-    col *= multiBounceAO(ao, approxAlbedo);
-  }
-
-  // 2. Volumetric clouds composited cleanly on sky pixels (only above water)
-  if (isSky && uUseClouds > 0.5 && uUnderwater < 0.5) {
-    vec4 cloud = texture2D(tClouds, sampleUv);
-    col = col * cloud.a + cloud.rgb;
+    col *= mix(multiBounceAO(ao, approxAlbedo), vec3(1.), seaGrade);
   }
 
   vec3 sunDir = normalize(uSunDir);
@@ -127,44 +128,51 @@ void main() {
 
     vec3 horizonDir = normalize(vec3(rd.x, max(rd.y, 0.05), rd.z));
     vec3 fogBase = texture2D(tSkyView, dirToSkyUV(horizonDir)).rgb;
-    fogBase += vec3(0.014, 0.026, 0.046) * (1.0 - smoothstep(0.02, 0.35, uDaylight));
+    fogBase += vec3(0.010, 0.022, 0.046) * (1.0 - smoothstep(0.02, 0.35, uDaylight));
 
     float cosTheta = max(dot(rd, sunDir), 0.0);
     vec3 sunTint = mix(vec3(1.0, 0.48, 0.20), vec3(1.0, 0.94, 0.82), smoothstep(0.0, 0.32, max(sunDir.y, 0.0)));
     float mieGlow = pow(cosTheta, 7.0) * uFogInscatter * smoothstep(-0.04, 0.10, sunDir.y) * uDaylight;
     vec3 fogCol = fogBase + sunTint * (mieGlow * 0.35);
-    col = mix(col, fogCol, fogAmount * (1.0 - uUnderwater));
+    col = mix(col, fogCol, fogAmount * (1.0 - seaGrade));
   }
 
   // 4. Underwater HDR Post-Processing: spectral absorption, animated seabed caustics, volumetric sun shafts & plankton bokeh!
   if (uUnderwater > 0.001) {
-    float uwDist = isSky ? 55.0 : dist;
+    float uwDist = min(dist, rd.y > .001 ? max(.1,uCamDepth)/rd.y : dist);
     float depthFrac = clamp(uCamDepth / 14.0, 0.0, 1.0);
     // Spectral water tint transitions smoothly from sunlit turquoise-aqua shallows to luminous abyssal cobalt
-    vec3 shallowFog = vec3(0.06, 0.44, 0.56) * (0.20 + 0.80 * uDaylight);
-    vec3 deepFog = vec3(0.012, 0.075, 0.19) * (0.22 + 0.78 * uDaylight);
-    vec3 uwFogCol = mix(shallowFog, deepFog, smoothstep(0.0, 0.85, depthFrac));
+    vec3 shallowFog = vec3(0.007, 0.101, 0.118) * (0.20 + 0.80 * uDaylight);
+    vec3 deepFog = vec3(0.003, 0.030, 0.061) * (0.22 + 0.78 * uDaylight);
+    vec3 uwFogCol = mix(shallowFog, deepFog, smoothstep(0.0, 0.85, depthFrac)) * (.055 + .945*exp(-uCamDepth*.009));
 
+    float cloudSun = uUseClouds > .5 ? oceanSunTransmission(tClouds, uCamPos, uCamPos, sunDir) : 1.;
     // Projected animated solar caustics on submerged seabed/reefs/creatures
     if (!isSky && worldPos.y < uSeaLevel - 0.05) {
-      float subDepth = max(0.0, uSeaLevel - worldPos.y);
-      float caustFade = exp(-subDepth * 0.14) * exp(-uwDist * 0.045) * smoothstep(-0.05, 0.2, sunDir.y) * uDaylight;
-      float c = causticsPattern(worldPos.xz + sunDir.xz * subDepth * 0.35, uTime);
-      col += vec3(0.24, 0.68, 0.72) * c * caustFade * 0.58 * uUnderwater;
+      vec3 focus = oceanCaustics(worldPos, sunDir, uSeaLevel, uTime, uDaylight, uOvercast);
+      vec3 bed = lightSeabed(col, focus * mix(.22,1.,cloudSun), uSeaLevel - worldPos.y, sunDir.y);
+      col = mix(bed, col, waterCoverage);
     }
 
     // Beer-Lambert underwater color absorption (reds attenuate rapidly, cyan/blue carry far)
     vec3 absorb = mix(vec3(0.11, 0.036, 0.018), vec3(0.16, 0.062, 0.032), depthFrac);
     vec3 trans = exp(-uwDist * absorb);
-    vec3 uwCol = col * trans + uwFogCol * (1.0 - trans);
+    vec3 uwCol = col * trans * (.08+.92*exp(-uCamDepth*.075)) + uwFogCol * (1.0 - trans);
 
     // Volumetric underwater god-rays streaming down from the sunlit water surface
     float upBias = smoothstep(-0.25, 0.85, rd.y);
     float sunAlign = pow(max(dot(rd, normalize(vec3(sunDir.x, max(sunDir.y, 0.35), sunDir.z))), 0.0), 4.0);
-    float rayAngle = atan(rd.x, rd.z) * 7.0 + rd.y * 4.0;
-    float rayBands = pow(0.5 + 0.5 * sin(rayAngle + uTime * 0.45) * cos(rayAngle * 1.7 - uTime * 0.32), 2.0);
+    int taps=uUseShafts>.5 ? 8 : 2;
+    float rayBands=0.;
+    for(int j=0;j<8;j++){
+      if(j>=taps)break;
+      vec3 beam=uCamPos+rd*(float(j)+.5)/float(taps)*min(uwDist,40.);
+      vec2 entry=beam.xz+sunDir.xz*(uSeaLevel-beam.y)/max(.18,sunDir.y);
+      float lattice=sin(entry.x*.8+sin(entry.y*.47+uTime*.36))+cos(entry.y*.65-uTime*.41);
+      rayBands+=exp(-7.*abs(lattice))/float(taps);
+    }
     float rayFade = exp(-uCamDepth * 0.12) * uDaylight * smoothstep(-0.04, 0.15, sunDir.y);
-    uwCol += vec3(0.18, 0.62, 0.70) * rayBands * (0.24 * upBias + 0.55 * sunAlign) * rayFade * 0.52;
+    uwCol += vec3(0.18, 0.62, 0.70) * rayBands * cloudSun * (0.24 * upBias + 0.55 * sunAlign) * rayFade * (1.-.9*uOvercast) * (.18+.34*uUseShafts);
 
     // Gentle floating luminescent underwater plankton motes
     vec2 moteGrid = floor((sampleUv * vec2(18.0, 11.0)) + vec2(sin(uTime * 0.22) * 0.8, -uTime * 0.18));
@@ -172,7 +180,7 @@ void main() {
     float moteHash = fract(sin(dot(moteGrid, vec2(127.1, 311.7))) * 43758.5453);
     float mote = step(0.84, moteHash) * smoothstep(0.16, 0.0, length(moteF - vec2(0.5 + 0.25 * sin(moteHash * 20.0 + uTime))));
     vec3 moteTint = mix(vec3(0.55, 0.92, 0.98), vec3(0.35, 0.85, 1.0), depthFrac);
-    uwCol += moteTint * mote * (0.14 + 0.18 * depthFrac);
+    uwCol += moteTint * mote * (.012+.012*depthFrac);
 
     // Soft underwater depth vignette
     float uwVig = smoothstep(0.45, 1.25, length((vUv - 0.5) * 1.45));
@@ -181,7 +189,7 @@ void main() {
     col = mix(col, uwCol, uUnderwater);
   }
 
-  gl_FragColor = vec4(max(col, vec3(0.0)), 1.0);
+  gl_FragColor = vec4(max(col, vec3(0.0)), seaGrade);
 }`;
 
 /** Pass 2a: Extract center-weighted log2 luminance into 64x64 RT for Auto Exposure. */
@@ -245,15 +253,19 @@ uniform sampler2D tHdr;
 uniform sampler2D tExposure;
 uniform float uTargetKey;
 uniform float uBias;
+uniform float uDaylight;
 void main() {
+  float night = 1.0 - smoothstep(0.05, 0.55, uDaylight);
+  float effTargetKey = mix(uTargetKey, 0.082, night);
+  float maxEv = mix(5.5, 1.65, night);
   float avgL = max(texture2D(tExposure, vec2(0.5)).r, 0.02);
-  float evMult = clamp((uTargetKey / avgL) * exp2(uBias), 0.30, 5.5);
+  float evMult = clamp((effTargetKey / avgL) * exp2(uBias), 0.30, maxEv);
   vec3 c = texture2D(tHdr, vUv).rgb * evMult;
   float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
   float logL = log2(max(luma, 1e-4));
-  // Soft-knee HDR bloom extract for sun rim, sunlit clouds, ocean glints & luminous accents (protects blue sky!)
+  // Soft-knee HDR bloom extract for sun rim, sunlit clouds, ocean glints, moonlight & warm night lanterns
   float knee = 0.40;
-  float thresh = 1.28;
+  float thresh = mix(1.28, 0.85, night);
   float soft = clamp(luma - thresh + knee, 0.0, 2.0 * knee);
   soft = (soft * soft) / (4.0 * knee + 1e-4);
   float contrib = max(soft, luma - thresh) / max(luma, 1e-4);
@@ -297,6 +309,7 @@ uniform float uShadowBoost;
 uniform float uHighlightCompress;
 uniform float uSaturation;
 uniform float uFade;
+uniform float uDaylight;
 
 // Crisp stylized Filmic / Narkowicz ACES curve with clean highlight roll-off and rich chroma retention
 vec3 stylizedFilmic(vec3 x) {
@@ -310,10 +323,14 @@ vec3 stylizedFilmic(vec3 x) {
 }
 
 void main() {
+  float night = 1.0 - smoothstep(0.05, 0.55, uDaylight);
+  float effTargetKey = mix(uTargetKey, 0.082, night);
+  float maxEv = mix(5.5, 1.65, night);
   float avgL = max(texture2D(tExposure, vec2(0.5)).r, 0.02);
-  float evMult = clamp((uTargetKey / avgL) * exp2(uBias), 0.30, 5.5);
+  float evMult = clamp((effTargetKey / avgL) * exp2(uBias), 0.30, maxEv);
 
-  vec3 col = texture2D(tHdr, vUv).rgb * evMult;
+  vec4 hdr = texture2D(tHdr, vUv);
+  vec3 col = hdr.rgb * evMult;
 
   // Regional Local Exposure + airy RGB Bloom packed in tLocalLuma (rgb = bloom, a = localLogL)
   vec4 localSample = texture2D(tLocalLuma, vUv);
@@ -322,27 +339,28 @@ void main() {
   float localLogL = localSample.a;
   float detail = logL - localLogL;
 
-  // Gentle shadow lift + light highlight recovery + subtle crisp micro-clarity (+8% detail contrast)
-  float midLog = log2(max(uTargetKey, 0.08));
+  // Gentle shadow lift + light highlight recovery; restrain night shadow lift so UDS moonlit shadows keep depth
+  float midLog = log2(max(effTargetKey, 0.06));
   float delta = localLogL - midLog;
+  float effShadowBoost = uShadowBoost * mix(1.0, 0.32, night);
   float compressedDelta = delta >= 0.0
     ? delta * (1.0 - uHighlightCompress)
-    : delta * (1.0 - uShadowBoost);
+    : delta * (1.0 - effShadowBoost);
   float targetLogL = midLog + compressedDelta + detail * 1.08;
-  float localGain = clamp(exp2(targetLogL - logL), 0.42, 3.0);
+  float localGain = clamp(exp2(targetLogL - logL), 0.42, mix(3.0, 1.45, night));
   col *= localGain;
 
-  // Airy luminous HDR Bloom (sun rim, cloud silver lining, water sparkles, glowing shards/portals)
-  col += localSample.rgb * 0.22;
+  // Airy luminous HDR Bloom (sun rim, cloud silver lining, water sparkles, glowing shards/portals/lanterns)
+  col += localSample.rgb * mix(0.22, 0.28, night);
 
   // Crisp Stylized Filmic tone mapping -> linear [0..1] display-referred
-  col = stylizedFilmic(max(col, vec3(0.0)) * 1.12);
+  col = stylizedFilmic(max(col, vec3(0.0)) * mix(1.12, 1.04, night));
 
-  // Subtle Genshin/WuWa split-tone: clean cool-azure shadow clarity + warm sunlit highlight glow
+  // Day split-tone (cool shadow / warm sun) transitions smoothly into UDS moonlit indigo night grade
   float l0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
-  vec3 shadowTint = vec3(0.95, 0.99, 1.06);
-  vec3 highTint = vec3(1.03, 1.01, 0.97);
-  col *= mix(shadowTint, highTint, smoothstep(0.12, 0.75, l0));
+  vec3 shadowTint = mix(vec3(0.95, 0.99, 1.06), vec3(0.84, 0.92, 1.12), night);
+  vec3 highTint = mix(vec3(1.03, 1.01, 0.97), vec3(0.96, 1.00, 1.06), night);
+  col *= mix(shadowTint, highTint, smoothstep(0.08, 0.70, l0));
 
   // Smart vibrance + saturation (enriches midtone colors while protecting clean whites)
   float maxC = max(col.r, max(col.g, col.b));
@@ -352,12 +370,20 @@ void main() {
   float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col = mix(vec3(l), col, 1.0 + vib);
 
-  // Clean crisp contrast lift (prevents dusty/washed shadows)
-  col = clamp((col - 0.5) * 1.04 + 0.515, 0.0, 1.0);
+  // Clean crisp contrast lift (neutral black floor at night so shadows stay deep instead of milky gray)
+  col = clamp((col - 0.5) * 1.04 + mix(0.515, 0.500, night), 0.0, 1.0);
 
   // Minimal airy edge framing (no dark muddy vignette)
   float vig = smoothstep(0.82, 1.55, length((vUv - 0.5) * 1.45));
   col *= 1.0 - vig * 0.04;
+
+  // Bring the water towards the harbor filmic palette without globally lifting deep-sea shadows.
+  // A fixed shoulder keeps whitecaps readable as the exposure meter crosses the waterline.
+  vec3 marine = hdr.rgb * 0.76;
+  vec3 optical = marine / (vec3(1.0) + marine);
+  vec3 painted = stylizedFilmic(hdr.rgb * clamp(evMult,.75,1.30));
+  float sunlit = smoothstep(.009,.09, dot(hdr.rgb, vec3(.2126,.7152,.0722)));
+  col = mix(col, mix(optical, painted, .44 * sunlit), hdr.a);
 
   // Fade-in transition from pale sky mist
   col = mix(vec3(0.84, 0.92, 0.98), col, uFade);
@@ -421,6 +447,7 @@ export class HomePostProcess implements PostProcessHook {
       uniforms: {
         tColor: {value: null},
         tDepth: {value: null},
+        tCaustics: {value: null},
         tGTAO: {value: this.dummyTex},
         tClouds: {value: this.dummyTex},
         tSkyView: {value: null},
@@ -439,7 +466,7 @@ export class HomePostProcess implements PostProcessHook {
         uUseShafts: {value: 1},
         uSeaLevel: {value: -0.38},
         uTime: {value: 0},
-        uUnderwater: {value: 0},
+        uOcean: {value: 0}, uOvercast: {value: 0}, uWaveNormal: {value: new THREE.Vector3(0,1,0)},
         uCamDepth: {value: 0},
       },
     });
@@ -470,7 +497,7 @@ export class HomePostProcess implements PostProcessHook {
       fragmentShader: LOCAL_LUMA_EXTRACT_FRAG,
       depthTest: false,
       depthWrite: false,
-      uniforms: {tHdr: {value: null}, tExposure: {value: null}, uTargetKey: {value: 0.24}, uBias: {value: 0}},
+      uniforms: {tHdr: {value: null}, tExposure: {value: null}, uTargetKey: {value: 0.24}, uBias: {value: 0}, uDaylight: {value: 1}},
     });
     this.gaussMat = new THREE.ShaderMaterial({
       vertexShader: FULLSCREEN_VERT,
@@ -494,6 +521,7 @@ export class HomePostProcess implements PostProcessHook {
         uHighlightCompress: {value: 0.34},
         uSaturation: {value: 1.06},
         uFade: {value: 1},
+        uDaylight: {value: 1},
       },
     });
 
@@ -527,6 +555,7 @@ export class HomePostProcess implements PostProcessHook {
     const cu = this.compositeMat.uniforms;
     cu.tColor.value = hdrColor;
     cu.tDepth.value = hdrDepth;
+    cu.tCaustics.value = args.causticsMap ?? this.dummyTex;
     cu.tGTAO.value = runGTAO ? this.gtao.texture : this.dummyTex;
     cu.tClouds.value = cloudsTex ?? this.dummyTex;
     cu.tSkyView.value = skyViewTex;
@@ -546,9 +575,10 @@ export class HomePostProcess implements PostProcessHook {
     cu.uTime.value = time;
     const seaLevel = args.seaLevel ?? -0.38;
     const camSub = Math.max(0, seaLevel - camera.position.y);
-    const uwBlend = Math.max(0, Math.min(1, (seaLevel - 0.02 - camera.position.y) / 0.22));
+    cu.uOcean.value = args.waveNormal ? 1 : 0;
+    cu.uWaveNormal.value.fromArray(args.waveNormal ?? [0,1,0]);
+    cu.uOvercast.value = args.overcast ?? 0;
     cu.uSeaLevel.value = seaLevel;
-    cu.uUnderwater.value = uwBlend;
     cu.uCamDepth.value = camSub;
     this.quadMesh.material = this.compositeMat;
     renderer.setRenderTarget(this.litHdrRT);
@@ -592,6 +622,7 @@ export class HomePostProcess implements PostProcessHook {
     this.localExtractMat.uniforms.tExposure.value = nextAdapt.texture;
     this.localExtractMat.uniforms.uTargetKey.value = params.exposureTarget;
     this.localExtractMat.uniforms.uBias.value = params.exposureBias;
+    this.localExtractMat.uniforms.uDaylight.value = daylight;
     this.quadMesh.material = this.localExtractMat;
     renderer.setRenderTarget(this.localRT);
     renderer.render(this.quadScene, this.quadCam);
@@ -618,6 +649,7 @@ export class HomePostProcess implements PostProcessHook {
     fu.uHighlightCompress.value = params.localHighlightCompress;
     fu.uSaturation.value = params.saturation;
     fu.uFade.value = fade;
+    fu.uDaylight.value = daylight;
     this.quadMesh.material = this.finalMat;
     renderer.setRenderTarget(resolvedTarget);
     renderer.render(this.quadScene, this.quadCam);

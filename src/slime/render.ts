@@ -1,5 +1,5 @@
 import {MeshFrame,Quality,Vec} from './types';
-import {elements} from './elements';
+import {DEFAULT_ELEMENT,elements} from './elements';
 import {CollisionWorld,flatWorld} from './world';
 import {FizzBubbles} from './bubbles';
 import {FaceDirector} from './face';
@@ -7,10 +7,10 @@ import {ssrGLSL} from './ssr';
 
 const vertex=`attribute float cluster;varying vec3 vWorld;varying vec3 vNormal;varying float vCluster;
 uniform vec3 uOffset;
-void main(){vWorld=position+uOffset;vNormal=normalize(normal);vCluster=cluster;gl_Position=projectionMatrix*viewMatrix*vec4(position+uOffset,1.);}`;
+void main(){vWorld=position+(cluster<.5?uOffset:vec3(0.));vNormal=normalize(normal);vCluster=cluster;gl_Position=projectionMatrix*viewMatrix*vec4(vWorld,1.);}`;
 
 const fragment=`precision highp float;uniform mat4 projectionMatrix;
-uniform sampler2D uBackground;uniform sampler2D uDepth;uniform vec2 uResolution;uniform vec3 uCenters[6];uniform vec3 uRadii[6];uniform vec3 uColor;uniform vec3 uRim;uniform vec3 uForward;uniform vec3 uSun;uniform float uTime;uniform float uNear;uniform float uFar;uniform float uReflectionPass;uniform float uXray;uniform float uQuality;uniform float uElement;uniform float uBlink;uniform float uSpread;uniform float uDome;uniform vec4 uFacePose;uniform vec4 uFaceMouth;uniform vec3 uFaceExtra;uniform vec4 uBubbles[64];uniform vec2 uBubbleStates[64];
+uniform sampler2D uBackground;uniform sampler2D uDepth;uniform vec2 uResolution;uniform vec3 uCenters[6];uniform vec3 uRadii[6];uniform vec3 uColor;uniform vec3 uRim;uniform vec3 uForward;uniform vec3 uSun;uniform float uDaylight;uniform vec3 uSkyHorizon;uniform vec3 uSkyZenith;uniform vec3 uSunColor;uniform float uTime;uniform float uNear;uniform float uFar;uniform float uReflectionPass;uniform float uXray;uniform float uQuality;uniform float uElement;uniform float uBlink;uniform float uSpread;uniform float uDome;uniform vec4 uFacePose;uniform vec4 uFaceMouth;uniform vec3 uFaceExtra;uniform vec4 uBubbles[64];uniform vec2 uBubbleStates[64];
 varying vec3 vWorld;varying vec3 vNormal;varying float vCluster;
 float linearDepth(float d){return uNear*uFar/(uFar+(uNear-uFar)*d);}
 float disk(vec2 p,vec2 c,vec2 size){return 1.-smoothstep(.82,1.,length((p-c)/size));}
@@ -24,6 +24,10 @@ vec3 sampleBg(vec2 ruv,vec2 fallbackUv,float ourDepth){
   return texture2D(uBackground,cuv).rgb;
 }
 ${ssrGLSL}
+#ifdef HOME_RAIN_CONTACT
+uniform vec4 uBodyRainHits[6];
+uniform float uRainClock,uHomeRain;
+#endif
 void main(){
   vec2 uv=gl_FragCoord.xy/uResolution;
   float sceneDepth=linearDepth(texture2D(uDepth,uv).x),ourDepth=linearDepth(gl_FragCoord.z);
@@ -37,6 +41,30 @@ void main(){
 
   int slot=int(clamp(floor(vCluster+.5),0.,5.));
   vec3 center=uCenters[slot],radii=max(uRadii[slot],vec3(.05));
+  #ifdef HOME_RAIN_CONTACT
+  float rainGlint=0., rainDimple=0.;
+  if(slot==0 && uHomeRain>.012 && N.y>0.){
+    vec3 surfaceNormal=N;
+    for(int i=0;i<6;i++){
+      vec4 hit=uBodyRainHits[i];float age=(uRainClock-hit.w)/.30;
+      if(age<0.||age>=1.)continue;
+      vec3 delta=vWorld-(center+hit.xyz*radii);
+      float d=length(delta), radius=.012+.083*age, w=.008+fwidth(d);
+      if(d>radius+w)continue;
+      vec3 tangent=delta-surfaceNormal*dot(delta,surfaceNormal);
+      vec3 radial=tangent/max(.001,length(tangent));
+      float edge=(d-radius)/w;
+      float crest=1.-smoothstep(.12,1.,abs(edge));
+      float fade=(1.-age)*uHomeRain*smoothstep(0.,.36,surfaceNormal.y);
+      // The receding and leading slopes refract the background in opposite directions.
+      N+=radial*(edge*crest*.29)*fade;
+      float lightSide=.15+.85*smoothstep(-.35,.85,dot(radial,normalize(uSun+V)));
+      rainGlint+=crest*lightSide*fade;
+      rainDimple+=(1.-smoothstep(0.,radius,d))*fade;
+    }
+    N=normalize(N);
+  }
+  #endif
   vec3 I=-V;
   float relH=clamp((vWorld.y-(center.y-radii.y))/max(radii.y*2.,.08),0.,1.);
 
@@ -76,28 +104,30 @@ void main(){
   vec3 absorbCoeff=uElement<.5
     ? vec3(.97,.46,.025)
     : uElement<1.5 ? vec3(.34,.06,.09)
+    : uElement>4.5 ? vec3(.08,.26,.95)
     : (vec3(1.)-uColor)*1.30;
   float pathLen=(.32+thickness*.65+pow(grazing,2.0)*1.15+(1.-relH)*.55);
   vec3 transmittance=exp(-pathLen*absorbCoeff);
   // Slight contrast deepening gives real wet-glass depth rather than flat paste
   vec3 body=pow(max(scene,vec3(.001)),vec3(1.08))*transmittance;
   if(uElement<.5)body+=vec3(.012,.085,.25)*(1.-transmittance.r);
+  else if(uElement>4.5)body+=vec3(.24,.17,.03)*(1.-transmittance.b)*.65;
 
   // Crisp dark glass refraction band right along the silhouette & base contact meniscus (critical for "liquid volume"!)
   float rimDepth=pow(grazing,2.6);
   body*=mix(1.,.58,rimDepth*(1.-uSpread*.45));
   float baseShadow=smoothstep(.0,.085,relH);
   body*=mix(.52,1.,baseShadow);
-  // Subtle emerald-teal caustic light trapped along the lower contact skirt (pure tint, no chalkiness)
+  // Subtle caustic light trapped along the lower contact skirt (pure tint, no chalkiness)
   float skirtBand=smoothstep(.20,.025,relH)*smoothstep(.0,.045,relH);
-  body*=mix(vec3(1.),uElement<.5?vec3(.57,.85,1.25):uElement<1.5?vec3(.72,1.08,.96):mix(vec3(1.),uColor*1.35,.55),skirtBand*.75);
+  body*=mix(vec3(1.),uElement<.5?vec3(.57,.85,1.25):uElement<1.5?vec3(.72,1.08,.96):uElement>4.5?vec3(1.22,1.04,.62):mix(vec3(1.),uColor*1.35,.55),skirtBand*.75);
 
   // ---- 3. Real SSR Environment Reflection + Delicate Thin-Film Iridescence ----
   float f0=.028;
   float fres=f0+(1.-f0)*pow(grazing,4.2);
   vec3 reflDir=reflect(I,N);
-  // Neutral dark-to-sky studio gradient so grazing reflection adds contrast, never white fog
-  vec3 skyRefl=mix(vec3(.12,.22,.24),vec3(.78,.89,.93),smoothstep(-.15,.85,reflDir.y));
+  // Live day/night sky reflection gradient so grazing reflection stays grounded at night
+  vec3 skyRefl=mix(uSkyHorizon*.52,uSkyZenith*1.15,smoothstep(-.15,.85,reflDir.y));
   vec4 screenRefl=uReflectionPass>.5?vec4(0.):traceSSR(vWorld+N*.015,reflDir);
   vec3 envRefl=mix(skyRefl,screenRefl.rgb*1.05,clamp(screenRefl.a*1.15,0.,1.));
 
@@ -108,14 +138,18 @@ void main(){
   body=mix(body,surfaceSheen,clamp(fres*.82,0.,.68));
 
   // Crisp bright liquid edge specular rim
-  body+=mix(uRim,film,.55)*pow(grazing,5.8)*.34;
+  body+=mix(uRim,film,.55)*pow(grazing,5.8)*mix(.15,.34,uDaylight);
 
-  // ---- 4. Single Sharp Sun Specular Catchlight (Clean Glass Drop) ----
+  // ---- 4. Single Sharp Sun/Moon Specular Catchlight (Clean Glass Drop) ----
   vec3 L=normalize(uSun);
   vec3 halfV=normalize(L+V);
   float specSharp=pow(max(dot(N,halfV),0.),560.)*2.4;
   float specHalo=pow(max(dot(N,halfV),0.),90.)*.12;
-  body+=vec3(1.,.99,.97)*(specSharp+specHalo);
+  body+=uSunColor*(specSharp*mix(.32,1.,uDaylight)+specHalo*mix(.24,1.,uDaylight));
+
+  #ifdef HOME_RAIN_CONTACT
+  body=body*(1.-.27*min(1.,rainDimple))+vec3(.56,.72,.80)*rainGlint;
+  #endif
 
   // ---- 5. Procedural Face (clean & readable inside clear jelly) ----
   vec3 right=normalize(vec3(uForward.z,0.,-uForward.x));
@@ -184,7 +218,7 @@ void main(){
         float gloss=pow(max(dot(bn,normalize(L+V)),0.),64.);
         float vis=uBubbleStates[i].y*(1.-ink);
         body=mix(body,body*.34,br*.70*vis);
-        body+=(vec3(.84,.98,1.)*br*.38+vec3(1.)*gloss*1.45)*vis;
+        body+=(vec3(.84,.98,1.)*br*.38+uSunColor*gloss*1.45)*vis*mix(.26,1.,uDaylight);
       }
     }
   }
@@ -204,9 +238,13 @@ export class SlimeRenderer {
   this.geometry.setAttribute('normal',new T.BufferAttribute(new Float32Array(27000),3).setUsage(T.DynamicDrawUsage));
   this.geometry.setAttribute('cluster',new T.BufferAttribute(new Float32Array(9000),1).setUsage(T.DynamicDrawUsage));
   this.geometry.setDrawRange(0,0);
-  const uniforms={uOffset:{value:new T.Vector3()},uBackground:{value:null},uDepth:{value:null},uResolution:{value:new T.Vector2()},uCenters:{value:Array.from({length:6},()=>new T.Vector3())},uRadii:{value:Array.from({length:6},()=>new T.Vector3(.3,.2,.3))},uColor:{value:new T.Color(elements[0].color)},uRim:{value:new T.Color(elements[0].rim)},uForward:{value:new T.Vector3(0,0,-1)},uSun:{value:ctx.sun.position.clone().normalize()},uTime:{value:0},uNear:{value:.05},uFar:{value:1500},uReflectionPass:{value:0},uXray:{value:0},uQuality:{value:1},uElement:{value:0},uBlink:{value:0},uSpread:{value:0},uDome:{value:1},uFacePose:{value:new T.Vector4(1,.92,.05,0)},uFaceMouth:{value:new T.Vector4(.115,.04,.085,0)},uFaceExtra:{value:new T.Vector3(.46,0,0)}};
+  const uniforms={uOffset:{value:new T.Vector3()},uBackground:{value:null},uDepth:{value:null},uResolution:{value:new T.Vector2()},uCenters:{value:Array.from({length:6},()=>new T.Vector3())},uRadii:{value:Array.from({length:6},()=>new T.Vector3(.3,.2,.3))},uColor:{value:new T.Color(elements[DEFAULT_ELEMENT].color)},uRim:{value:new T.Color(elements[DEFAULT_ELEMENT].rim)},uForward:{value:new T.Vector3(0,0,-1)},uSun:{value:ctx.sun.position.clone().normalize()},uDaylight:ctx.U?.uDaylight??{value:1},uSkyHorizon:ctx.U?.uSkyHorizon??{value:new T.Color().setRGB(.24,.40,.48)},uSkyZenith:ctx.U?.uSkyZenith??{value:new T.Color().setRGB(.36,.56,.68)},uSunColor:ctx.U?.uSunColor??{value:new T.Color(0xfff1d5)},uTime:{value:0},uNear:{value:.05},uFar:{value:1500},uReflectionPass:{value:0},uXray:{value:0},uQuality:{value:1},uElement:{value:DEFAULT_ELEMENT},uBlink:{value:0},uSpread:{value:0},uDome:{value:1},uFacePose:{value:new T.Vector4(1,.92,.05,0)},uFaceMouth:{value:new T.Vector4(.115,.04,.085,0)},uFaceExtra:{value:new T.Vector3(.46,0,0)}};
   this.bubbles=new FizzBubbles(T,this.scene,uniforms);
   this.material=new T.ShaderMaterial({uniforms,vertexShader:vertex,fragmentShader:fragment,depthTest:true,depthWrite:true});
+  if(ctx.U?.uBodyRainHits){
+    this.material.defines.HOME_RAIN_CONTACT=1;
+    Object.assign(this.material.uniforms,{uBodyRainHits:ctx.U.uBodyRainHits,uRainClock:ctx.U.uTime,uHomeRain:ctx.U.uRain});
+  }
   this.mesh=new T.Mesh(this.geometry,this.material);this.mesh.name='PBF Slime';this.mesh.frustumCulled=false;this.mesh.renderOrder=1;this.scene.add(this.mesh);
   this.xrayMaterial=new T.ShaderMaterial({uniforms:{...uniforms,uXray:{value:1}},vertexShader:vertex,fragmentShader:fragment,transparent:true,depthTest:false,depthWrite:false});
   this.xray=new T.Mesh(this.geometry,this.xrayMaterial);this.xray.frustumCulled=false;this.xray.renderOrder=2;this.scene.add(this.xray);this.drawingSize=new T.Vector2();
@@ -227,7 +265,7 @@ export class SlimeRenderer {
   shadowMat.dispose();this.color=new T.Color();
   this.actorTarget=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,depthBuffer:true});this.actorTarget.depthTexture=new T.DepthTexture(1,1,T.UnsignedIntType);
   this.compositeScene=new T.Scene();this.compositeCamera=new T.Camera();this.compositeGeo=new T.PlaneGeometry(2,2);
-  this.compositeMat=new T.ShaderMaterial({transparent:true,depthTest:false,depthWrite:false,uniforms:{uImage:{value:this.actorTarget.texture}},vertexShader:"varying vec2 vUv;void main(){vUv=position.xy*.5+.5;gl_Position=vec4(position.xy,0.,1.);}",fragmentShader:"uniform sampler2D uImage;varying vec2 vUv;void main(){gl_FragColor=texture2D(uImage,vUv);\n#include <colorspace_fragment>\n}"});
+  this.compositeMat=new T.ShaderMaterial({transparent:true,depthTest:false,depthWrite:false,uniforms:{uImage:{value:this.actorTarget.texture},uActorDepth:{value:this.actorTarget.depthTexture}},vertexShader:"varying vec2 vUv;void main(){vUv=position.xy*.5+.5;gl_Position=vec4(position.xy,0.,1.);}",fragmentShader:"uniform sampler2D uImage;uniform sampler2D uActorDepth;varying vec2 vUv;void main(){gl_FragColor=texture2D(uImage,vUv);if(gl_FragColor.a<0.001)discard;gl_FragDepth=texture2D(uActorDepth,vUv).r;\n#include <colorspace_fragment>\n}"});
   this.compositeScene.add(new T.Mesh(this.compositeGeo,this.compositeMat));
  }
  receive(frame:MeshFrame){
@@ -267,13 +305,14 @@ export class SlimeRenderer {
  private offset:Vec=[0,0,0];
  render(pass:any,forward:Vec,element:number,quality:Quality,underlay?:(actor:{color:any;depth:any})=>void){
   if(!this.frame)return;const u=this.material.uniforms,T=this.ctx.THREE;
-  {const o=this.offset;u.uOffset.value.set(o[0],o[1],o[2]);for(let i=0;i<6;i++){const c=this.frame.centers[i];if(c)u.uCenters.value[i].set(c[0]+o[0],c[1]+o[1],c[2]+o[2]);const sh=this.shadows[i],b=sh.userData.base;if(b)sh.position.set(b[0]+o[0],b[1],b[2]+o[2]);sh.material.uniforms.uTint.value.set(element===1?0x22a88c:elements[element].color);}this.proxy.position.set(o[0],o[1],o[2]);}
-  u.uBackground.value=pass.color;u.uDepth.value=pass.depth;this.ctx.renderer.getDrawingBufferSize(this.drawingSize);u.uResolution.value.copy(this.drawingSize);u.uForward.value.fromArray(forward);u.uColor.value.set(elements[element].color);u.uRim.value.set(elements[element].rim);u.uTime.value=pass.time;u.uNear.value=this.ctx.camera.near;u.uFar.value=this.ctx.camera.far;u.uQuality.value=quality==='high'?1:0;u.uElement.value=element;u.uSpread.value=this.frame.spread;u.uDome.value=this.frame.shapeBlend??1;
+  {const o=this.offset;u.uOffset.value.set(o[0],o[1],o[2]);for(let i=0;i<6;i++){const c=this.frame.centers[i];if(c){u.uCenters.value[i].fromArray(c);if(!i)u.uCenters.value[i].add(u.uOffset.value);}const sh=this.shadows[i],b=sh.userData.base;if(b)sh.position.set(b[0]+(i?0:o[0]),b[1],b[2]+(i?0:o[2]));sh.material.uniforms.uTint.value.set(element===1?0x22a88c:elements[element].color);}this.proxy.position.set(o[0],o[1],o[2]);}
+  u.uBackground.value=pass.color;u.uDepth.value=pass.depth;this.ctx.renderer.getDrawingBufferSize(this.drawingSize);u.uResolution.value.copy(this.drawingSize);u.uForward.value.fromArray(forward);u.uColor.value.set(elements[element].color);u.uRim.value.set(elements[element].rim);u.uTime.value=pass.time;u.uNear.value=this.ctx.camera.near;u.uFar.value=this.ctx.camera.far;u.uQuality.value=quality==='high'?1:0;u.uElement.value=element;u.uSpread.value=this.frame.spread;u.uDome.value=this.frame.shapeBlend??1;if(this.ctx.U?.uSunDir?.value){const s=this.ctx.U.uSunDir.value;const flip=s.y<0?-1:1;u.uSun.value.set(s.x*flip,Math.max(.18,s.y*flip),s.z*flip).normalize();}else if(this.ctx.sun?.position){u.uSun.value.copy(this.ctx.sun.position).normalize();}
   this.bubbles.update(pass.time,this.frame.spread,forward);
   const renderer=this.ctx.renderer,auto=renderer.autoClear,clear=renderer.getClearColor(new T.Color()),alpha=renderer.getClearAlpha();
   if(this.actorTarget.width!==this.drawingSize.x||this.actorTarget.height!==this.drawingSize.y)this.actorTarget.setSize(this.drawingSize.x,this.drawingSize.y);
   renderer.autoClear=true;renderer.setClearColor(0,0);renderer.setRenderTarget(this.actorTarget);renderer.clear();renderer.render(this.scene,this.ctx.camera);
-  renderer.setClearColor(clear,alpha);renderer.setRenderTarget(null);
+  renderer.setClearColor(clear,alpha);renderer.setRenderTarget(pass.target??null);
+  this.compositeMat.depthWrite=this.compositeMat.depthTest=!!pass.target;
   if(underlay)underlay({color:this.actorTarget.texture,depth:this.actorTarget.depthTexture});
   renderer.autoClear=false;renderer.render(this.compositeScene,this.compositeCamera);renderer.autoClear=auto;
  }

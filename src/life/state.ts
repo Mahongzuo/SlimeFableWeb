@@ -25,10 +25,11 @@ export interface PlotState {
   /** True once wind pollination has been attempted on this planting. */
   pollinated?: boolean;
 }
-export interface DexEntry {n: number; first: number; /** biggest size (fish cm) or best time (park ms) */ best?: number}
+export interface DexEntry { starlight?: boolean;n: number; first: number; /** biggest size (fish cm) or best time (park ms) */ best?: number}
 export interface RequestState {id: string; item: string; count: number; reward: number; done: boolean}
 
 export interface PlacedProp {
+  nativeFootprint?: {width:number;depth:number;name:string};
   paidShells?: number;
   id: string;
   itemId: string;
@@ -124,9 +125,13 @@ export interface AdoptedAnimal {
   homeId?: string;
   /** True when the animal is currently set to follow the slime around Home. */
   following?: boolean;
+  care?: {born: number; due: number; reserve: number; rescueMs: number; notified: boolean};
+  station?: [number, number];
 }
 
 export interface RanchState {
+  starter?: 'later' | 'claimed';
+  memorials?: {id: string; speciesId: string; name: string; at: number}[];
   animals: AdoptedAnimal[];
   /** Species IDs discovered & befriended in wild encounters (unlocks adoption). */
   discovered: string[];
@@ -149,6 +154,7 @@ export interface FishPondState {
 }
 
 export interface FishingProgressState {
+  lure?: number;
   /** 1: 竹竿, 2: 碳素元素竿, 3: 沧溟星竿 */
   rodTier: number;
   bobberId: string | null;
@@ -173,6 +179,8 @@ export interface ActiveBuff {
 }
 
 export interface HomeBuildState {
+  trees: import('./orchard').OrchardTree[];
+  nativeTreeHarvests: Record<string, number>;
   gardenTerrain?: 1;
   paving: GroundTile[];
   placed: PlacedProp[];
@@ -214,6 +222,9 @@ export interface HomeBuildState {
 
 export interface LifeData {
   sailing?: import('./voyage').SailingLog;
+  earnedShells?: number;
+  capacityFloor?: number;
+  cottage?: {ninglu?:boolean; furnished?: boolean; furniture: {id: string; kind: string; x: number; z: number; turn: number; stored?: boolean}[]; plants: {asset: string; x: number; z: number}[]};
   coins: number;
   bag: Record<string, number>;
   dex: Record<string, DexEntry>;
@@ -237,6 +248,8 @@ export const freshFishing = (): FishingProgressState => ({
 });
 
 export const freshHome = (): HomeBuildState => ({
+  trees: [],
+  nativeTreeHarvests: {},
   paving: [],
   placed: [],
   expansions: [],
@@ -268,6 +281,8 @@ export function ensureHome(life: LifeData): HomeBuildState {
     life.home = {
       ...base,
       ...life.home,
+      trees: Array.isArray(life.home.trees) ? life.home.trees : [],
+      nativeTreeHarvests: life.home.nativeTreeHarvests ?? {},
       bodyShape: 'dome',
       placed: Array.isArray(life.home.placed) ? life.home.placed : [],
       paving: Array.isArray(life.home.paving) ? life.home.paving : [],
@@ -279,6 +294,7 @@ export function ensureHome(life: LifeData): HomeBuildState {
       voxels: Array.isArray(life.home.voxels) ? life.home.voxels : [],
       voxelBlueprints: Array.isArray(life.home.voxelBlueprints) ? life.home.voxelBlueprints : [],
       ranch: {
+        ...rawRanch,
         animals: Array.isArray(rawRanch?.animals) ? rawRanch.animals : [],
         discovered: Array.isArray(rawRanch?.discovered) ? rawRanch.discovered : [],
         encounterDay: rawRanch?.encounterDay,
@@ -287,6 +303,7 @@ export function ensureHome(life: LifeData): HomeBuildState {
       museum: life.home.museum && typeof life.home.museum === 'object' ? life.home.museum : {},
       fishing: {
         rodTier: typeof rawFishing?.rodTier === 'number' && rawFishing.rodTier >= 1 ? rawFishing.rodTier : 1,
+        lure: Math.max(0,Math.min(2,Math.floor(rawFishing?.lure ?? 0))),
         bobberId: rawFishing?.bobberId ?? null,
         ponds: rawFishing?.ponds && typeof rawFishing.ponds === 'object' ? rawFishing.ponds : {},
         treasuresFound: typeof rawFishing?.treasuresFound === 'number' ? rawFishing.treasuresFound : 0,

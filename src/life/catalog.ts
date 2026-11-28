@@ -1,8 +1,14 @@
+import {extraFish, waterNames} from './fish-species';
+import {TREE_SPECIES} from './orchard';
 /** Every item the Home's casual loops hand out. Prices are in 贝壳 (shells). */
 export type ItemKind = 'seed' | 'crop' | 'fish' | 'critter' | 'food' | 'bait' | 'artisan' | 'animal_product' | 'relic' | 'blueprint';
 export interface ItemDef {id: string; name: string; kind: ItemKind; price: number; icon: string; desc: string}
 const list: ItemDef[] = [];
 const add = (kind: ItemKind, id: string, name: string, price: number, icon: string, desc: string) => list.push({id, name, kind, price, icon, desc});
+for (const tree of Object.values(TREE_SPECIES)) {
+  add('seed', tree.saplingId, tree.name + '苗', tree.price, tree.icon, '可在已购扩建地上栽种。');
+  if (tree.fruitId) add('crop', tree.fruitId, tree.fruitName!, 4, tree.icon, '在家园枝头自然成熟，可在农场收购站出售。');
+}
 // Resident species spotted by touch have their own journal entries.
 export const RESIDENT_FISH = new Set(['fish-koi','fish-stream-trout']);
 add('fish','fish-koi','锦鲤',0,'🐟','乳白与朱红的花鲤，在镜湖和荷塘成群游动。');
@@ -226,7 +232,7 @@ for (const [id, name, icon, price, desc] of [
   ['carrot-soup', '奶油胡萝卜浓汤', '🥣', 28, '食用后 15 分钟内移动轻盈提速。'],
   ['chili-hotpot', '火辣松菇锅', '🥘', 36, '食用后 15 分钟内加工坊速度提升 25%。'],
   ['mint-tea-cake', '薄荷茶酥', '🧁', 34, '食用后 15 分钟内滑翔伞升力增强，滑得更远。'],
-  ['lotus-porridge', '青莲晶米粥', '🍚', 42, '食用后 15 分钟内垂钓捕鱼绿框加宽 25%。'],
+  ['lotus-porridge', '青莲晶米粥', '🍚', 42, '食用后 15 分钟内搏鱼收线效率提高。'],
   ['fisherman-feast', '港湾渔夫拼盘', '🍣', 54, '食用后 15 分钟内垂钓绿框加宽且宝箱率翻倍。'],
   ['truffle-pasta', '松露奶酪意面', '🍝', 110, '食用后 15 分钟内稀兽遭遇率大幅提升。'],
   ['honey-toast', '花蜜厚吐司', '🍞', 52, '食用后 15 分钟内丰收好运，额外产果率上升。'],
@@ -250,6 +256,7 @@ add('bait', 'bait-glow', '发光饵', 6, '💡', '稀有鱼与夜行鱼更容易
 add('bait', 'bait-element', '元素香饵', 8, '✨', '吸引宝箱与高价值季节鱼，并让鱼游动更平稳。');
 add('bait', 'bait-chronicle', '岁月年轮饵', 12, '📜', '历史日专用珍稀饵，大幅提升史书鱼与古代遗物宝箱概率。');
 
+for (const s of extraFish) add('fish',s.id,s.name,s.rarity==='common'?12:28,'🐟',waterNames[s.water]+'垂钓收藏');
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(list.map(i => [i.id, i]));
 
 /**

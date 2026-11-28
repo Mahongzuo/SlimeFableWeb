@@ -14,10 +14,11 @@ export interface HomePassPlugin {
 }
 
 export interface OceanRenderHook extends HomePassPlugin {
+  readonly causticsMap?: THREE.Texture;
   mesh: THREE.Mesh;
   update(renderer: THREE.WebGLRenderer, time: number, dt: number, windSpeed: number, sunDir: THREE.Vector3, params: HomeRenderParams): void;
   setQuality(fftSize: number, cascades: number): void;
-  sampleWave?(x: number, z: number, time?: number): {height: number; seaLevel: number};
+  sampleWave?(x: number, z: number, time?: number): {height: number; seaLevel: number; normal: [number, number, number]};
   isOceanAt?(x: number, z: number): boolean;
 }
 
@@ -31,11 +32,13 @@ export interface CloudRenderHook extends HomePassPlugin {
     sunDir: THREE.Vector3,
     time: number,
     cloudAmount: number,
+    wind: number,
+    fog: number,
     storminess: number,
     daylight: number,
     params: HomeRenderParams,
   ): void;
-  setMode(mode: 'off' | 'analytic' | 'volumetric'): void;
+  setMode(mode: 'off' | 'analytic' | 'volumetric',steps?:number): void;
   invalidate?(): void;
 }
 
@@ -44,6 +47,7 @@ export interface PostProcessHook extends HomePassPlugin {
     renderer: THREE.WebGLRenderer;
     camera: THREE.PerspectiveCamera;
     hdrColor: THREE.Texture;
+    causticsMap?: THREE.Texture;
     hdrDepth: THREE.Texture;
     cloudsTex: THREE.Texture | null;
     skyViewTex: THREE.Texture;
@@ -53,6 +57,8 @@ export interface PostProcessHook extends HomePassPlugin {
     rain: number;
     time: number;
     seaLevel?: number;
+    waveNormal?: [number, number, number];
+    overcast?: number;
     fade: number;
     params: HomeRenderParams;
     gtaoEnabled: boolean;
@@ -217,9 +223,9 @@ export class HomeRenderPipeline {
   private tmpLook = new THREE.Vector3();
   private tmpUp = new THREE.Vector3();
   private tmpSphere = new THREE.Sphere();
-  private skyPos = new THREE.Vector3();
   private frustum = new THREE.Frustum();
   private projView = new THREE.Matrix4();
+  waterBed?: (x:number,z:number)=>number|null;
   private waters: WaterEntry[] = [];
   private frameId = 0;
   private capturedFrame = -1;
@@ -406,6 +412,21 @@ export class HomeRenderPipeline {
     return entry;
   }
 
+  inlandWaterLevel(x:number,z:number,normal?:[number,number,number]):number|undefined {
+    let highest:number|undefined;
+    for(const {mesh,level} of this.waters){
+      const sample=mesh.userData.levelAt;
+      const h=sample?sample(x,z):mesh.userData.containsWater?.(x,z)?level:undefined;
+      if(h===undefined || h<=(highest??-Infinity) || (this.waterBed?.(x,z)??Infinity)>=h-.002)continue;
+      highest=h;
+      if(normal){
+        const nx=sample?(h-(sample(x+.035,z)??h))/.035:0,nz=sample?(h-(sample(x,z+.035)??h))/.035:0;
+        const len=Math.hypot(nx,1,nz);normal[0]=nx/len;normal[1]=1/len;normal[2]=nz/len;
+      }
+    }
+    return highest;
+  }
+
   unregisterWater(entry: WaterEntry) {
     const i = this.waters.indexOf(entry);
     if (i >= 0) this.waters.splice(i, 1);
@@ -415,6 +436,7 @@ export class HomeRenderPipeline {
    * Called from the first water mesh's onBeforeRender inside the main pass: resolves the opaque
    * colour and depth drawn so far into `opaqueCopy` without leaving the render call.
    */
+  private drawOceanActor?: () => void;
   captureOpaque(renderer: THREE.WebGLRenderer) {
     if (this.capturedFrame === this.frameId || renderer.getRenderTarget() !== this.hdrTarget) return;
     this.capturedFrame = this.frameId;
@@ -427,11 +449,19 @@ export class HomeRenderPipeline {
     const state = renderer.state as any;
     const w = this.hdrTarget.width, h = this.hdrTarget.height;
     // Bind through three's state cache so its later MSAA resolve still binds what it expects
-    state.bindFramebuffer(gl.READ_FRAMEBUFFER, readFb);
-    state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, dst.__webglFramebuffer);
-    gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT, gl.NEAREST);
-    state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-    state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, readFb);
+    const copy = () => {
+      state.bindFramebuffer(gl.READ_FRAMEBUFFER, readFb);
+      state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, dst.__webglFramebuffer);
+      gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+      state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+      state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, readFb);
+    };
+    copy();
+    if (this.drawOceanActor) {
+      this.drawOceanActor();
+      this.drawOceanActor = undefined;
+      copy();
+    }
   }
 
   applyQuality(opts: {
@@ -464,7 +494,7 @@ export class HomeRenderPipeline {
     if (opts.ssr !== undefined) this.water.uSSR.value = opts.ssr ? 1 : 0;
     if (opts.minScale !== undefined) this.dynamicRes.min = opts.minScale;
     this.oceanHook?.setQuality(opts.oceanFFT, opts.oceanCascades);
-    this.cloudHook?.setMode(opts.clouds);
+    this.cloudHook?.setMode(opts.clouds,opts.oceanFFT>=256 ? 32 : 16);
   }
   private forceResize = false;
 
@@ -493,7 +523,7 @@ export class HomeRenderPipeline {
       p,
     );
     this.ibl.update(this.renderer, this.scene, sunDir, daylight, storminess, skyUpdated);
-    (this.scene as any).environmentIntensity = p.envIntensity * (0.48 + 0.52 * daylight);
+    (this.scene as any).environmentIntensity = p.envIntensity * (0.26 + 0.74 * daylight);
 
     // Shadow-casting sun light follows the focus area with texel snapping to prevent shadow shimmer
     const lightDir = this.sunOffset;
@@ -517,7 +547,7 @@ export class HomeRenderPipeline {
     }
     const elevAtten = Math.min(1, Math.max(0.18, (sunDir.y + 0.14) / 0.42));
     const dayInt = p.sunIlluminance * elevAtten * (1 - 0.52 * storminess);
-    const nightInt = 0.48 * (1 - 0.40 * storminess);
+    const nightInt = 0.36 * (1 - 0.45 * storminess);
     this.sun.intensity = nightInt + (dayInt - nightInt) * daylight;
 
     // Opposite ocean/sky bounce light for luminous cool-filled shadows
@@ -527,17 +557,17 @@ export class HomeRenderPipeline {
       0.82 - 0.10 * twilight,
       1.0 - 0.22 * twilight,
     );
-    this.bounceLight.intensity = p.sunBounceIntensity * (0.30 + 0.70 * daylight) * (1 - 0.32 * storminess);
+    this.bounceLight.intensity = p.sunBounceIntensity * (0.14 + 0.86 * daylight) * (1 - 0.32 * storminess);
 
-    this.hemi.color.setHex(daylight > 0.2 ? 0x82ceff : 0x466d98).lerp(this.tmpColor.setHex(0xffc088), twilight * 0.42);
-    this.hemi.groundColor.setHex(daylight > 0.2 ? 0x6c8f78 : 0x294156);
-    this.hemi.intensity = p.hemiIntensity * (0.50 + 0.50 * daylight);
+    this.hemi.color.setHex(daylight > 0.2 ? 0x82ceff : 0x2c4f82).lerp(this.tmpColor.setHex(0xffc088), twilight * 0.42);
+    this.hemi.groundColor.setHex(daylight > 0.2 ? 0x6c8f78 : 0x122238);
+    this.hemi.intensity = p.hemiIntensity * (0.28 + 0.72 * daylight);
 
     this.atmosphere.skyDome.position.copy(this.camera.position);
 
     // Step GPU FFT ocean simulation before main render
     if (this.oceanHook) {
-      this.oceanHook.update(this.renderer, this.time, dt, wind, sunDir, p);
+      this.oceanHook.update(this.renderer, this.time + dt, dt, wind, sunDir, p);
     }
   }
 
@@ -728,6 +758,7 @@ export class HomeRenderPipeline {
       bestScore = 0.5;
     }
     for (const e of this.waters) {
+      if(e.mesh.userData.levelAt)continue;
       if (!isWorldVisible(e.mesh) || cam.position.y < e.level + 0.02) continue;
       const g = e.mesh.geometry;
       if (!g.boundingSphere) g.computeBoundingSphere();
@@ -780,9 +811,10 @@ export class HomeRenderPipeline {
     rc.projectionMatrixInverse.copy(rc.projectionMatrix).invert();
 
     const dome = this.atmosphere.skyDome;
-    this.skyPos.copy(dome.position);
-    dome.position.copy(rc.position);
-    dome.updateMatrixWorld();
+    // The reflected sky is evaluated per wave normal in wSky(). Only reflected
+    // objects belong in the planar map, whose alpha marks their coverage.
+    const domeVisible = dome.visible;
+    dome.visible = false;
 
     const shadowNeeds = r.shadowMap.needsUpdate;
     const shadowAuto = r.shadowMap.autoUpdate;
@@ -837,8 +869,7 @@ export class HomeRenderPipeline {
 
     r.shadowMap.autoUpdate = shadowAuto;
     r.shadowMap.needsUpdate = shadowNeeds;
-    dome.position.copy(this.skyPos);
-    dome.updateMatrixWorld();
+    dome.visible = domeVisible;
 
     this.reflMatrix.copy(this.reflBias).multiply(rc.projectionMatrix).multiply(rc.matrixWorldInverse);
     this.water.uReflMatrix.value.copy(this.reflMatrix);
@@ -848,8 +879,8 @@ export class HomeRenderPipeline {
 
   render(
     dt: number,
-    env: {sunDir: THREE.Vector3; daylight: number; cloud: number; storminess: number; fogDensity: number; rain: number},
-    slime?: {render(pass: {color: THREE.Texture; depth: THREE.Texture; time: number}): void},
+    env: {sunDir: THREE.Vector3; daylight: number; cloud: number; wind: number; fog: number; storminess: number; fogDensity: number; rain: number},
+    slime?: {inOcean?: boolean; render(pass: {color: THREE.Texture; depth: THREE.Texture; time: number; target?: THREE.WebGLRenderTarget}): void},
     reflectActor?: ((renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera, target: THREE.WebGLRenderTarget) => void) | null,
   ) {
     this.time += dt;
@@ -872,9 +903,15 @@ export class HomeRenderPipeline {
     const perf = this.perf;
     perf.frameStart(r.shadowMap.autoUpdate || r.shadowMap.needsUpdate);
 
-    // Preserve 24-bit depth precision (SlimeCharacter.play sets near=0.04; keep >= 0.14)
-    if (this.camera.near < 0.14) {
-      this.camera.near = 0.14;
+    const {x,y,z}=this.camera.position;
+    const inlandNormal:[number,number,number]=[0,1,0];
+    const inlandLevel=this.inlandWaterLevel(x,z,inlandNormal);
+    // A pond can be shallower than the usual 14 cm near plane. Keep the bed in the
+    // frustum when looking down, then restore outdoor precision on returning to land.
+    const nearWater=inlandLevel!==undefined && y<inlandLevel+.12;
+    const nearLimit=nearWater?THREE.MathUtils.clamp((y-(this.waterBed?.(x,z)??y-.5))*.35,.012,.14):.14;
+    if(nearLimit<.14 ? Math.abs(this.camera.near-nearLimit)>.0005 : this.camera.near<.14){
+      this.camera.near=nearLimit;
       this.camera.updateProjectionMatrix();
     }
     this.camera.updateMatrixWorld();
@@ -885,6 +922,7 @@ export class HomeRenderPipeline {
     // Shared water uniforms
     const w = this.water;
     w.uProj.value.copy(this.camera.projectionMatrix);
+    w.tCaustics.value = this.oceanHook?.causticsMap ?? null;
     w.uInvProj.value.copy(this.camera.projectionMatrixInverse);
     w.uNear.value = this.camera.near;
     w.uFar.value = this.camera.far;
@@ -892,12 +930,13 @@ export class HomeRenderPipeline {
     w.uSunColor.value.copy(this.sun.color);
     w.uDaylight.value = env.daylight;
     w.uStorm.value = env.storminess;
+    w.uRain.value = env.rain;
 
     // 1. Cloud panorama slice (sampled by the sky dome, water and reflections)
     perf.begin('clouds');
     const domeU = (this.atmosphere.skyDome.material as THREE.ShaderMaterial).uniforms;
     if (this.cloudHook) {
-      this.cloudHook.update(r, this.camera.position, env.sunDir, this.time, env.cloud, env.storminess, env.daylight, this.params);
+      this.cloudHook.update(r, this.camera.position, env.sunDir, this.time, env.cloud, env.wind, env.fog, env.storminess, env.daylight, this.params);
       const on = this.cloudHook.enabled ? 1 : 0;
       domeU.tCloudPano.value = this.cloudHook.texture;
       domeU.uUseClouds.value = on;
@@ -927,11 +966,17 @@ export class HomeRenderPipeline {
     }
 
     // 3. Main HDR pass; the first water draw captures the opaque copy mid-pass
+    let actorInScene = false;
+    this.drawOceanActor = slime?.inOcean ? () => {
+      slime.render({color: this.opaqueCopy.texture, depth: this.opaqueCopy.depthTexture!, time: this.time, target: this.hdrTarget});
+      actorInScene = true;
+    } : undefined;
     perf.begin('main');
     r.setRenderTarget(this.hdrTarget);
     r.setClearColor(0x000000, 1);
     r.clear();
     r.render(this.scene, this.camera);
+    this.drawOceanActor = undefined;
     this.restoreDetail();
     perf.end('main');
 
@@ -946,15 +991,18 @@ export class HomeRenderPipeline {
         renderer: r,
         camera: this.camera,
         hdrColor: this.hdrTarget.texture,
+        causticsMap: this.oceanHook?.causticsMap,
         hdrDepth: this.hdrTarget.depthTexture!,
-        cloudsTex: null,
+        cloudsTex: this.cloudHook?.enabled ? this.cloudHook.texture : null,
         skyViewTex: this.atmosphere.skyViewRT.texture,
         sunDir: env.sunDir,
         daylight: env.daylight,
         fogDensity: env.fogDensity,
         rain: env.rain,
         time: this.time,
-        seaLevel: camWave ? camWave.seaLevel + camWave.height : SEA_LEVEL,
+        seaLevel: inlandLevel ?? (camWave ? camWave.seaLevel + camWave.height : SEA_LEVEL),
+        waveNormal: inlandLevel!==undefined ? inlandNormal : camWave?.normal,
+        overcast: env.storminess,
         fade,
         params: this.params,
         gtaoEnabled: this.gtaoEnabled,
@@ -981,7 +1029,7 @@ export class HomeRenderPipeline {
 
     // 6. SlimeCharacter on top, using the linear resolvedTarget + exact scene depth
     perf.begin('slime');
-    slime?.render({
+    if (!actorInScene) slime?.render({
       color: this.resolvedTarget.texture,
       depth: this.hdrTarget.depthTexture!,
       time: this.time,
